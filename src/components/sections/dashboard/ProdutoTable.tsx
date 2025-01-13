@@ -6,6 +6,7 @@ import SearchFilter from 'components/common/SearchFilter';
 import CustomPagination from 'components/common/CustomPagination';
 import { columns, rows } from 'data/dashboard/produtoTableData';
 import Modal from '@mui/material/Modal';
+import TextField from '@mui/material/TextField';
 
 const style = {
   position: 'absolute',
@@ -16,6 +17,11 @@ const style = {
   height: 500,
   bgcolor: 'background.paper',
   boxShadow: 24,
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'start',
+  alignItems: 'center',
+  backgroundColor: '#f9f9f9',
   p: 4,
 };
 
@@ -62,13 +68,130 @@ export default function ProdutoTable() {
           aria-labelledby="modal-modal-title"
           aria-describedby="modal-modal-description"
         >
-          <Box sx={style}>
-            <Typography id="modal-modal-title" variant="h6" component="h2">
-              Text in a modal
+          <Box sx={style} component="form" noValidate autoComplete="on">
+            <Typography id="modal-modal-title" variant="h1" component="h2">
+              Cadastrar Produto
             </Typography>
-            <Typography id="modal-modal-description" sx={{ mt: 2 }}>
-              Duis mollis, est non commodo luctus, nisi erat porttitor ligula.
-            </Typography>
+
+            <div>
+              <TextField
+                id="filled-multiline-flexible"
+                label="Multiline"
+                multiline
+                maxRows={4}
+                variant="filled"
+                sx={{
+                  padding: '16px',
+                  width: '300px',
+                }}
+              />
+              <TextField
+                id="filled-multiline-flexible"
+                label="Multiline"
+                multiline
+                maxRows={4}
+                variant="filled"
+                sx={{
+                  padding: '16px',
+                  width: '300px',
+                }}
+              />
+              <TextField
+                id="filled-multiline-flexible"
+                label="Multiline"
+                multiline
+                maxRows={4}
+                variant="filled"
+                sx={{
+                  padding: '16px',
+                  width: '300px',
+                }}
+              />
+            </div>
+            <div>
+              <TextField
+                id="filled-multiline-flexible"
+                label="Multiline"
+                multiline
+                maxRows={4}
+                variant="filled"
+                sx={{
+                  padding: '16px',
+                  width: '300px',
+                }}
+              />
+              <TextField
+                id="filled-multiline-flexible"
+                label="Multiline"
+                multiline
+                maxRows={4}
+                variant="filled"
+                sx={{
+                  padding: '16px',
+                  width: '300px',
+                }}
+              />
+              <TextField
+                id="filled-multiline-flexible"
+                label="Multiline"
+                multiline
+                maxRows={4}
+                variant="filled"
+                sx={{
+                  padding: '16px',
+                  width: '300px',
+                }}
+              />
+            </div>
+            <div>
+              <TextField
+                id="filled-multiline-flexible"
+                label="Multiline"
+                multiline
+                maxRows={4}
+                variant="filled"
+                sx={{
+                  padding: '16px',
+                  width: '300px',
+                }}
+              />
+              <TextField
+                id="filled-multiline-flexible"
+                label="Multiline"
+                multiline
+                maxRows={4}
+                variant="filled"
+                sx={{
+                  padding: '16px',
+                  width: '300px',
+                }}
+              />
+              <TextField
+                id="filled-multiline-flexible"
+                label="Multiline"
+                multiline
+                maxRows={4}
+                variant="filled"
+                sx={{
+                  padding: '16px',
+                  width: '300px',
+                }}
+              />
+            </div>
+            <br />
+            <Button
+              variant="contained"
+              color="secondary"
+              sx={(theme) => ({
+                p: theme.spacing(0.625, 1.5),
+                borderRadius: 1.5,
+                height: 40,
+                width: 150,
+              })}
+              onClick={handleOpen}
+            >
+              <Typography variant="body2">Cadastrar</Typography>
+            </Button>
           </Box>
         </Modal>
       </Stack>
@@ -93,6 +216,7 @@ export default function ProdutoTable() {
           }}
         />
       </Box>
+
       <CustomPagination apiRef={apiRef} />
     </Paper>
   );
