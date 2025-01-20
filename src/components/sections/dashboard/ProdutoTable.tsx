@@ -7,14 +7,19 @@ import CustomPagination from 'components/common/CustomPagination';
 import { columns, rows } from 'data/dashboard/produtoTableData';
 import Modal from '@mui/material/Modal';
 import TextField from '@mui/material/TextField';
+import MenuItem from '@mui/material/MenuItem';
+import Select, { SelectChangeEvent } from '@mui/material/Select';
+import InputLabel from '@mui/material/InputLabel';
 
 const style = {
   position: 'absolute',
   top: '50%',
   left: '50%',
   transform: 'translate(-50%, -50%)',
-  width: 1080,
-  height: 500,
+  width: { xs: '90%', sm: '80%', md: 900 }, // Responsivo: 90% na tela pequena, 80% média, 900px maior
+  maxWidth: '100%', // Limita a largura máxima
+  height: { xs: '90%', sm: '80%', md: 650 }, // Responsivo: 90% da altura na tela pequena
+  maxHeight: '100%', // Limita a altura máxima
   bgcolor: 'background.paper',
   boxShadow: 24,
   display: 'flex',
@@ -23,19 +28,27 @@ const style = {
   alignItems: 'center',
   backgroundColor: '#f9f9f9',
   p: 4,
+  overflowY: 'auto', // Ativa o scroll vertical
+  scrollbarWidth: 'thin', // Estilo para Firefox
+  scrollbarColor: '#6c63ff #f1f1f1', // Cores para Firefox
 };
 
 export default function ProdutoTable() {
   const [open, setOpen] = React.useState(false);
   const handleOpen = () => setOpen(true);
   const handleClose = () => setOpen(false);
+  const [categoria, setCategoria] = React.useState('');
   const apiRef = useGridApiRef();
+
+  const handleChange = (event: SelectChangeEvent) => {
+    setCategoria(event.target.value);
+  };
 
   return (
     <Paper
       sx={(theme) => ({
         p: theme.spacing(2, 2.5),
-        width: 1,
+        width: '100%',
       })}
     >
       <Stack
@@ -60,7 +73,7 @@ export default function ProdutoTable() {
           startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
           onClick={handleOpen}
         >
-          <Typography variant="body2">Adiciona</Typography>
+          <Typography variant="body2">Adicionar</Typography>
         </Button>
         <Modal
           open={open}
@@ -68,130 +81,84 @@ export default function ProdutoTable() {
           aria-labelledby="modal-modal-title"
           aria-describedby="modal-modal-description"
         >
-          <Box sx={style} component="form" noValidate autoComplete="on">
-            <Typography id="modal-modal-title" variant="h1" component="h2">
-              Cadastrar Produto
-            </Typography>
-
-            <div>
-              <TextField
-                id="filled-multiline-flexible"
-                label="Multiline"
-                multiline
-                maxRows={4}
-                variant="filled"
-                sx={{
-                  padding: '16px',
-                  width: '300px',
-                }}
-              />
-              <TextField
-                id="filled-multiline-flexible"
-                label="Multiline"
-                multiline
-                maxRows={4}
-                variant="filled"
-                sx={{
-                  padding: '16px',
-                  width: '300px',
-                }}
-              />
-              <TextField
-                id="filled-multiline-flexible"
-                label="Multiline"
-                multiline
-                maxRows={4}
-                variant="filled"
-                sx={{
-                  padding: '16px',
-                  width: '300px',
-                }}
-              />
-            </div>
-            <div>
-              <TextField
-                id="filled-multiline-flexible"
-                label="Multiline"
-                multiline
-                maxRows={4}
-                variant="filled"
-                sx={{
-                  padding: '16px',
-                  width: '300px',
-                }}
-              />
-              <TextField
-                id="filled-multiline-flexible"
-                label="Multiline"
-                multiline
-                maxRows={4}
-                variant="filled"
-                sx={{
-                  padding: '16px',
-                  width: '300px',
-                }}
-              />
-              <TextField
-                id="filled-multiline-flexible"
-                label="Multiline"
-                multiline
-                maxRows={4}
-                variant="filled"
-                sx={{
-                  padding: '16px',
-                  width: '300px',
-                }}
-              />
-            </div>
-            <div>
-              <TextField
-                id="filled-multiline-flexible"
-                label="Multiline"
-                multiline
-                maxRows={4}
-                variant="filled"
-                sx={{
-                  padding: '16px',
-                  width: '300px',
-                }}
-              />
-              <TextField
-                id="filled-multiline-flexible"
-                label="Multiline"
-                multiline
-                maxRows={4}
-                variant="filled"
-                sx={{
-                  padding: '16px',
-                  width: '300px',
-                }}
-              />
-              <TextField
-                id="filled-multiline-flexible"
-                label="Multiline"
-                multiline
-                maxRows={4}
-                variant="filled"
-                sx={{
-                  padding: '16px',
-                  width: '300px',
-                }}
-              />
-            </div>
-            <br />
-            <Button
-              variant="contained"
-              color="secondary"
-              sx={(theme) => ({
-                p: theme.spacing(0.625, 1.5),
-                borderRadius: 1.5,
-                height: 40,
-                width: 150,
-              })}
-              onClick={handleOpen}
+          <Box sx={style} component="form" noValidate autoComplete="off">
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              sx={{ width: '100%', mb: 2 }}
             >
-              <Typography variant="body2">Cadastrar</Typography>
-            </Button>
+              <Typography id="modal-modal-title" variant="h5" component="h2">
+                Cadastrar Produto
+              </Typography>
+              <Button onClick={handleClose} variant="outlined" color="error">
+                Fechar
+              </Button>
+            </Stack>
+
+            <Stack spacing={2} sx={{ width: '100%' }}>
+              <TextField
+                id="product-name"
+                label="Nome do Produto"
+                variant="filled"
+                sx={{ width: '100%' }}
+              />
+              <InputLabel id="demo-simple-select-standard-label">Categoria</InputLabel>
+              <Select
+                labelId="demo-simple-select-standard-label"
+                id="demo-simple-select-standard"
+                value={categoria}
+                onChange={handleChange}
+                label="categoria"
+                fullWidth
+              >
+                <MenuItem value="">
+                  <em>Categoria</em>
+                </MenuItem>
+                <MenuItem value={10}>Alimentar</MenuItem>
+                <MenuItem value={20}>Electrodomesticos</MenuItem>
+                <MenuItem value={30}>Bebida</MenuItem>
+              </Select>
+              <TextField
+                id="product-ref"
+                label="Ref. Produto"
+                variant="filled"
+                sx={{ width: '100%' }}
+              />
+              <TextField
+                id="product-cost"
+                label="Custo de Aquisão"
+                variant="filled"
+                sx={{ width: '100%' }}
+              />
+
+              <TextField
+                id="product-name-duplicate"
+                label="Nome do Produto"
+                variant="filled"
+                sx={{ width: '100%' }}
+              />
+              <TextField
+                id="product-name-duplicate"
+                label="Nome do Produto"
+                variant="filled"
+                sx={{ width: '100%' }}
+              />
+              <TextField
+                id="product-name-duplicate"
+                label="Nome do Produto"
+                variant="filled"
+                sx={{ width: '100%' }}
+              />
+              <Button
+                variant="contained"
+                color="secondary"
+                sx={{ height: 40, width: '100%' }}
+                onClick={handleOpen}
+              >
+                <Typography variant="body2">Cadastrar</Typography>
+              </Button>
+            </Stack>
           </Box>
         </Modal>
       </Stack>
@@ -199,7 +166,7 @@ export default function ProdutoTable() {
       <Box
         sx={{
           height: 330,
-          width: 1,
+          width: '100%',
           mt: 1.75,
         }}
       >
@@ -214,6 +181,8 @@ export default function ProdutoTable() {
               },
             },
           }}
+          autoHeight
+          sx={{ width: '100%' }}
         />
       </Box>
 
