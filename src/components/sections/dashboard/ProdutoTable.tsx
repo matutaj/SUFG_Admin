@@ -131,7 +131,6 @@ export default function ProdutoTable() {
                 variant="filled"
                 sx={{ width: '100%' }}
               />
-
               <TextField
                 id="product-name-duplicate"
                 label="Nome do Produto"
