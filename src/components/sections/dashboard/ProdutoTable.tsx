@@ -105,8 +105,8 @@ export default function ProdutoTable() {
               />
               <InputLabel id="demo-simple-select-standard-label">Categoria</InputLabel>
               <Select
+                labelId="demo-simple-select-standard-label"
                 id="demo-simple-select-standard"
-                color="primary"
                 value={categoria}
                 onChange={handleChange}
                 label="categoria"
@@ -121,7 +121,7 @@ export default function ProdutoTable() {
               </Select>
               <TextField
                 id="product-ref"
-                label="Referência do Produto"
+                label="Ref. Produto"
                 variant="filled"
                 sx={{ width: '100%' }}
               />
@@ -133,19 +133,19 @@ export default function ProdutoTable() {
               />
               <TextField
                 id="product-name-duplicate"
-                label="Custo por Unidade"
+                label="Nome do Produto"
                 variant="filled"
                 sx={{ width: '100%' }}
               />
               <TextField
                 id="product-name-duplicate"
-                label="Quantidade Adquirida"
+                label="Nome do Produto"
                 variant="filled"
                 sx={{ width: '100%' }}
               />
               <TextField
                 id="product-name-duplicate"
-                label="Nome do Fornecedor"
+                label="Nome do Produto"
                 variant="filled"
                 sx={{ width: '100%' }}
               />
