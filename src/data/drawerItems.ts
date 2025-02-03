@@ -3,7 +3,7 @@ import Doughnut from 'components/icons/drawer/Doughnut';
 import Fencing from 'components/icons/drawer/Fencing';
 import Grid from 'components/icons/drawer/Grid';
 import Cliente from 'components/icons/drawer/Cliente';
-import Categoria from 'components/icons/drawer/categoria';
+import Categoria from 'components/icons/drawer/Categoria';
 import Settings from 'components/icons/drawer/Settings';
 import ShoppingBag from 'components/icons/drawer/ShoppingBag';
 import ShoppingCart from 'components/icons/drawer/ShoppingCart';
