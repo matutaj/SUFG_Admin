@@ -23,6 +23,7 @@ import React from 'react';
 
 import Delete from '@mui/material/Icon';
 import Edit from '@mui/material/Icon';
+
 interface CollapsedItemProps {
   subItems: SubItem[] | undefined;
   open: boolean;
@@ -33,10 +34,10 @@ const style = {
   top: '50%',
   left: '50%',
   transform: 'translate(-50%, -50%)',
-  width: { xs: '90%', sm: '80%', md: 900 }, // Responsivo: 90% na tela pequena, 80% média, 900px maior
-  maxWidth: '100%', // Limita a largura máxima
-  height: { xs: '60%', sm: '50%', md: 650 }, // Responsivo: 90% da altura na tela pequena
-  maxHeight: '60%', // Limita a altura máxima
+  width: { xs: '90%', sm: '80%', md: 900 },
+  maxWidth: '100%',
+  height: { xs: '60%', sm: '50%', md: 650 },
+  maxHeight: '60%',
   bgcolor: 'background.paper',
   boxShadow: 24,
   display: 'flex',
@@ -45,9 +46,9 @@ const style = {
   alignItems: 'center',
   backgroundColor: '#f9f9f9',
   p: 4,
-  overflowY: 'auto', // Ativa o scroll vertical
-  scrollbarWidth: 'thin', // Estilo para Firefox
-  scrollbarColor: '#6c63ff #f1f1f1', // Cores para Firefox
+  overflowY: 'auto',
+  scrollbarWidth: 'thin',
+  scrollbarColor: '#6c63ff #f1f1f1',
 };
 
 const Categoria = ({ open }: CollapsedItemProps) => {
@@ -60,13 +61,28 @@ const Categoria = ({ open }: CollapsedItemProps) => {
     { id: number; name: string; description: string }[]
   >(JSON.parse(localStorage.getItem('categoria') || '[]'));
 
+  // Estados de erro
+  const [errors, setErrors] = React.useState<{ name?: string; description?: string }>({});
+
   function onAddCategoriaSubmit(name: string, description: string) {
+    // Validação
+    const newErrors: { name?: string; description?: string } = {};
+    if (!name.trim()) newErrors.name = 'O nome da categoria é obrigatório.';
+    if (!description.trim()) newErrors.description = 'A descrição é obrigatória.';
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
     const newsCategoria = {
       id: categoria.length + 1,
       name,
       description,
     };
     setCategoria([...categoria, newsCategoria]);
+    // Limpar os campos e erros após a submissão
+    setName('');
+    setDescription('');
+    setErrors({});
   }
 
   React.useEffect(() => {
@@ -75,12 +91,7 @@ const Categoria = ({ open }: CollapsedItemProps) => {
 
   return (
     <>
-      <Paper
-        sx={(theme) => ({
-          p: theme.spacing(2, 2.5),
-          width: '100%',
-        })}
-      >
+      <Paper sx={(theme) => ({ p: theme.spacing(2, 2.5), width: '100%' })}>
         <Collapse in={open}>
           <Stack
             direction="row"
@@ -94,10 +105,7 @@ const Categoria = ({ open }: CollapsedItemProps) => {
             <Button
               variant="contained"
               color="secondary"
-              sx={(theme) => ({
-                p: theme.spacing(0.625, 1.5),
-                borderRadius: 1.5,
-              })}
+              sx={(theme) => ({ p: theme.spacing(0.625, 1.5), borderRadius: 1.5 })}
               startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
               onClick={handleOpen}
             >
@@ -132,25 +140,24 @@ const Categoria = ({ open }: CollapsedItemProps) => {
                     label="Nome da Categoria"
                     variant="filled"
                     sx={{ width: '100%' }}
+                    error={Boolean(errors.name)}
+                    helperText={errors.name}
                   />
                   <TextField
                     id="product-name-duplicate"
                     onChange={(e) => setDescription(e.target.value)}
                     value={description}
-                    label="Descripção"
+                    label="Descrição"
                     variant="filled"
                     sx={{ width: '100%' }}
+                    error={Boolean(errors.description)}
+                    helperText={errors.description}
                   />
                   <Button
                     variant="contained"
                     color="secondary"
                     sx={{ height: 40, width: '100%' }}
-                    onClick={() => {
-                      if (!name.trim() || !description.trim()) return alert('Campos obrigatorios');
-                      onAddCategoriaSubmit(name, description);
-                      setDescription('');
-                      setName('');
-                    }}
+                    onClick={() => onAddCategoriaSubmit(name, description)}
                   >
                     <Typography variant="body2">Cadastrar</Typography>
                   </Button>
@@ -160,7 +167,7 @@ const Categoria = ({ open }: CollapsedItemProps) => {
           </Stack>
         </Collapse>
       </Paper>
-      <Card sx={{ maxWidth: ' 100%', margin: 'auto', mt: 4 }}>
+      <Card sx={{ maxWidth: '100%', margin: 'auto', mt: 4 }}>
         <CardContent>
           <TableContainer component={Paper}>
             <Table>
