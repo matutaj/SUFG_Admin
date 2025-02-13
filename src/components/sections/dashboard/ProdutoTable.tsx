@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Box, Button, Paper, Stack, Typography } from '@mui/material';
 import { DataGrid, useGridApiRef } from '@mui/x-data-grid';
-import IconifyIcon from 'components/base/IconifyIcon';
+//import IconifyIcon from 'components/base/IconifyIcon';
 import SearchFilter from 'components/common/SearchFilter';
 import CustomPagination from 'components/common/CustomPagination';
 import { columns, rows } from 'data/dashboard/produtoTableData';
@@ -62,19 +62,6 @@ export default function ProdutoTable() {
         </Typography>
 
         <SearchFilter apiRef={apiRef} />
-
-        <Button
-          variant="contained"
-          color="secondary"
-          sx={(theme) => ({
-            p: theme.spacing(0.625, 1.5),
-            borderRadius: 1.5,
-          })}
-          startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
-          onClick={handleOpen}
-        >
-          <Typography variant="body2">Adicionar</Typography>
-        </Button>
         <Modal
           open={open}
           onClose={handleClose}
