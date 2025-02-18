@@ -6,9 +6,9 @@ import LinearLoader from 'components/loading/LinearLoader';
 import Stock from 'pages/stock/Stock';
 import Funcionario from 'pages/funcionario/Funcionario';
 import Venda from 'pages/venda/Venda';
-import Relatorio from 'pages/relatorio/Relatorio';
 import Cliente from 'pages/cliente/Cliente';
 import Faturacao from 'pages/faturacao/Faturacao';
+import Relatorio from 'pages/relatorio/Relatorio';
 
 const App = lazy(() => import('App'));
 const MainLayout = lazy(() => import('layouts/main-layout'));
@@ -58,6 +58,7 @@ export const routes = [
           },
         ],
       },
+
       {
         path: '*',
         element: <ErrorPage />,
@@ -84,6 +85,7 @@ export const routes = [
             path: paths.estoque,
             element: <Stock subItems={undefined} open={true} />,
           },
+
           {
             path: paths.funcionarios,
             element: <Funcionario subItems={undefined} open={true} />,
@@ -93,8 +95,8 @@ export const routes = [
             element: <Venda subItems={undefined} open={true} />,
           },
           {
-            path: paths.Relatorio,
-            element: <Relatorio subItems={undefined} open={true} />,
+            path: paths.relatorio,
+            element: <Relatorio />,
           },
           {
             path: paths.cliente,

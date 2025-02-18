@@ -57,7 +57,7 @@ export const drawerItems: DrawerItem[] = [
     id: 6,
     icon: ShoppingCart,
     title: 'Relatório',
-    path: `/${rootPaths.pagesRoot}/relatorio`, // '/pages/vendas'
+    path: `/${rootPaths.pagesRoot}/relatorio`, // '/pages/estoque'
     collapsible: false,
   },
   {
