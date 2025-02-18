@@ -16,6 +16,7 @@ export default {
   categorias: `/${rootPaths.pagesRoot}/categorias`,
   estoque: `/${rootPaths.pagesRoot}/stock`,
   vendas: `/${rootPaths.pagesRoot}/venda`,
+  relatorio: `/${rootPaths.pagesRoot}/relatorio`,
   faturacao: `/${rootPaths.pagesRoot}/faturacao`,
   cliente: `/${rootPaths.pagesRoot}/cliente`,
   Relatorio: `/${rootPaths.pagesRoot}/relatorio`,
