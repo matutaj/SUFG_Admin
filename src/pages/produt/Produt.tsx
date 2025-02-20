@@ -24,8 +24,8 @@ import {
 } from '@mui/material';
 import React from 'react';
 import IconifyIcon from 'components/base/IconifyIcon';
-import Delete from '@mui/material/Icon';
-import Edit from '@mui/material/Icon';
+import Delete from 'components/icons/factor/Delete';
+import Edit from 'components/icons/factor/Edit';
 import { SubItem } from 'types/types';
 
 interface CollapsedItemProps {
