@@ -20,9 +20,8 @@ import { SubItem } from 'types/types';
 import IconifyIcon from 'components/base/IconifyIcon';
 import Modal from '@mui/material/Modal';
 import React from 'react';
-
-import Delete from '@mui/material/Icon';
-import Edit from '@mui/material/Icon';
+import Delete from 'components/icons/factor/Delete';
+import Edit from 'components/icons/factor/Edit';
 
 interface CollapsedItemProps {
   subItems: SubItem[] | undefined;
