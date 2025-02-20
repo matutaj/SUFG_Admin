@@ -92,7 +92,7 @@ export const routes = [
           },
           {
             path: paths.vendas,
-            element: <Venda subItems={undefined} open={true} />,
+            element: <Venda />,
           },
           {
             path: paths.relatorio,

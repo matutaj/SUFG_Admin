@@ -8,14 +8,14 @@ export const factors: IFactor[] = [
   {
     id: 1,
     icon: Lightning,
-    title: 'Total de Produtos',
+    title: 'Lucro líquido',
     color: 'primary.main',
     value: 45,
   },
   {
     id: 2,
     icon: Range,
-    title: 'Devolvidos',
+    title: 'Total Faturado',
     color: 'error.light',
     value: 157,
     max: 300,
@@ -23,14 +23,14 @@ export const factors: IFactor[] = [
   {
     id: 3,
     icon: Blood,
-    title: 'Vendidos',
+    title: 'Faturas Pendentes',
     color: 'secondary.main',
     value: 9,
   },
   {
     id: 4,
     icon: Tier,
-    title: 'Balcão',
+    title: 'Pagamento aberto',
     color: 'warning.darker',
     value: 25,
   },
