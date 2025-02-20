@@ -1,4 +1,3 @@
-import Authentication from 'components/icons/drawer/Authentication';
 import Doughnut from 'components/icons/drawer/Doughnut';
 import Fencing from 'components/icons/drawer/Fencing';
 import Grid from 'components/icons/drawer/Grid';
@@ -17,21 +16,11 @@ export const drawerItems: DrawerItem[] = [
     id: 1,
     icon: Grid,
     title: 'Dashboard',
-    path: rootPaths.root, // '/'
+    path: paths.dashboard, // '/'
     collapsible: false,
     active: true,
   },
-  {
-    id: 2,
-    icon: Authentication,
-    title: 'Authentication',
-    active: true,
-    collapsible: true,
-    subList: [
-      { id: 21, title: 'Login', path: paths.login }, // '/authentication/login'
-      { id: 22, title: 'Sign Up', path: paths.signup }, // '/authentication/sign-up'
-    ],
-  },
+
   {
     id: 3,
     icon: Doughnut,

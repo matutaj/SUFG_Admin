@@ -9,7 +9,7 @@ import { cars } from 'data/dashboard/produtoMaisVendidos';
 const Dashboard = () => {
   return (
     <Grid container rowGap={3.75}>
-      <Grid item xs={12}>
+      <Grid item xs={14}>
         <Factors factors={factors} />
       </Grid>
 

@@ -8,9 +8,9 @@ import { LanguageItem } from 'types/types';
 const languageItems: LanguageItem[] = [
   {
     id: 0,
-    value: 'ban',
-    label: 'Bengali',
-    icon: 'twemoji:flag-bangladesh',
+    value: 'pt',
+    label: 'Português',
+    icon: 'twemoji:flag-portugal',
   },
   {
     id: 1,

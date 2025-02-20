@@ -1,0 +1,17 @@
+import { SvgIcon, SvgIconProps } from '@mui/material';
+
+const Delete = (props: SvgIconProps) => {
+  return (
+    <SvgIcon width="20" height="21" viewBox="0 0 20 21" fill="none" {...props}>
+      <svg xmlns="http://www.w3.org/2000/svg" width={24} height={24} viewBox="0 0 24 24">
+        <path fill="currentColor" d="M8 9h8v10H8z" opacity={0.3}></path>
+        <path
+          fill="currentColor"
+          d="m15.5 4l-1-1h-5l-1 1H5v2h14V4zM6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6zM8 9h8v10H8z"
+        ></path>
+      </svg>
+    </SvgIcon>
+  );
+};
+
+export default Delete;

@@ -36,7 +36,7 @@ const MilesStatistics = () => {
     >
       <Stack rowGap={3} sx={{ mb: 1.75 }}>
         <Typography variant="h3">
-          Balança{' '}
+          Balanço{' '}
           <Box component="span" sx={{ fontWeight: 'fontWeightRegular' }}>
             de Venda
           </Box>
