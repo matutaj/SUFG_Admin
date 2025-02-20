@@ -1,7 +1,7 @@
 import { Link, List, Stack, Toolbar, Typography } from '@mui/material';
 import { drawerItems } from 'data/drawerItems';
 import Logo from 'components/icons/common/Logo';
-import { rootPaths } from 'routes/paths';
+import paths from 'routes/paths';
 import DrawerListItem from './DrawerListItem';
 
 const DrawerList = () => {
@@ -10,7 +10,7 @@ const DrawerList = () => {
       <Toolbar disableGutters>
         <Stack
           component={Link}
-          href={rootPaths.root}
+          href={paths.dashboard}
           direction="row"
           alignItems="center"
           columnGap={1.5}

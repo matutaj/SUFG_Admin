@@ -29,27 +29,15 @@ export const routes = [
     ),
     children: [
       {
-        path: rootPaths.root,
-        element: (
-          <MainLayout>
-            <Suspense fallback={<LinearLoader />}>
-              <Outlet />
-            </Suspense>
-          </MainLayout>
-        ),
-        children: [
-          {
-            index: true,
-            element: <Dashboard />,
-          },
-        ],
+        path: '/',
+        element: <Login />, // 🔥 Redireciona "/" para o login
       },
       {
         path: rootPaths.authRoot,
         element: <AuthLayout />,
         children: [
           {
-            path: paths.login,
+            index: true,
             element: <Login />,
           },
           {
@@ -57,11 +45,6 @@ export const routes = [
             element: <Signup />,
           },
         ],
-      },
-
-      {
-        path: '*',
-        element: <ErrorPage />,
       },
       {
         path: rootPaths.pagesRoot,
@@ -74,6 +57,10 @@ export const routes = [
         ),
         children: [
           {
+            path: paths.dashboard, // 🔥 Agora dashboard tem sua própria rota
+            element: <Dashboard />,
+          },
+          {
             path: paths.produtos,
             element: <Produt subItems={undefined} open={true} />,
           },
@@ -85,7 +72,6 @@ export const routes = [
             path: paths.estoque,
             element: <Stock subItems={undefined} open={true} />,
           },
-
           {
             path: paths.funcionarios,
             element: <Funcionario subItems={undefined} open={true} />,
@@ -107,6 +93,10 @@ export const routes = [
             element: <Faturacao subItems={undefined} open={true} />,
           },
         ],
+      },
+      {
+        path: '*',
+        element: <ErrorPage />,
       },
     ],
   },

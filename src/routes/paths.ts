@@ -11,7 +11,7 @@ export default {
   signup: `/${rootPaths.authRoot}/sign-up`,
 
   // Páginas principais
-  dashboard: `${rootPaths.root}`, // '/'
+  dashboard: `/${rootPaths.pagesRoot}/dashboard`,
   produtos: `/${rootPaths.pagesRoot}/produt`,
   categorias: `/${rootPaths.pagesRoot}/categorias`,
   estoque: `/${rootPaths.pagesRoot}/stock`,

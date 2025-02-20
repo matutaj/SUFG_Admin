@@ -4,7 +4,6 @@ import AccountMenu from './AccountMenu';
 import LanguagePopover from './LanguagePopover';
 
 import OutlinedBadge from 'components/styled/OutlinedBadge';
-import SearchBox from 'components/common/SearchBox';
 import { rootPaths } from 'routes/paths';
 import Logo from 'components/icons/common/Logo';
 import ElevationScroll from './ElevationScroll';
@@ -26,7 +25,7 @@ const TopBar = ({ drawerWidth, onHandleDrawerToggle }: TopBarProps) => {
           ml: { sm: `${drawerWidth}px` },
         }}
       >
-        <Toolbar sx={{ justifyContent: 'space-between' }}>
+        <Toolbar sx={{ justifyContent: 'end' }}>
           <Stack
             direction="row"
             alignItems="center"
@@ -47,8 +46,6 @@ const TopBar = ({ drawerWidth, onHandleDrawerToggle }: TopBarProps) => {
               <Search fontSize="small" />
             </IconButton>
           </Stack>
-
-          <SearchBox />
 
           <Stack direction="row" alignItems="center" columnGap={{ xs: 1, sm: 2, md: 3 }}>
             <LanguagePopover />
