@@ -12,6 +12,10 @@ import {
   InputLabel,
   TextField,
   Button,
+  useMediaQuery,
+  TableContainer,
+  Typography,
+  Box,
   Stack,
 } from '@mui/material';
 import Search from 'components/icons/common/Search';
@@ -50,6 +54,8 @@ const Venda = () => {
   const [error, setError] = useState({ startDate: '', endDate: '' });
 
   // Carrega os produtos do localStorage e converte corretamente
+  const isSmallScreen = useMediaQuery('(max-width: 768px)');
+
   useEffect(() => {
     const storedProducts = localStorage.getItem('products');
     if (storedProducts) {
@@ -154,12 +160,9 @@ const Venda = () => {
           <FormControl sx={{ flex: 1, minWidth: 200 }}>
             <InputLabel>Caixa</InputLabel>
             <Select value={selectedProduct} onChange={handleProductChange}>
-              <MenuItem value="">Todos os Produtos</MenuItem>
-              {products.map((product) => (
-                <MenuItem key={product.id} value={product.id}>
-                  {product.name}
-                </MenuItem>
-              ))}
+              <MenuItem value="">Todos os caixas</MenuItem>
+              <MenuItem value="#">caixa 1</MenuItem>
+              <MenuItem value="#">caixa 1</MenuItem>
             </Select>
           </FormControl>
           <Button variant="contained" color="primary" startIcon={<Search />} sx={{ minWidth: 150 }}>
@@ -168,37 +171,71 @@ const Venda = () => {
         </Stack>
       </Paper>
       <br />
-      <Paper sx={{ p: 2, textAlign: 'center', color: 'gray' }}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Nome do Produto</TableCell>
-              <TableCell>Ref.</TableCell>
-              <TableCell>Quant.</TableCell>
-              <TableCell>P. Unitário</TableCell>
-              <TableCell>Valor Total</TableCell>
-              <TableCell>Data</TableCell>
-              <TableCell>T. Documento</TableCell>
-              <TableCell>Cliente</TableCell>
-              <TableCell>Funcionário</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {vendas.map((venda) => (
-              <TableRow key={venda.id}>
-                <TableCell>{venda.nomeProduto}</TableCell>
-                <TableCell>{venda.referencia}</TableCell>
-                <TableCell>{venda.quantidade}</TableCell>
-                <TableCell>{venda.precoUnitario.toFixed(2)}Kzs</TableCell>
-                <TableCell>{venda.valorTotal.toFixed(2)}Kzs</TableCell>
-                <TableCell>{new Date(venda.data).toLocaleDateString()}</TableCell>
-                <TableCell>{venda.tipoDocumento}</TableCell>
-                <TableCell>{venda.cliente}</TableCell>
-                <TableCell>{venda.funcionario}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+      <Paper sx={{ p: 2, textAlign: 'center', color: 'gray', width: '100%' }}>
+        {isSmallScreen ? (
+          vendas.map((venda) => (
+            <Paper key={venda.id} sx={{ p: 2, mb: 2, boxShadow: 2 }}>
+              <Typography variant="h6">{venda.nomeProduto}</Typography>
+              <Box>
+                <strong>Ref.:</strong> {venda.referencia}
+              </Box>
+              <Box>
+                <strong>Quant.:</strong> {venda.quantidade}
+              </Box>
+              <Box>
+                <strong>P. Unitário:</strong> {venda.precoUnitario.toFixed(2)} Kzs
+              </Box>
+              <Box>
+                <strong>Valor Total:</strong> {venda.valorTotal.toFixed(2)} Kzs
+              </Box>
+              <Box>
+                <strong>Data:</strong> {new Date(venda.data).toLocaleDateString()}
+              </Box>
+              <Box>
+                <strong>T. Documento:</strong> {venda.tipoDocumento}
+              </Box>
+              <Box>
+                <strong>Cliente:</strong> {venda.cliente}
+              </Box>
+              <Box>
+                <strong>Funcionário:</strong> {venda.funcionario}
+              </Box>
+            </Paper>
+          ))
+        ) : (
+          <TableContainer sx={{ overflowX: 'auto' }}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Nome do Produto</TableCell>
+                  <TableCell>Ref.</TableCell>
+                  <TableCell>Quant.</TableCell>
+                  <TableCell>P. Unitário</TableCell>
+                  <TableCell>Valor Total</TableCell>
+                  <TableCell>Data</TableCell>
+                  <TableCell>T. Documento</TableCell>
+                  <TableCell>Cliente</TableCell>
+                  <TableCell>Funcionário</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {vendas.map((venda) => (
+                  <TableRow key={venda.id}>
+                    <TableCell>{venda.nomeProduto}</TableCell>
+                    <TableCell>{venda.referencia}</TableCell>
+                    <TableCell>{venda.quantidade}</TableCell>
+                    <TableCell>{venda.precoUnitario.toFixed(2)} Kzs</TableCell>
+                    <TableCell>{venda.valorTotal.toFixed(2)} Kzs</TableCell>
+                    <TableCell>{new Date(venda.data).toLocaleDateString()}</TableCell>
+                    <TableCell>{venda.tipoDocumento}</TableCell>
+                    <TableCell>{venda.cliente}</TableCell>
+                    <TableCell>{venda.funcionario}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
       </Paper>
     </>
   );
