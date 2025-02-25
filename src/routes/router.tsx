@@ -107,6 +107,6 @@ export const routes = [
   },
 ];
 
-const router = createBrowserRouter(routes, { basename: '/motiv' });
+const router = createBrowserRouter(routes, { basename: '/sufg' });
 
 export default router;
