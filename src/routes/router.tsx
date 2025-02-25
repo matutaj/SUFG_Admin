@@ -75,7 +75,7 @@ export const routes = [
           },
           {
             path: paths.estoque,
-            element: <Stock subItems={undefined} open={true} />,
+            element: <Stock />,
           },
           {
             path: paths.funcionarios,
