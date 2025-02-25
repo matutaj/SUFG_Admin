@@ -24,7 +24,6 @@ import {
 } from '@mui/material';
 import React from 'react';
 import IconifyIcon from 'components/base/IconifyIcon';
-import Delete from 'components/icons/factor/Delete';
 import Edit from 'components/icons/factor/Edit';
 import { SubItem } from 'types/types';
 
@@ -40,7 +39,7 @@ const style = {
   transform: 'translate(-50%, -50%)',
   width: { xs: '90%', sm: '80%', md: 980 },
   maxWidth: '100%',
-  height: { xs: '100%', sm: '50%', md: 650 },
+  height: { xs: '100%', sm: '50%', md: 500 },
   maxHeight: '90%',
   bgcolor: 'background.paper',
   boxShadow: 24,
@@ -70,6 +69,7 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
     categoria: '',
     custoAqui: 0,
     detalhes: '',
+    fornecedor: '',
     validade: new Date(),
     prico: 0,
     quantidade: 0,
@@ -91,6 +91,7 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
       categoria: string;
       custoAqui: number;
       detalhes: string;
+      fornecedor: string;
       validade: Date;
       prico: number;
       quantidade: number;
@@ -163,6 +164,7 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
         categoria: '',
         custoAqui: 0,
         detalhes: '',
+        fornecedor: '',
         validade: new Date(),
         prico: 0,
         quantidade: 0,
@@ -308,6 +310,16 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
                   <FormHelperText error>{formErrors.categoria}</FormHelperText>
                 )}
               </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  name="fornecedor"
+                  label="Fornecedor do Produto"
+                  type="string"
+                  sx={{ width: '100%' }}
+                  value={form.detalhes}
+                  onChange={handleChange}
+                />
+              </Grid>
             </Grid>
 
             <Button variant="contained" color="secondary" onClick={handleAddProduct}>
@@ -329,6 +341,8 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
                     'Categoria',
                     'Preço',
                     'Validade',
+                    'custo de aquisição',
+                    'Fornecedor',
                     'Quantidade',
                     'Ações',
                   ].map((header) => (
@@ -354,14 +368,12 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
                           }).format(new Date(product.validade))
                         : 'Data inválida'}
                     </TableCell>
-
+                    <TableCell>{product.custoAqui}</TableCell>
+                    <TableCell>{product.fornecedor}</TableCell>
                     <TableCell>{product.quantidade}</TableCell>
                     <TableCell align="right">
                       <IconButton color="primary">
                         <Edit />
-                      </IconButton>
-                      <IconButton color="error">
-                        <Delete />
                       </IconButton>
                     </TableCell>
                   </TableRow>

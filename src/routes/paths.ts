@@ -12,7 +12,8 @@ export default {
 
   // Páginas principais
   dashboard: `/${rootPaths.pagesRoot}/dashboard`,
-  produtos: `/${rootPaths.pagesRoot}/produt`,
+  loja: `/${rootPaths.pagesRoot}/produt/loja`,
+  armanzem: `/${rootPaths.pagesRoot}/produt/armanzem`,
   categorias: `/${rootPaths.pagesRoot}/categorias`,
   estoque: `/${rootPaths.pagesRoot}/stock`,
   vendas: `/${rootPaths.pagesRoot}/venda`,
