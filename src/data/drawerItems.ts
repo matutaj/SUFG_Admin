@@ -24,9 +24,20 @@ export const drawerItems: DrawerItem[] = [
   {
     id: 3,
     icon: Doughnut,
-    title: 'Produtos',
-    path: paths.produtos, // '/pages/produtos'
-    collapsible: false,
+    title: 'Produtos', // '/pages/produtos'
+    collapsible: true,
+    subList: [
+      {
+        id: 31,
+        title: 'Produto Loja',
+        path: `/${rootPaths.pagesRoot}/produt/loja`,
+      },
+      {
+        id: 32,
+        title: 'Produto Armazém',
+        path: `/${rootPaths.pagesRoot}/produt/armanzem`,
+      },
+    ],
   },
   {
     id: 4,

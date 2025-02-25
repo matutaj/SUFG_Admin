@@ -9,13 +9,14 @@ import Venda from 'pages/venda/Venda';
 import Cliente from 'pages/cliente/Cliente';
 import Faturacao from 'pages/faturacao/Faturacao';
 import Relatorio from 'pages/relatorio/Relatorio';
+import Loja from 'pages/produt/Produt_loja';
 
 const App = lazy(() => import('App'));
 const MainLayout = lazy(() => import('layouts/main-layout'));
 const Categoria = lazy(() => import('pages/categoria/Categoria'));
 const AuthLayout = lazy(() => import('layouts/auth-layout'));
 const Dashboard = lazy(() => import('pages/dashboard/Dashboard'));
-const Produt = lazy(() => import('pages/produt/Produt'));
+const Armanzem = lazy(() => import('pages/produt/Armanzem'));
 const Login = lazy(() => import('pages/authentication/Login'));
 const Signup = lazy(() => import('pages/authentication/Signup'));
 const ErrorPage = lazy(() => import('pages/errors/ErrorPage'));
@@ -61,8 +62,12 @@ export const routes = [
             element: <Dashboard />,
           },
           {
-            path: paths.produtos,
-            element: <Produt subItems={undefined} open={true} />,
+            path: paths.loja,
+            element: <Loja subItems={undefined} open={true} />,
+          },
+          {
+            path: paths.armanzem,
+            element: <Armanzem subItems={undefined} open={true} />,
           },
           {
             path: paths.categorias,
