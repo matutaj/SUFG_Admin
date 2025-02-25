@@ -6,6 +6,7 @@ import {
   Typography,
   TextField,
   Box,
+  IconButton,
   Grid,
   Card,
   CardContent,
@@ -15,7 +16,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  IconButton,
   Modal,
   Select,
   MenuItem,
@@ -24,7 +24,6 @@ import {
 } from '@mui/material';
 import React from 'react';
 import IconifyIcon from 'components/base/IconifyIcon';
-import Delete from 'components/icons/factor/Delete';
 import Edit from 'components/icons/factor/Edit';
 import { SubItem } from 'types/types';
 
@@ -40,7 +39,7 @@ const style = {
   transform: 'translate(-50%, -50%)',
   width: { xs: '90%', sm: '80%', md: 980 },
   maxWidth: '100%',
-  height: { xs: '100%', sm: '50%', md: 650 },
+  height: { xs: '100%', sm: '50%', md: 450 },
   maxHeight: '90%',
   bgcolor: 'background.paper',
   boxShadow: 24,
@@ -52,24 +51,23 @@ const style = {
   overflowY: 'auto',
 };
 interface FormErrors {
+  categoria: string;
   name: string;
-  custoAqui: string;
+  pratileira: string;
   quantidade: string;
   validade: string;
   prico: string;
-  categoria: string;
 }
 
-const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
+const ProductLoja: React.FC<CollapsedItemProps> = ({ open }) => {
   const [openProduct, setOpenProduct] = React.useState(false);
   const handleOpen = () => setOpenProduct(true);
   const handleClose = () => setOpenProduct(false);
 
   const [form, setForm] = React.useState({
     name: '',
+    pratileira: '',
     categoria: '',
-    custoAqui: 0,
-    detalhes: '',
     validade: new Date(),
     prico: 0,
     quantidade: 0,
@@ -77,20 +75,19 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const [formErrors, setFormErrors] = React.useState({
     name: '',
-    custoAqui: '',
-    quantidade: '',
+    pratileira: '',
+    categoria: '',
     validade: '',
     prico: '',
-    categoria: '',
+    quantidade: '',
   });
 
   const [products, setProducts] = React.useState<
     {
       id: number;
       name: string;
+      pratileira: string;
       categoria: string;
-      custoAqui: number;
-      detalhes: string;
       validade: Date;
       prico: number;
       quantidade: number;
@@ -120,23 +117,25 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
   const validateForm = () => {
     const errors: FormErrors = {
       name: '',
-      custoAqui: '',
       quantidade: '',
       validade: '',
-      prico: '',
       categoria: '',
+      prico: '',
+      pratileira: '',
     };
     if (!form.name) {
       errors.name = 'Nome do produto é obrigatório';
     }
-    if (form.custoAqui <= 0) {
-      errors.custoAqui = 'O custo de aquisição deve ser maior que 0';
-    }
+
     if (form.quantidade <= 0) {
       errors.quantidade = 'A quantidade deve ser maior que 0';
     }
     if (form.prico <= 0) {
       errors.prico = 'O preço deve ser maior que 0';
+    }
+
+    if (!form.pratileira) {
+      errors.pratileira = 'A pratileira é obrigatória';
     }
     if (!form.categoria) {
       errors.categoria = 'A categoria é obrigatória';
@@ -160,9 +159,8 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
       setProducts([...products, newProduct]);
       setForm({
         name: '',
+        pratileira: '',
         categoria: '',
-        custoAqui: 0,
-        detalhes: '',
         validade: new Date(),
         prico: 0,
         quantidade: 0,
@@ -180,7 +178,7 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
       <Paper sx={{ p: 2, width: '100%' }}>
         <Collapse in={open}>
           <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Typography variant="h5">Cadastrar Produto</Typography>
+            <Typography variant="h5">Produtos Na Loja</Typography>
             <Button
               variant="contained"
               color="secondary"
@@ -202,7 +200,7 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
             sx={{ width: '100%', mb: 8 }}
           >
             <Typography id="modal-modal-title" variant="h5" component="h2">
-              Cadastrar Produtos
+              Adicionar Produtos Na Loja
             </Typography>
             <Button onClick={handleClose} variant="outlined" color="error">
               Fechar
@@ -211,82 +209,6 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
           <Stack sx={{ width: '100%' }} spacing={3}>
             <Grid container spacing={2}>
               <Grid item xs={12} sm={4}>
-                <TextField
-                  name="name"
-                  label="Nome do Produto"
-                  type="string"
-                  sx={{ width: '100%' }}
-                  value={form.name}
-                  onChange={handleChange}
-                  error={Boolean(formErrors.name)}
-                  helperText={formErrors.name}
-                />
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  name="custoAqui"
-                  label="Custo de Aquisição"
-                  type="number"
-                  sx={{ width: '100%' }}
-                  value={form.custoAqui}
-                  onChange={handleChange}
-                  error={Boolean(formErrors.custoAqui)}
-                  helperText={formErrors.custoAqui}
-                />
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  name="quantidade"
-                  label="Quantidade do Produto"
-                  type="number"
-                  sx={{ width: '100%' }}
-                  value={form.quantidade}
-                  onChange={handleChange}
-                  error={Boolean(formErrors.quantidade)}
-                  helperText={formErrors.quantidade}
-                />
-              </Grid>
-            </Grid>
-
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  name="validade"
-                  label="Validade do Produto"
-                  type="date"
-                  sx={{ width: '100%' }}
-                  value={form.validade}
-                  onChange={handleChange}
-                  error={Boolean(formErrors.validade)}
-                  helperText={formErrors.validade}
-                />
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  name="prico"
-                  label="Preço do Produto"
-                  type="number"
-                  sx={{ width: '100%' }}
-                  value={form.prico}
-                  onChange={handleChange}
-                  error={Boolean(formErrors.prico)}
-                  helperText={formErrors.prico}
-                />
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  name="detalhes"
-                  label="Detalhes do Produto"
-                  type="string"
-                  sx={{ width: '100%' }}
-                  value={form.detalhes}
-                  onChange={handleChange}
-                />
-              </Grid>
-            </Grid>
-
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
                 <Select
                   name="categoria"
                   value={form.categoria}
@@ -296,7 +218,7 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
                   fullWidth
                 >
                   <MenuItem value="" disabled>
-                    Selecione uma Categoria
+                    Selecione a categoria
                   </MenuItem>
                   {categories.map((cat) => (
                     <MenuItem key={cat.id} value={cat.name}>
@@ -307,6 +229,58 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
                 {formErrors.categoria && (
                   <FormHelperText error>{formErrors.categoria}</FormHelperText>
                 )}
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Select
+                  name="produto"
+                  value={form.name}
+                  onChange={handleSelectChange}
+                  displayEmpty
+                  error={Boolean(formErrors.name)}
+                  fullWidth
+                >
+                  <MenuItem value="" disabled>
+                    Selecione um Produto
+                  </MenuItem>
+                  {products.map((prod) => (
+                    <MenuItem key={prod.id} value={prod.name}>
+                      {prod.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {formErrors.name && <FormHelperText error>{formErrors.name}</FormHelperText>}
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Select
+                  name="pratileira"
+                  value={form.pratileira}
+                  onChange={handleSelectChange}
+                  displayEmpty
+                  error={Boolean(formErrors.pratileira)}
+                  fullWidth
+                >
+                  <MenuItem value="" disabled>
+                    Selecione a pratileira
+                  </MenuItem>
+                  <MenuItem value="baixo">Baixo</MenuItem>
+                  <MenuItem value="medio">Médio</MenuItem>
+                  <MenuItem value="alto">Alto</MenuItem>
+                </Select>
+                {formErrors.pratileira && (
+                  <FormHelperText error>{formErrors.pratileira}</FormHelperText>
+                )}
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  name="quantidade"
+                  label="quantidade"
+                  type="number"
+                  sx={{ width: '100%' }}
+                  value={form.quantidade}
+                  onChange={handleChange}
+                  error={Boolean(formErrors.quantidade)}
+                  helperText={formErrors.quantidade}
+                />
               </Grid>
             </Grid>
 
@@ -326,11 +300,11 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
                   {[
                     'ID',
                     'Nome do Produto',
-                    'Categoria',
+                    'Pratileira',
                     'Preço',
                     'Validade',
                     'Quantidade',
-                    'Ações',
+                    'Editar',
                   ].map((header) => (
                     <TableCell key={header}>
                       <strong>{header}</strong>
@@ -343,7 +317,7 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
                   <TableRow key={product.id}>
                     <TableCell>{product.id}</TableCell>
                     <TableCell>{product.name}</TableCell>
-                    <TableCell>{product.categoria}</TableCell>
+                    <TableCell>{product.pratileira}</TableCell>
                     <TableCell>{product.prico}</TableCell>
                     <TableCell>
                       {product.validade && !isNaN(new Date(product.validade).getTime())
@@ -360,9 +334,6 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
                       <IconButton color="primary">
                         <Edit />
                       </IconButton>
-                      <IconButton color="error">
-                        <Delete />
-                      </IconButton>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -375,4 +346,4 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
   );
 };
 
-export default ProductManager;
+export default ProductLoja;
