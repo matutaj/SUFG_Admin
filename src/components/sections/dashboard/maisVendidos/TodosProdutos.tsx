@@ -4,13 +4,16 @@ import { ICar } from 'types/types';
 
 const Cars = ({ cars }: { cars: ICar[] }) => {
   return (
-    <Grid container spacing={3.75}>
-      {cars.map((car) => (
-        <Grid item key={car.id} xs={12} sm={6} lg>
-          <Car car={car} />
-        </Grid>
-      ))}
-    </Grid>
+    <>
+      <h3>Produtos Mais Vendidos</h3>
+      <Grid container spacing={3.75}>
+        {cars.map((car) => (
+          <Grid item key={car.id} xs={12} sm={6} lg>
+            <Car car={car} />
+          </Grid>
+        ))}
+      </Grid>
+    </>
   );
 };
 

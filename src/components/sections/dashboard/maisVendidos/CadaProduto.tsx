@@ -64,7 +64,7 @@ const Car = ({ car }: { car: ICar }) => {
             </Stack>
 
             <Typography variant="body2" component="span">
-              ${costPerHour}/h
+              {costPerHour}/h
             </Typography>
           </Stack>
         </Box>
