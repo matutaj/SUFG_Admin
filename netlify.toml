@@ -1,5 +1,5 @@
 [build]
-base = "."
+base = "./"
 command = "yarn build"
 publish = "./dist/"
 
