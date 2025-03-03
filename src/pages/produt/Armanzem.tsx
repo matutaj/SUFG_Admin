@@ -21,6 +21,7 @@ import {
   MenuItem,
   SelectChangeEvent,
   FormHelperText,
+  Alert,
 } from '@mui/material';
 import React from 'react';
 import IconifyIcon from 'components/base/IconifyIcon';
@@ -50,6 +51,7 @@ const style = {
   p: 4,
   overflowY: 'auto',
 };
+
 interface FormErrors {
   name: string;
   custoAqui: string;
@@ -61,8 +63,62 @@ interface FormErrors {
 
 const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
   const [openProduct, setOpenProduct] = React.useState(false);
-  const handleOpen = () => setOpenProduct(true);
-  const handleClose = () => setOpenProduct(false);
+  const [alert, setAlert] = React.useState<{
+    severity: 'success' | 'error' | 'info' | 'warning';
+    message: string;
+  } | null>(null);
+  const [editProductId, setEditProductId] = React.useState<number | null>(null);
+  const [search, setSearch] = React.useState('');
+
+  const handleOpen = (productId?: number) => {
+    if (productId) {
+      const productToEdit = products.find((p) => p.id === productId);
+      if (productToEdit) {
+        setForm(productToEdit);
+        setEditProductId(productId);
+      }
+    } else {
+      setForm({
+        name: '',
+        categoria: '',
+        custoAqui: 0,
+        detalhes: '',
+        fornecedor: '',
+        validade: '',
+        prico: 0,
+        quantidade: 0,
+      });
+      setEditProductId(null);
+    }
+    setOpenProduct(true);
+  };
+
+  const handleClose = () => {
+    setOpenProduct(false);
+    setEditProductId(null);
+    setForm({
+      name: '',
+      categoria: '',
+      custoAqui: 0,
+      detalhes: '',
+      fornecedor: '',
+      validade: '',
+      prico: 0,
+      quantidade: 0,
+    });
+    setFormErrors({
+      name: '',
+      custoAqui: '',
+      quantidade: '',
+      validade: '',
+      prico: '',
+      categoria: '',
+    });
+  };
+
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearch(e.target.value);
+  };
 
   const [form, setForm] = React.useState({
     name: '',
@@ -70,12 +126,12 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
     custoAqui: 0,
     detalhes: '',
     fornecedor: '',
-    validade: new Date(),
+    validade: '',
     prico: 0,
     quantidade: 0,
   });
 
-  const [formErrors, setFormErrors] = React.useState({
+  const [formErrors, setFormErrors] = React.useState<FormErrors>({
     name: '',
     custoAqui: '',
     quantidade: '',
@@ -92,21 +148,26 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
       custoAqui: number;
       detalhes: string;
       fornecedor: string;
-      validade: Date;
+      validade: string;
       prico: number;
       quantidade: number;
     }[]
-  >(JSON.parse(localStorage.getItem('products') || '[]'));
+  >(() => {
+    const savedProducts = localStorage.getItem('products');
+    return savedProducts ? JSON.parse(savedProducts) : [];
+  });
 
-  const [categories] = React.useState<{ id: number; name: string }[]>(
-    JSON.parse(localStorage.getItem('categoria') || '[]'),
-  );
+  const [categories] = React.useState<{ id: number; name: string }[]>(() => {
+    const savedCategories = localStorage.getItem('categoria');
+    return savedCategories ? JSON.parse(savedCategories) : [];
+  });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setForm((prev) => ({
       ...prev,
-      [name as string]: value,
+      [name]:
+        name === 'custoAqui' || name === 'prico' || name === 'quantidade' ? Number(value) : value,
     }));
   };
 
@@ -127,49 +188,57 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
       prico: '',
       categoria: '',
     };
-    if (!form.name) {
-      errors.name = 'Nome do produto é obrigatório';
-    }
-    if (form.custoAqui <= 0) {
-      errors.custoAqui = 'O custo de aquisição deve ser maior que 0';
-    }
-    if (form.quantidade <= 0) {
-      errors.quantidade = 'A quantidade deve ser maior que 0';
-    }
-    if (form.prico <= 0) {
-      errors.prico = 'O preço deve ser maior que 0';
-    }
-    if (!form.categoria) {
-      errors.categoria = 'A categoria é obrigatória';
-    }
-    if (!form.validade || isNaN(new Date(form.validade).getTime())) {
+    if (!form.name) errors.name = 'Nome do produto é obrigatório';
+    else if (
+      products.some(
+        (p) =>
+          p.name.toLowerCase() === form.name.toLowerCase() &&
+          (!editProductId || p.id !== editProductId),
+      )
+    )
+      errors.name = 'Este produto já existe';
+    if (form.custoAqui <= 0) errors.custoAqui = 'O custo de aquisição deve ser maior que 0';
+    if (form.quantidade <= 0) errors.quantidade = 'A quantidade deve ser maior que 0';
+    if (form.prico <= 0) errors.prico = 'O preço deve ser maior que 0';
+    if (!form.categoria) errors.categoria = 'A categoria é obrigatória';
+    if (!form.validade || isNaN(new Date(form.validade).getTime()))
       errors.validade = 'A validade é inválida';
-    }
 
     setFormErrors(errors);
-
-    return Object.keys(errors).length === 0;
+    return Object.values(errors).every((error) => error === '');
   };
 
   const handleAddProduct = () => {
     if (validateForm()) {
-      const newProduct = {
-        id: products.length + 1,
-        ...form,
-      };
+      if (editProductId) {
+        const updatedProducts = products.map((product) =>
+          product.id === editProductId ? { ...form, id: editProductId } : product,
+        );
+        setProducts(updatedProducts);
+        localStorage.setItem('products', JSON.stringify(updatedProducts));
+        setAlert({ severity: 'success', message: 'Produto atualizado com sucesso!' });
+      } else {
+        const newProduct = {
+          id: products.length + 1,
+          ...form,
+        };
+        const updatedProducts = [...products, newProduct];
+        setProducts(updatedProducts);
+        localStorage.setItem('products', JSON.stringify(updatedProducts));
+        setAlert({ severity: 'success', message: 'Produto cadastrado com sucesso!' });
+      }
 
-      setProducts([...products, newProduct]);
-      setForm({
-        name: '',
-        categoria: '',
-        custoAqui: 0,
-        detalhes: '',
-        fornecedor: '',
-        validade: new Date(),
-        prico: 0,
-        quantidade: 0,
+      handleClose();
+      setTimeout(() => setAlert(null), 3000);
+    } else {
+      setAlert({
+        severity: 'error',
+        message:
+          formErrors.name === 'Este produto já existe'
+            ? 'Erro: Este produto já existe!'
+            : 'Erro: Preencha todos os campos corretamente!',
       });
-      setOpenProduct(false);
+      setTimeout(() => setAlert(null), 3000);
     }
   };
 
@@ -177,16 +246,37 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
     localStorage.setItem('products', JSON.stringify(products));
   }, [products]);
 
+  // Filter products based on search input
+  const filteredProducts = products.filter(
+    (product) =>
+      product.name.toLowerCase().includes(search.toLowerCase()) ||
+      product.categoria.toLowerCase().includes(search.toLowerCase()) ||
+      product.fornecedor.toLowerCase().includes(search.toLowerCase()),
+  );
+
   return (
     <>
+      {alert && (
+        <Box sx={{ position: 'fixed', top: 20, right: 40, zIndex: 9999 }}>
+          <Alert severity={alert.severity}>{alert.message}</Alert>
+        </Box>
+      )}
+
       <Paper sx={{ p: 2, width: '100%' }}>
         <Collapse in={open}>
           <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Typography variant="h5">Cadastrar Produto</Typography>
+            <Typography variant="h5">Cadastrar Produto No Armazém</Typography>
+            <TextField
+              label="Pesquisar"
+              variant="outlined"
+              size="small"
+              value={search}
+              onChange={handleSearch}
+            />
             <Button
               variant="contained"
               color="secondary"
-              onClick={handleOpen}
+              onClick={() => handleOpen()}
               startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
             >
               <Typography variant="body2">Adicionar Produto</Typography>
@@ -216,7 +306,7 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
                 <TextField
                   name="name"
                   label="Nome do Produto"
-                  type="string"
+                  type="text"
                   sx={{ width: '100%' }}
                   value={form.name}
                   onChange={handleChange}
@@ -259,6 +349,7 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
                   sx={{ width: '100%' }}
                   value={form.validade}
                   onChange={handleChange}
+                  InputLabelProps={{ shrink: true }}
                   error={Boolean(formErrors.validade)}
                   helperText={formErrors.validade}
                 />
@@ -279,7 +370,7 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
                 <TextField
                   name="detalhes"
                   label="Detalhes do Produto"
-                  type="string"
+                  type="text"
                   sx={{ width: '100%' }}
                   value={form.detalhes}
                   onChange={handleChange}
@@ -314,9 +405,9 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
                 <TextField
                   name="fornecedor"
                   label="Fornecedor do Produto"
-                  type="string"
+                  type="text"
                   sx={{ width: '100%' }}
-                  value={form.detalhes}
+                  value={form.fornecedor}
                   onChange={handleChange}
                 />
               </Grid>
@@ -341,7 +432,7 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
                     'Categoria',
                     'Preço',
                     'Validade',
-                    'custo de aquisição',
+                    'Custo de Aquisição',
                     'Fornecedor',
                     'Quantidade',
                     'Ações',
@@ -353,7 +444,7 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {products.map((product) => (
+                {filteredProducts.map((product) => (
                   <TableRow key={product.id}>
                     <TableCell>{product.id}</TableCell>
                     <TableCell>{product.name}</TableCell>
@@ -372,7 +463,7 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
                     <TableCell>{product.fornecedor}</TableCell>
                     <TableCell>{product.quantidade}</TableCell>
                     <TableCell align="right">
-                      <IconButton color="primary">
+                      <IconButton color="primary" onClick={() => handleOpen(product.id)}>
                         <Edit />
                       </IconButton>
                     </TableCell>
