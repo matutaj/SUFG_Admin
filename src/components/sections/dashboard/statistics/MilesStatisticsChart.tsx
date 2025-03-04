@@ -63,7 +63,7 @@ const MilesStatisticsChart = ({ barChartRef, data, style }: ChartProps) => {
       xAxis: [
         {
           type: 'category',
-          data: ['1 PM', '2 PM', '3 PM', '4 PM', '5 PM', '6 PM', '7 PM'],
+          data: ['8h', '9h', '10h', '11h', '12h', '13h', ' 14h', '15h', '16h', '17h'],
           axisTick: {
             show: false,
           },
@@ -96,7 +96,7 @@ const MilesStatisticsChart = ({ barChartRef, data, style }: ChartProps) => {
         {
           type: 'bar',
           barWidth: 28,
-          data: [120, 80, 157, 60, 130, 40, 90],
+          data: [120, 80, 157, 60, 130, 40, 90, 50, 100, 70],
           // data: data,
           cursor: 'none',
           emphasis: {

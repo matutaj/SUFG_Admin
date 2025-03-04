@@ -13,7 +13,7 @@ const Footer = () => {
       </Box>{' '}
       by{' '}
       <Link
-        href="https://themewagon.com/"
+        href="https://www.linkedin.com/in/matuta-jorge-4236b7204/"
         target="_blank"
         rel="noopener"
         aria-label="Explore ThemeWagon Website"

@@ -52,19 +52,24 @@ const style = {
 
 const Categoria = ({ open }: CollapsedItemProps) => {
   const [openCategoria, setOpenCategoria] = React.useState(false);
+  const [editCategoriaId, setEditCategoriaId] = React.useState<number | null>(null);
   const handleOpen = () => setOpenCategoria(true);
-  const handleClose = () => setOpenCategoria(false);
+  const handleClose = () => {
+    setOpenCategoria(false);
+    setEditCategoriaId(null);
+    setName('');
+    setDescription('');
+    setErrors({});
+  };
   const [name, setName] = React.useState('');
   const [description, setDescription] = React.useState('');
   const [categoria, setCategoria] = React.useState<
     { id: number; name: string; description: string }[]
   >(JSON.parse(localStorage.getItem('categoria') || '[]'));
 
-  // Estados de erro
   const [errors, setErrors] = React.useState<{ name?: string; description?: string }>({});
 
   function onAddCategoriaSubmit(name: string, description: string) {
-    // Validação
     const newErrors: { name?: string; description?: string } = {};
     if (!name.trim()) newErrors.name = 'O nome da categoria é obrigatório.';
     if (!description.trim()) newErrors.description = 'A descrição é obrigatória.';
@@ -72,17 +77,43 @@ const Categoria = ({ open }: CollapsedItemProps) => {
       setErrors(newErrors);
       return;
     }
-    const newsCategoria = {
-      id: categoria.length + 1,
-      name,
-      description,
-    };
-    setCategoria([...categoria, newsCategoria]);
-    // Limpar os campos e erros após a submissão
+
+    if (editCategoriaId) {
+      // Editar categoria existente
+      setCategoria(
+        categoria.map((cat) => (cat.id === editCategoriaId ? { ...cat, name, description } : cat)),
+      );
+    } else {
+      // Adicionar nova categoria
+      const newsCategoria = {
+        id: categoria.length + 1,
+        name,
+        description,
+      };
+      setCategoria([...categoria, newsCategoria]);
+    }
+
     setName('');
     setDescription('');
     setErrors({});
+    handleClose();
   }
+
+  const handleEdit = (id: number) => {
+    const categoriaToEdit = categoria.find((cat) => cat.id === id);
+    if (categoriaToEdit) {
+      setName(categoriaToEdit.name);
+      setDescription(categoriaToEdit.description);
+      setEditCategoriaId(id);
+      handleOpen();
+    }
+  };
+
+  const handleDelete = (id: number) => {
+    if (window.confirm('Tem certeza que deseja excluir esta categoria?')) {
+      setCategoria(categoria.filter((cat) => cat.id !== id));
+    }
+  };
 
   React.useEffect(() => {
     localStorage.setItem('categoria', JSON.stringify(categoria));
@@ -194,10 +225,10 @@ const Categoria = ({ open }: CollapsedItemProps) => {
                       <TableCell>{categoria.name}</TableCell>
                       <TableCell>{categoria.description}</TableCell>
                       <TableCell align="right">
-                        <IconButton color="primary" onClick={() => {}}>
+                        <IconButton color="primary" onClick={() => handleEdit(categoria.id)}>
                           <Edit>edit</Edit>
                         </IconButton>
-                        <IconButton color="error" onClick={() => {}}>
+                        <IconButton color="error" onClick={() => handleDelete(categoria.id)}>
                           <Delete>delete</Delete>
                         </IconButton>
                       </TableCell>

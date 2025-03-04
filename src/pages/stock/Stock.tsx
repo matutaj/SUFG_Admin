@@ -103,7 +103,7 @@ const Stock = () => {
           </FormControl>
           <FormControl sx={{ flex: 1, minWidth: 200 }}>
             <InputLabel>Caixa</InputLabel>
-            <Select value={selectedProduct} onChange={handleProductChange}>
+            <Select value="" onChange={handleProductChange}>
               <MenuItem value="">Todos os caixas</MenuItem>
               <MenuItem value="#">caixa 1</MenuItem>
               <MenuItem value="#">caixa 1</MenuItem>
