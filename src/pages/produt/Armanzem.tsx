@@ -68,7 +68,6 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
     message: string;
   } | null>(null);
   const [editProductId, setEditProductId] = React.useState<number | null>(null);
-  const [search, setSearch] = React.useState('');
 
   const handleOpen = (productId?: number) => {
     if (productId) {
@@ -116,9 +115,8 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
     });
   };
 
-  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearch(e.target.value);
-  };
+  const [search, setSearch] = React.useState('');
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value);
 
   const [form, setForm] = React.useState({
     name: '',
@@ -211,6 +209,7 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
   const handleAddProduct = () => {
     if (validateForm()) {
       if (editProductId) {
+        // Update existing product
         const updatedProducts = products.map((product) =>
           product.id === editProductId ? { ...form, id: editProductId } : product,
         );
@@ -218,6 +217,7 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
         localStorage.setItem('products', JSON.stringify(updatedProducts));
         setAlert({ severity: 'success', message: 'Produto atualizado com sucesso!' });
       } else {
+        // Add new product
         const newProduct = {
           id: products.length + 1,
           ...form,
@@ -245,14 +245,6 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
   React.useEffect(() => {
     localStorage.setItem('products', JSON.stringify(products));
   }, [products]);
-
-  // Filter products based on search input
-  const filteredProducts = products.filter(
-    (product) =>
-      product.name.toLowerCase().includes(search.toLowerCase()) ||
-      product.categoria.toLowerCase().includes(search.toLowerCase()) ||
-      product.fornecedor.toLowerCase().includes(search.toLowerCase()),
-  );
 
   return (
     <>
@@ -444,7 +436,7 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {filteredProducts.map((product) => (
+                {products.map((product) => (
                   <TableRow key={product.id}>
                     <TableCell>{product.id}</TableCell>
                     <TableCell>{product.name}</TableCell>

@@ -17,11 +17,11 @@ import {
   IconButton,
   Collapse,
   Modal,
+  Grid,
   MenuItem,
   Select,
   InputLabel,
   FormControl,
-  SelectChangeEvent,
 } from '@mui/material';
 import IconifyIcon from 'components/base/IconifyIcon';
 import Delete from 'components/icons/factor/Delete';
@@ -38,10 +38,14 @@ interface Produto {
 interface Fatura {
   id: number;
   cliente: string;
+  nif: string;
+  telefone: string;
+  localizacao: string;
+  email: string;
   data: string;
   total: number;
   status: string;
-  produtos: Produto[];
+  produtos: { produto: Produto; quantidade: number }[];
 }
 
 interface CollapsedItemProps {
@@ -49,154 +53,144 @@ interface CollapsedItemProps {
   open: boolean;
 }
 
-const style = {
+const modalStyle = {
   position: 'absolute',
   top: '50%',
   left: '50%',
   transform: 'translate(-50%, -50%)',
   width: { xs: '90%', sm: '80%', md: 900 },
   maxWidth: '100%',
-  height: { xs: '100%', sm: '50%', md: 650 },
+  height: { xs: '100%', sm: '60%', md: 700 },
   maxHeight: '90%',
   bgcolor: 'background.paper',
   boxShadow: 24,
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'start',
-  alignItems: 'center',
   p: 4,
   overflowY: 'auto',
-  scrollbarWidth: 'thin',
-  scrollbarColor: '#6c63ff #f1f1f1',
+  borderRadius: 2,
 };
 
 const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
-  const [openFatura, setOpenFatura] = useState(false);
-  const [form, setForm] = useState({
-    cliente: '',
-    data: '',
-    total: 0,
-    status: 'Pendente',
-    produtos: [] as Produto[],
-    produtoSelecionado: '',
-    categoriaSelecionada: '',
+  // Carrega os produtos da loja do localStorage
+  const [loja] = useState<Produto[]>(() => {
+    const lojaSalva = localStorage.getItem('loja');
+    return lojaSalva ? JSON.parse(lojaSalva) : [];
   });
 
+  const [openFatura, setOpenFatura] = useState(false);
   const [faturas, setFaturas] = useState<Fatura[]>(
     JSON.parse(localStorage.getItem('faturas') || '[]'),
   );
 
-  const produtos = [
-    { id: 1, nome: 'Produto 1', preco: 10 },
-    { id: 2, nome: 'Produto 2', preco: 20 },
-    { id: 3, nome: 'Produto 3', preco: 30 },
-  ];
-
-  const categorias = JSON.parse(localStorage.getItem('categorias') || '[]');
+  const [form, setForm] = useState({
+    cliente: '',
+    nif: '',
+    telefone: '',
+    localizacao: '',
+    email: '',
+    data: '',
+    status: 'Pendente',
+    produtosSelecionados: [] as { id: string; quantidade: number }[],
+  });
 
   const handleOpen = () => setOpenFatura(true);
-  const handleClose = () => setOpenFatura(false);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+  const handleClose = () => {
+    setOpenFatura(false);
+    resetForm();
   };
 
-  const handleProdutoChange = (e: SelectChangeEvent<string>) => {
-    const produtoId = e.target.value as string;
-    const produto = produtos.find((p) => p.id.toString() === produtoId);
-    if (produto && form.produtos.length < 10) {
-      setForm((prev) => ({
-        ...prev,
-        produtoSelecionado: produtoId,
-      }));
-    }
-  };
-
-  const handleCategoriaChange = (e: SelectChangeEvent<string>) => {
-    setForm((prev) => ({
-      ...prev,
-      categoriaSelecionada: e.target.value,
-    }));
-  };
-
-  const adicionarProduto = () => {
-    const produto = produtos.find((p) => p.id.toString() === form.produtoSelecionado);
-    if (produto && !form.produtos.some((p) => p.id === produto.id)) {
-      const produtoComCategoria = {
-        ...produto,
-        categoria: form.categoriaSelecionada || 'Sem Categoria',
-      };
-
-      setForm((prev) => ({
-        ...prev,
-        produtos: [...prev.produtos, produtoComCategoria],
-        total: prev.total + produto.preco,
-        produtoSelecionado: '',
-      }));
-    }
-  };
-
-  const excluirProduto = (produtoId: number) => {
-    const produto = form.produtos.find((p) => p.id === produtoId);
-    if (produto) {
-      const updatedProdutos = form.produtos.filter((p) => p.id !== produtoId);
-      setForm((prev) => ({
-        ...prev,
-        produtos: updatedProdutos,
-        total: prev.total - produto.preco,
-      }));
-    }
-  };
-
-  const onAddFaturaSubmit = () => {
-    if (!form.cliente.trim() || !form.total || !form.data.trim()) {
-      alert('Todos os campos são obrigatórios!');
-      return;
-    }
-
-    const newFatura = {
-      id: faturas.length + 1,
-      ...form,
-    };
-
-    setFaturas([...faturas, newFatura]);
+  const resetForm = () => {
     setForm({
       cliente: '',
+      nif: '',
+      telefone: '',
+      localizacao: '',
+      email: '',
       data: '',
-      total: 0,
       status: 'Pendente',
-      produtos: [],
-      produtoSelecionado: '',
-      categoriaSelecionada: '',
+      produtosSelecionados: [],
     });
   };
 
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handleProdutoChange = (index: number, field: string, value: string | number) => {
+    const updatedProdutos = [...form.produtosSelecionados];
+    updatedProdutos[index] = { ...updatedProdutos[index], [field]: value };
+    setForm((prev) => ({ ...prev, produtosSelecionados: updatedProdutos }));
+  };
+
+  const adicionarNovoProdutoInput = () => {
+    setForm((prev) => ({
+      ...prev,
+      produtosSelecionados: [...prev.produtosSelecionados, { id: '', quantidade: 1 }],
+    }));
+  };
+
+  const removerProdutoInput = (index: number) => {
+    const updatedProdutos = form.produtosSelecionados.filter((_, i) => i !== index);
+    setForm((prev) => ({ ...prev, produtosSelecionados: updatedProdutos }));
+  };
+
+  const calcularTotal = () => {
+    return form.produtosSelecionados.reduce((acc, curr) => {
+      const produto = loja.find((p) => p.id.toString() === curr.id); // Alterado de produtos para loja
+      return acc + (produto ? produto.preco * curr.quantidade : 0);
+    }, 0);
+  };
+
+  const onAddFaturaSubmit = () => {
+    if (!form.cliente.trim() || !form.data.trim() || form.produtosSelecionados.length === 0) {
+      alert('Preencha todos os campos obrigatórios (Nome do Cliente, Data e Produtos)!');
+      return;
+    }
+
+    const newFatura: Fatura = {
+      id: faturas.length + 1,
+      cliente: form.cliente,
+      nif: form.nif,
+      telefone: form.telefone,
+      localizacao: form.localizacao,
+      email: form.email,
+      data: form.data,
+      total: calcularTotal(),
+      status: form.status,
+      produtos: form.produtosSelecionados.map((p) => ({
+        produto: loja.find((prod) => prod.id.toString() === p.id)!, // Alterado de produtos para loja
+        quantidade: p.quantidade,
+      })),
+    };
+
+    setFaturas((prev) => [...prev, newFatura]);
+    handleClose();
+  };
+
   const excluirFatura = (faturaId: number) => {
-    const updatedFaturas = faturas.filter((f) => f.id !== faturaId);
-    setFaturas(updatedFaturas);
-    localStorage.setItem('faturas', JSON.stringify(updatedFaturas));
+    setFaturas((prev) => prev.filter((f) => f.id !== faturaId));
   };
 
   const editarFatura = (faturaId: number) => {
-    const faturaToEdit = faturas.find((f) => f.id === faturaId);
-    if (faturaToEdit) {
+    const fatura = faturas.find((f) => f.id === faturaId);
+    if (fatura) {
       setForm({
-        cliente: faturaToEdit.cliente,
-        data: faturaToEdit.data,
-        total: faturaToEdit.total,
-        status: faturaToEdit.status,
-        produtos: faturaToEdit.produtos,
-        produtoSelecionado: '',
-        categoriaSelecionada: '',
+        cliente: fatura.cliente,
+        nif: fatura.nif,
+        telefone: fatura.telefone,
+        localizacao: fatura.localizacao,
+        email: fatura.email,
+        data: fatura.data,
+        status: fatura.status,
+        produtosSelecionados: fatura.produtos.map((p) => ({
+          id: p.produto.id.toString(),
+          quantidade: p.quantidade,
+        })),
       });
       setOpenFatura(true);
     }
   };
 
+  // Sincroniza faturas com o localStorage
   useEffect(() => {
     localStorage.setItem('faturas', JSON.stringify(faturas));
   }, [faturas]);
@@ -205,13 +199,8 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     <>
       <Paper sx={{ p: 2, width: '100%', borderRadius: 2 }}>
         <Collapse in={open}>
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="center"
-            sx={{ width: '100%', mb: 2 }}
-          >
-            <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+            <Typography variant="h5" fontWeight="bold">
               Faturação
             </Typography>
             <Button
@@ -219,110 +208,185 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
               color="secondary"
               onClick={handleOpen}
               startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
-              sx={{ borderRadius: 2 }}
             >
-              <Typography variant="body2">Adicionar Fatura</Typography>
+              Adicionar Fatura
             </Button>
           </Stack>
-
-          <Modal open={openFatura} onClose={handleClose}>
-            <Box sx={style} component="form" noValidate autoComplete="off">
-              <Stack
-                direction="row"
-                justifyContent="space-between"
-                alignItems="center"
-                sx={{ width: '100%', mb: 2 }}
-              >
-                <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-                  Cadastrar Fatura
-                </Typography>
-                <Button
-                  onClick={handleClose}
-                  variant="outlined"
-                  color="error"
-                  sx={{ borderRadius: 2 }}
-                >
-                  Fechar
-                </Button>
-              </Stack>
-
-              <Stack spacing={2} sx={{ width: '100%' }}>
-                {['cliente', 'data', 'total', 'status'].map((field) => (
-                  <TextField
-                    key={field}
-                    name={field}
-                    label={field.charAt(0).toUpperCase() + field.slice(1)}
-                    variant="filled"
-                    sx={{ width: '100%', borderRadius: 2 }}
-                    value={form[field as keyof typeof form]}
-                    onChange={handleChange}
-                    type={field === 'total' ? 'number' : 'text'}
-                    disabled={field === 'total'}
-                  />
-                ))}
-
-                <FormControl fullWidth variant="filled" sx={{ borderRadius: 2 }}>
-                  <InputLabel>Produto</InputLabel>
-                  <Select
-                    value={form.produtoSelecionado}
-                    onChange={handleProdutoChange}
-                    label="Produto"
-                    sx={{ borderRadius: 2 }}
-                  >
-                    {produtos.map((produto) => (
-                      <MenuItem key={produto.id} value={produto.id.toString()}>
-                        {produto.nome} - R${produto.preco}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-
-                <Button
-                  variant="contained"
-                  color="primary"
-                  sx={{ height: 40, width: '100%', borderRadius: 2 }}
-                  onClick={adicionarProduto}
-                >
-                  <Typography variant="body2">Adicionar Produto</Typography>
-                </Button>
-
-                <FormControl fullWidth variant="filled" sx={{ borderRadius: 2 }}>
-                  <InputLabel>Categoria</InputLabel>
-                  <Select
-                    value={form.categoriaSelecionada}
-                    onChange={handleCategoriaChange}
-                    label="Categoria"
-                    sx={{ borderRadius: 2 }}
-                  >
-                    {categorias.map((categoria: string, index: number) => (
-                      <MenuItem key={index} value={categoria}>
-                        {categoria}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-
-                <Button
-                  variant="contained"
-                  color="secondary"
-                  sx={{ height: 40, width: '100%', borderRadius: 2 }}
-                  onClick={onAddFaturaSubmit}
-                >
-                  <Typography variant="body2">Cadastrar Fatura</Typography>
-                </Button>
-              </Stack>
-            </Box>
-          </Modal>
         </Collapse>
       </Paper>
 
-      <Card sx={{ maxWidth: '100%', margin: 'auto', mt: 4, borderRadius: 2 }}>
+      <Modal open={openFatura} onClose={handleClose}>
+        <Box sx={modalStyle}>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            sx={{ mb: 4, width: '100%' }}
+          >
+            <Typography variant="h5" fontWeight="bold">
+              Cadastrar Fatura
+            </Typography>
+            <Button variant="outlined" color="error" onClick={handleClose}>
+              Fechar
+            </Button>
+          </Stack>
+
+          <Stack spacing={3} sx={{ width: '100%' }}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  fullWidth
+                  variant="filled"
+                  name="cliente"
+                  label="Nome do Cliente"
+                  value={form.cliente}
+                  onChange={handleChange}
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  fullWidth
+                  variant="filled"
+                  name="nif"
+                  label="NIF/BI"
+                  value={form.nif}
+                  onChange={handleChange}
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  fullWidth
+                  variant="filled"
+                  name="telefone"
+                  label="Telefone"
+                  type="tel"
+                  value={form.telefone}
+                  onChange={handleChange}
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  fullWidth
+                  variant="filled"
+                  name="localizacao"
+                  label="Localização"
+                  value={form.localizacao}
+                  onChange={handleChange}
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  fullWidth
+                  variant="filled"
+                  name="email"
+                  label="Email"
+                  type="email"
+                  value={form.email}
+                  onChange={handleChange}
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  fullWidth
+                  variant="filled"
+                  name="data"
+                  label="Data"
+                  value={form.data}
+                  onChange={handleChange}
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  fullWidth
+                  variant="filled"
+                  name="status"
+                  label="Status"
+                  value={form.status}
+                  onChange={handleChange}
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  fullWidth
+                  variant="filled"
+                  label="Total a Pagar"
+                  value={`R$${calcularTotal().toFixed(2)}`}
+                  InputProps={{ readOnly: true }}
+                />
+              </Grid>
+            </Grid>
+
+            {form.produtosSelecionados.map((produto, index) => (
+              <Grid container spacing={2} key={index}>
+                <Grid item xs={12} sm={5}>
+                  <FormControl fullWidth variant="filled">
+                    <InputLabel>Produto</InputLabel>
+                    <Select
+                      value={produto.id}
+                      onChange={(e) => handleProdutoChange(index, 'id', e.target.value)}
+                    >
+                      {loja.map(
+                        (
+                          p, // Alterado de produtos para loja
+                        ) => (
+                          <MenuItem key={p.id} value={p.id.toString()}>
+                            {p.nome} - R${p.preco}
+                          </MenuItem>
+                        ),
+                      )}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={8} sm={5}>
+                  <TextField
+                    fullWidth
+                    variant="filled"
+                    type="number"
+                    label="Quantidade"
+                    value={produto.quantidade}
+                    onChange={(e) =>
+                      handleProdutoChange(index, 'quantidade', parseInt(e.target.value) || 1)
+                    }
+                    inputProps={{ min: 1 }}
+                  />
+                </Grid>
+                <Grid item xs={4} sm={2}>
+                  <IconButton color="error" onClick={() => removerProdutoInput(index)}>
+                    <Delete />
+                  </IconButton>
+                </Grid>
+              </Grid>
+            ))}
+
+            <Button variant="outlined" color="primary" onClick={adicionarNovoProdutoInput}>
+              Adicionar Produto
+            </Button>
+
+            <Button variant="contained" color="secondary" onClick={onAddFaturaSubmit}>
+              Cadastrar Fatura
+            </Button>
+          </Stack>
+        </Box>
+      </Modal>
+
+      <Card sx={{ mt: 4, borderRadius: 2 }}>
         <CardContent>
-          <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
+          <TableContainer component={Paper}>
             <Table>
               <TableHead>
                 <TableRow>
-                  {['Cliente', 'Data', 'Total', 'Status', 'Produtos', 'Ações'].map((header) => (
+                  {[
+                    'Cliente',
+                    'NIF',
+                    'Telefone',
+                    'Localização',
+                    'Email',
+                    'Data',
+                    'Total',
+                    'Status',
+                    'Produtos',
+                    'Ações',
+                  ].map((header) => (
                     <TableCell key={header} sx={{ fontWeight: 'bold' }}>
                       {header}
                     </TableCell>
@@ -333,17 +397,18 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                 {faturas.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell>{item.cliente}</TableCell>
+                    <TableCell>{item.nif}</TableCell>
+                    <TableCell>{item.telefone}</TableCell>
+                    <TableCell>{item.localizacao}</TableCell>
+                    <TableCell>{item.email}</TableCell>
                     <TableCell>{item.data}</TableCell>
-                    <TableCell>{item.total}</TableCell>
+                    <TableCell>R${item.total.toFixed(2)}</TableCell>
                     <TableCell>{item.status}</TableCell>
                     <TableCell>
-                      {item.produtos.map((produto, index) => (
-                        <div key={index}>
-                          {produto.nome} - R${produto.preco}
-                          <IconButton color="error" onClick={() => excluirProduto(produto.id)}>
-                            <Delete />
-                          </IconButton>
-                        </div>
+                      {item.produtos.map((p, idx) => (
+                        <div
+                          key={idx}
+                        >{`${p.produto.nome} - ${p.quantidade}x (R$${p.produto.preco})`}</div>
                       ))}
                     </TableCell>
                     <TableCell align="right">
