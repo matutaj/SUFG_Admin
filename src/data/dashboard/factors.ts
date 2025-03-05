@@ -23,14 +23,14 @@ export const factors: IFactor[] = [
   {
     id: 3,
     icon: Blood,
-    title: 'Faturas Pendentes',
+    title: 'Clientes ativos',
     color: 'secondary.main',
     value: 9,
   },
   {
     id: 4,
     icon: Tier,
-    title: 'Pagamento aberto',
+    title: 'Perda',
     color: 'warning.darker',
     value: 25,
   },

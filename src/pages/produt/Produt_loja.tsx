@@ -6,7 +6,6 @@ import {
   Typography,
   TextField,
   Box,
-  IconButton,
   Grid,
   Card,
   CardContent,
@@ -16,6 +15,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  IconButton,
   Modal,
   Select,
   MenuItem,
@@ -40,7 +40,7 @@ const style = {
   transform: 'translate(-50%, -50%)',
   width: { xs: '90%', sm: '80%', md: 980 },
   maxWidth: '100%',
-  height: { xs: '100%', sm: '50%', md: 450 },
+  height: { xs: '100%', sm: '50%', md: 500 },
   maxHeight: '90%',
   bgcolor: 'background.paper',
   boxShadow: 24,
@@ -53,83 +53,182 @@ const style = {
 };
 
 interface FormErrors {
-  categoria: string;
   name: string;
-  pratileira: string;
+  custoAqui: string;
   quantidade: string;
   validade: string;
   prico: string;
+  categoria: string;
 }
 
-const ProductLoja: React.FC<CollapsedItemProps> = ({ open }) => {
+interface TransferFormErrors {
+  transferQuantity: string;
+  shelf: string;
+}
+
+const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
   const [openProduct, setOpenProduct] = React.useState(false);
+  const [openTransfer, setOpenTransfer] = React.useState(false);
   const [alert, setAlert] = React.useState<{
-    type: 'success' | 'error' | 'warning' | 'info';
+    severity: 'success' | 'error' | 'info' | 'warning';
     message: string;
   } | null>(null);
-
-  const handleOpen = () => setOpenProduct(true);
-  const handleClose = () => {
-    setOpenProduct(false);
-    setAlert(null); // Clear alert when closing modal
-  };
-  const [search, setSearch] = React.useState('');
-
-  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value);
+  const [editProductId, setEditProductId] = React.useState<number | null>(null);
+  const [transferProductId, setTransferProductId] = React.useState<number | null>(null);
 
   const [form, setForm] = React.useState({
     name: '',
-    pratileira: '',
     categoria: '',
-    validade: new Date(),
+    custoAqui: 0,
+    detalhes: '',
+    fornecedor: '',
+    validade: '',
     prico: 0,
     quantidade: 0,
   });
 
-  const [formErrors, setFormErrors] = React.useState({
-    name: '',
-    pratileira: '',
-    categoria: '',
-    validade: '',
-    prico: '',
-    quantidade: '',
+  const [transferForm, setTransferForm] = React.useState({
+    transferQuantity: 0,
+    shelf: '',
   });
 
-  const [loja, setLoja] = React.useState<
+  const [formErrors, setFormErrors] = React.useState<FormErrors>({
+    name: '',
+    custoAqui: '',
+    quantidade: '',
+    validade: '',
+    prico: '',
+    categoria: '',
+  });
+
+  const [transferFormErrors, setTransferFormErrors] = React.useState<TransferFormErrors>({
+    transferQuantity: '',
+    shelf: '',
+  });
+
+  const [products, setProducts] = React.useState<
     {
       id: number;
       name: string;
-      pratileira: string;
       categoria: string;
-      validade: Date;
+      custoAqui: number;
+      detalhes: string;
+      fornecedor: string;
+      validade: string;
       prico: number;
       quantidade: number;
     }[]
-  >(JSON.parse(localStorage.getItem('loja') || '[]'));
+  >(() => {
+    const savedProducts = localStorage.getItem('products');
+    return savedProducts ? JSON.parse(savedProducts) : [];
+  });
 
-  const [products] = React.useState<
+  const [storeProducts, setStoreProducts] = React.useState<
     {
       id: number;
       name: string;
-      pratileira: string;
-      categoria: string;
-      validade: Date;
+      shelf: string;
       prico: number;
+      validade: string;
       quantidade: number;
     }[]
-  >(JSON.parse(localStorage.getItem('products') || '[]'));
+  >(() => {
+    const savedStoreProducts = localStorage.getItem('loja');
+    return savedStoreProducts ? JSON.parse(savedStoreProducts) : [];
+  });
 
-  const [categories] = React.useState<{ id: number; name: string }[]>(
-    JSON.parse(localStorage.getItem('categoria') || '[]'),
-  );
+  const [categories] = React.useState<{ id: number; name: string }[]>(() => {
+    const savedCategories = localStorage.getItem('categoria');
+    return savedCategories ? JSON.parse(savedCategories) : [];
+  });
 
-  const filteredProducts = loja.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
+  const [shelves] = React.useState<string[]>(['Prateleira A', 'Prateleira B', 'Prateleira C']);
+
+  const handleOpen = (productId?: number) => {
+    if (productId) {
+      const productToEdit = products.find((p) => p.id === productId);
+      if (productToEdit) {
+        setForm(productToEdit);
+        setEditProductId(productId);
+      }
+    } else {
+      setForm({
+        name: '',
+        categoria: '',
+        custoAqui: 0,
+        detalhes: '',
+        fornecedor: '',
+        validade: '',
+        prico: 0,
+        quantidade: 0,
+      });
+      setEditProductId(null);
+    }
+    setOpenProduct(true);
+  };
+
+  const handleClose = () => {
+    setOpenProduct(false);
+    setEditProductId(null);
+    setForm({
+      name: '',
+      categoria: '',
+      custoAqui: 0,
+      detalhes: '',
+      fornecedor: '',
+      validade: '',
+      prico: 0,
+      quantidade: 0,
+    });
+    setFormErrors({
+      name: '',
+      custoAqui: '',
+      quantidade: '',
+      validade: '',
+      prico: '',
+      categoria: '',
+    });
+  };
+
+  const handleOpenTransfer = (productId: number) => {
+    setTransferProductId(productId);
+    setTransferForm({
+      transferQuantity: 0,
+      shelf: '',
+    });
+    setOpenTransfer(true);
+  };
+
+  const handleCloseTransfer = () => {
+    setOpenTransfer(false);
+    setTransferProductId(null);
+    setTransferForm({
+      transferQuantity: 0,
+      shelf: '',
+    });
+    setTransferFormErrors({
+      transferQuantity: '',
+      shelf: '',
+    });
+  };
+
+  const [search, setSearch] = React.useState('');
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setForm((prev) => ({
       ...prev,
-      [name as string]: name === 'prico' || name === 'quantidade' ? Number(value) : value,
+      [name]:
+        name === 'custoAqui' || name === 'prico' || name === 'quantidade' ? Number(value) : value,
+    }));
+  };
+
+  const handleTransferChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setTransferForm((prev) => ({
+      ...prev,
+      [name]: name === 'transferQuantity' ? Number(value) : value,
     }));
   };
 
@@ -141,109 +240,153 @@ const ProductLoja: React.FC<CollapsedItemProps> = ({ open }) => {
     }));
   };
 
+  const handleTransferSelectChange = (e: SelectChangeEvent<string>) => {
+    const { name, value } = e.target;
+    setTransferForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
   const validateForm = () => {
     const errors: FormErrors = {
       name: '',
+      custoAqui: '',
       quantidade: '',
       validade: '',
-      categoria: '',
       prico: '',
-      pratileira: '',
+      categoria: '',
     };
-    if (!form.name) {
-      errors.name = 'Nome do produto é obrigatório';
-    }
-
-    if (form.quantidade <= 0) {
-      errors.quantidade = 'A quantidade deve ser maior que 0';
-    }
-    if (form.prico <= 0) {
-      errors.prico = 'O preço deve ser maior que 0';
-    }
-
-    if (!form.pratileira) {
-      errors.pratileira = 'A pratileira é obrigatória';
-    }
-    if (!form.categoria) {
-      errors.categoria = 'A categoria é obrigatória';
-    }
-    if (!form.validade || isNaN(new Date(form.validade).getTime())) {
+    if (!form.name) errors.name = 'Nome do produto é obrigatório';
+    else if (
+      products.some(
+        (p) =>
+          p.name.toLowerCase() === form.name.toLowerCase() &&
+          (!editProductId || p.id !== editProductId),
+      )
+    )
+      errors.name = 'Este produto já existe';
+    if (form.custoAqui <= 0) errors.custoAqui = 'O custo de aquisição deve ser maior que 0';
+    if (form.quantidade <= 0) errors.quantidade = 'A quantidade deve ser maior que 0';
+    if (form.prico <= 0) errors.prico = 'O preço deve ser maior que 0';
+    if (!form.categoria) errors.categoria = 'A categoria é obrigatória';
+    if (!form.validade || isNaN(new Date(form.validade).getTime()))
       errors.validade = 'A validade é inválida';
-    }
 
     setFormErrors(errors);
     return Object.values(errors).every((error) => error === '');
   };
 
+  const validateTransferForm = () => {
+    const errors: TransferFormErrors = {
+      transferQuantity: '',
+      shelf: '',
+    };
+    const product = products.find((p) => p.id === transferProductId);
+    if (!transferForm.transferQuantity || transferForm.transferQuantity <= 0)
+      errors.transferQuantity = 'A quantidade deve ser maior que 0';
+    else if (product && transferForm.transferQuantity > product.quantidade)
+      errors.transferQuantity = 'Quantidade maior que o estoque disponível';
+    if (!transferForm.shelf) errors.shelf = 'A prateleira é obrigatória';
+
+    setTransferFormErrors(errors);
+    return Object.values(errors).every((error) => error === '');
+  };
+
   const handleAddProduct = () => {
     if (validateForm()) {
-      // Check for duplicate based on name and categoria
-      const isDuplicate = loja.some(
-        (item) => item.name === form.name && item.categoria === form.categoria,
-      );
-
-      if (isDuplicate) {
-        setAlert({
-          type: 'error',
-          message: 'Este produto já existe nesta categoria na loja!',
-        });
-        return;
+      if (editProductId) {
+        const updatedProducts = products.map((product) =>
+          product.id === editProductId ? { ...form, id: editProductId } : product,
+        );
+        setProducts(updatedProducts);
+        localStorage.setItem('products', JSON.stringify(updatedProducts));
+        setAlert({ severity: 'success', message: 'Produto atualizado com sucesso!' });
+      } else {
+        const newProduct = {
+          id: products.length + 1,
+          ...form,
+        };
+        const updatedProducts = [...products, newProduct];
+        setProducts(updatedProducts);
+        localStorage.setItem('products', JSON.stringify(updatedProducts));
+        setAlert({ severity: 'success', message: 'Produto cadastrado com sucesso!' });
       }
 
-      const newProduct = {
-        id: loja.length + 1,
-        name: form.name,
-        pratileira: form.pratileira,
-        categoria: form.categoria,
-        validade: form.validade,
-        prico: form.prico,
-        quantidade: form.quantidade,
-      };
-
-      const updatedLoja = [...loja, newProduct];
-      setLoja(updatedLoja);
-      localStorage.setItem('loja', JSON.stringify(updatedLoja));
-
+      handleClose();
+      setTimeout(() => setAlert(null), 3000);
+    } else {
       setAlert({
-        type: 'success',
-        message: 'Produto adicionado com sucesso!',
+        severity: 'error',
+        message:
+          formErrors.name === 'Este produto já existe'
+            ? 'Erro: Este produto já existe!'
+            : 'Erro: Preencha todos os campos corretamente!',
       });
+      setTimeout(() => setAlert(null), 3000);
+    }
+  };
 
-      setForm({
-        name: '',
-        pratileira: '',
-        categoria: '',
-        validade: new Date(),
-        prico: 0,
-        quantidade: 0,
-      });
-      setFormErrors({
-        name: '',
-        pratileira: '',
-        categoria: '',
-        validade: '',
-        prico: '',
-        quantidade: '',
-      });
+  const handleTransferProduct = () => {
+    if (validateTransferForm() && transferProductId !== null) {
+      const product = products.find((p) => p.id === transferProductId);
+      if (product) {
+        // Update warehouse products (reduce quantity)
+        const updatedProducts = products.map((p) =>
+          p.id === transferProductId
+            ? { ...p, quantidade: p.quantidade - transferForm.transferQuantity }
+            : p,
+        );
+        setProducts(updatedProducts);
+        localStorage.setItem('products', JSON.stringify(updatedProducts));
 
-      // Optional: Automatically close modal after success
-      setTimeout(() => {
-        setOpenProduct(false);
-        setAlert(null);
-      }, 2000); // Close after 2 seconds
+        // Add to store products
+        const storeProduct = {
+          id: product.id,
+          name: product.name,
+          shelf: transferForm.shelf,
+          prico: product.prico,
+          validade: product.validade,
+          quantidade: transferForm.transferQuantity,
+        };
+
+        const updatedStoreProducts = [...storeProducts, storeProduct];
+        setStoreProducts(updatedStoreProducts);
+        localStorage.setItem('loja', JSON.stringify(updatedStoreProducts));
+
+        setAlert({ severity: 'success', message: 'Produto transferido para a loja com sucesso!' });
+        handleCloseTransfer();
+        setTimeout(() => setAlert(null), 3000);
+      }
+    } else {
+      setAlert({
+        severity: 'error',
+        message: 'Erro: Preencha todos os campos corretamente!',
+      });
+      setTimeout(() => setAlert(null), 3000);
     }
   };
 
   React.useEffect(() => {
-    localStorage.setItem('loja', JSON.stringify(loja));
-  }, [loja]);
+    localStorage.setItem('products', JSON.stringify(products));
+  }, [products]);
+
+  React.useEffect(() => {
+    localStorage.setItem('loja', JSON.stringify(storeProducts));
+  }, [storeProducts]);
 
   return (
     <>
+      {alert && (
+        <Box sx={{ position: 'fixed', top: 20, right: 40, zIndex: 9999 }}>
+          <Alert severity={alert.severity}>{alert.message}</Alert>
+        </Box>
+      )}
+
       <Paper sx={{ p: 2, width: '100%' }}>
         <Collapse in={open}>
           <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Typography variant="h5">Produtos Na Loja</Typography>
+            <Typography variant="h5">Produto Na loja</Typography>
             <TextField
               label="Pesquisar"
               variant="outlined"
@@ -251,14 +394,14 @@ const ProductLoja: React.FC<CollapsedItemProps> = ({ open }) => {
               value={search}
               onChange={handleSearch}
             />
-            <Button
+            {/*  <Button
               variant="contained"
               color="secondary"
-              onClick={handleOpen}
+              onClick={() => handleOpen()}
               startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
             >
               <Typography variant="body2">Adicionar Produto</Typography>
-            </Button>
+            </Button> */}
           </Stack>
         </Collapse>
       </Paper>
@@ -272,20 +415,92 @@ const ProductLoja: React.FC<CollapsedItemProps> = ({ open }) => {
             sx={{ width: '100%', mb: 8 }}
           >
             <Typography id="modal-modal-title" variant="h5" component="h2">
-              Adicionar Produtos Na Loja
+              Cadastrar Produtos
             </Typography>
             <Button onClick={handleClose} variant="outlined" color="error">
               Fechar
             </Button>
           </Stack>
           <Stack sx={{ width: '100%' }} spacing={3}>
-            {alert && (
-              <Alert variant="filled" severity={alert.type}>
-                {alert.message}
-              </Alert>
-            )}
             <Grid container spacing={2}>
               <Grid item xs={12} sm={4}>
+                <TextField
+                  name="name"
+                  label="Nome do Produto"
+                  type="text"
+                  sx={{ width: '100%' }}
+                  value={form.name}
+                  onChange={handleChange}
+                  error={Boolean(formErrors.name)}
+                  helperText={formErrors.name}
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  name="custoAqui"
+                  label="Custo de Aquisição"
+                  type="number"
+                  sx={{ width: '100%' }}
+                  value={form.custoAqui}
+                  onChange={handleChange}
+                  error={Boolean(formErrors.custoAqui)}
+                  helperText={formErrors.custoAqui}
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  name="quantidade"
+                  label="Quantidade do Produto"
+                  type="number"
+                  sx={{ width: '100%' }}
+                  value={form.quantidade}
+                  onChange={handleChange}
+                  error={Boolean(formErrors.quantidade)}
+                  helperText={formErrors.quantidade}
+                />
+              </Grid>
+            </Grid>
+
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  name="validade"
+                  label="Validade do Produto"
+                  type="date"
+                  sx={{ width: '100%' }}
+                  value={form.validade}
+                  onChange={handleChange}
+                  InputLabelProps={{ shrink: true }}
+                  error={Boolean(formErrors.validade)}
+                  helperText={formErrors.validade}
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  name="prico"
+                  label="Preço do Produto"
+                  type="number"
+                  sx={{ width: '100%' }}
+                  value={form.prico}
+                  onChange={handleChange}
+                  error={Boolean(formErrors.prico)}
+                  helperText={formErrors.prico}
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  name="detalhes"
+                  label="Detalhes do Produto"
+                  type="text"
+                  sx={{ width: '100%' }}
+                  value={form.detalhes}
+                  onChange={handleChange}
+                />
+              </Grid>
+            </Grid>
+
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
                 <Select
                   name="categoria"
                   value={form.categoria}
@@ -295,7 +510,7 @@ const ProductLoja: React.FC<CollapsedItemProps> = ({ open }) => {
                   fullWidth
                 >
                   <MenuItem value="" disabled>
-                    Selecione a categoria
+                    Selecione uma Categoria
                   </MenuItem>
                   {categories.map((cat) => (
                     <MenuItem key={cat.id} value={cat.name}>
@@ -308,88 +523,83 @@ const ProductLoja: React.FC<CollapsedItemProps> = ({ open }) => {
                 )}
               </Grid>
               <Grid item xs={12} sm={4}>
-                <Select
-                  name="name"
-                  value={form.name}
-                  onChange={handleSelectChange}
-                  displayEmpty
-                  error={Boolean(formErrors.name)}
-                  fullWidth
-                >
-                  <MenuItem value="" disabled>
-                    Selecione um Produto
-                  </MenuItem>
-                  {products.map((prod) => (
-                    <MenuItem key={prod.id} value={prod.name}>
-                      {prod.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-                {formErrors.name && <FormHelperText error>{formErrors.name}</FormHelperText>}
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <Select
-                  name="pratileira"
-                  value={form.pratileira}
-                  onChange={handleSelectChange}
-                  displayEmpty
-                  error={Boolean(formErrors.pratileira)}
-                  fullWidth
-                >
-                  <MenuItem value="" disabled>
-                    Selecione a pratileira
-                  </MenuItem>
-                  <MenuItem value="baixo">Baixo</MenuItem>
-                  <MenuItem value="medio">Médio</MenuItem>
-                  <MenuItem value="alto">Alto</MenuItem>
-                </Select>
-                {formErrors.pratileira && (
-                  <FormHelperText error>{formErrors.pratileira}</FormHelperText>
-                )}
-              </Grid>
-              <Grid item xs={12} sm={4}>
                 <TextField
-                  name="quantidade"
-                  label="Quantidade"
-                  type="number"
+                  name="fornecedor"
+                  label="Fornecedor do Produto"
+                  type="text"
                   sx={{ width: '100%' }}
-                  value={form.quantidade}
+                  value={form.fornecedor}
                   onChange={handleChange}
-                  error={Boolean(formErrors.quantidade)}
-                  helperText={formErrors.quantidade}
-                />
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  name="prico"
-                  label="Preço"
-                  type="number"
-                  sx={{ width: '100%' }}
-                  value={form.prico}
-                  onChange={handleChange}
-                  error={Boolean(formErrors.prico)}
-                  helperText={formErrors.prico}
-                />
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  name="validade"
-                  label="Validade"
-                  type="date"
-                  sx={{ width: '100%' }}
-                  value={form.validade.toISOString().split('T')[0]}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, validade: new Date(e.target.value) }))
-                  }
-                  error={Boolean(formErrors.validade)}
-                  helperText={formErrors.validade}
-                  InputLabelProps={{ shrink: true }}
                 />
               </Grid>
             </Grid>
 
             <Button variant="contained" color="secondary" onClick={handleAddProduct}>
               Cadastrar
+            </Button>
+          </Stack>
+        </Box>
+      </Modal>
+
+      <Modal open={openTransfer} onClose={handleCloseTransfer}>
+        <Box sx={style} component="form" noValidate autoComplete="off">
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            sx={{ width: '100%', mb: 8 }}
+          >
+            <Typography id="modal-modal-title" variant="h5" component="h2">
+              Transferir Produto para Loja
+            </Typography>
+            <Button onClick={handleCloseTransfer} variant="outlined" color="error">
+              Fechar
+            </Button>
+          </Stack>
+          <Stack sx={{ width: '100%' }} spacing={3}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  name="transferQuantity"
+                  label="Quantidade a Transferir"
+                  type="number"
+                  sx={{ width: '100%' }}
+                  value={transferForm.transferQuantity}
+                  onChange={handleTransferChange}
+                  error={Boolean(transferFormErrors.transferQuantity)}
+                  helperText={
+                    transferFormErrors.transferQuantity ||
+                    `Estoque disponível: ${
+                      products.find((p) => p.id === transferProductId)?.quantidade || 0
+                    }`
+                  }
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Select
+                  name="shelf"
+                  value={transferForm.shelf}
+                  onChange={handleTransferSelectChange}
+                  displayEmpty
+                  error={Boolean(transferFormErrors.shelf)}
+                  fullWidth
+                >
+                  <MenuItem value="" disabled>
+                    Selecione uma Prateleira
+                  </MenuItem>
+                  {shelves.map((shelf) => (
+                    <MenuItem key={shelf} value={shelf}>
+                      {shelf}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {transferFormErrors.shelf && (
+                  <FormHelperText error>{transferFormErrors.shelf}</FormHelperText>
+                )}
+              </Grid>
+            </Grid>
+            <Button variant="contained" color="secondary" onClick={handleTransferProduct}>
+              Transferir
             </Button>
           </Stack>
         </Box>
@@ -404,11 +614,13 @@ const ProductLoja: React.FC<CollapsedItemProps> = ({ open }) => {
                   {[
                     'ID',
                     'Nome do Produto',
-                    'Pratileira',
+                    'Categoria',
                     'Preço',
                     'Validade',
+                    'Custo de Aquisição',
+                    'Fornecedor',
                     'Quantidade',
-                    'Editar',
+                    'Ações',
                   ].map((header) => (
                     <TableCell key={header}>
                       <strong>{header}</strong>
@@ -417,17 +629,30 @@ const ProductLoja: React.FC<CollapsedItemProps> = ({ open }) => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {filteredProducts.map((product) => (
+                {products.map((product) => (
                   <TableRow key={product.id}>
                     <TableCell>{product.id}</TableCell>
                     <TableCell>{product.name}</TableCell>
-                    <TableCell>{product.pratileira}</TableCell>
+                    <TableCell>{product.categoria}</TableCell>
                     <TableCell>{product.prico}</TableCell>
-                    <TableCell>{new Date(product.validade).toLocaleDateString('pt-BR')}</TableCell>
-                    <TableCell>{product.quantidade}</TableCell>
                     <TableCell>
-                      <IconButton color="primary">
+                      {product.validade && !isNaN(new Date(product.validade).getTime())
+                        ? new Intl.DateTimeFormat('pt-BR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                          }).format(new Date(product.validade))
+                        : 'Data inválida'}
+                    </TableCell>
+                    <TableCell>{product.custoAqui}</TableCell>
+                    <TableCell>{product.fornecedor}</TableCell>
+                    <TableCell>{product.quantidade}</TableCell>
+                    <TableCell align="right">
+                      <IconButton color="primary" onClick={() => handleOpen(product.id)}>
                         <Edit />
+                      </IconButton>
+                      <IconButton color="secondary" onClick={() => handleOpenTransfer(product.id)}>
+                        <IconifyIcon icon="mdi:store" />
                       </IconButton>
                     </TableCell>
                   </TableRow>
@@ -441,4 +666,4 @@ const ProductLoja: React.FC<CollapsedItemProps> = ({ open }) => {
   );
 };
 
-export default ProductLoja;
+export default ProductManager;
