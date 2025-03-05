@@ -16,6 +16,7 @@ import {
   TableRow,
   IconButton,
   Modal,
+  Grid,
 } from '@mui/material';
 import { SubItem } from 'types/types';
 import IconifyIcon from 'components/base/IconifyIcon';
@@ -35,8 +36,8 @@ const style = {
   transform: 'translate(-50%, -50%)',
   width: { xs: '90%', sm: '80%', md: 900 },
   maxWidth: '100%',
-  height: { xs: '100%', sm: '50%', md: 650 },
-  maxHeight: '90%',
+  height: { xs: '100%', sm: '50%', md: 550 },
+  maxHeight: '60%',
   bgcolor: 'background.paper',
   boxShadow: 24,
   display: 'flex',
@@ -51,7 +52,15 @@ const style = {
 
 const Cliente: React.FC<CollapsedItemProps> = ({ open }) => {
   const [openCliente, setOpenCliente] = React.useState(false);
-  const handleOpen = () => setOpenCliente(true);
+  const [isEditing, setIsEditing] = React.useState(false); // Track if we're editing
+  const [editId, setEditId] = React.useState<number | null>(null); // Store the ID of the client being edited
+
+  const handleOpen = () => {
+    setIsEditing(false); // Reset to "add" mode
+    setEditId(null);
+    setForm({ name: '', telefone: '', email: '', endereco: '', nif: '' }); // Clear form
+    setOpenCliente(true);
+  };
   const handleClose = () => setOpenCliente(false);
 
   const [errors, setErrors] = React.useState<{ name?: string }>({});
@@ -83,12 +92,18 @@ const Cliente: React.FC<CollapsedItemProps> = ({ open }) => {
       return;
     }
 
-    const newCliente = {
-      id: cliente.length + 1,
-      ...form,
-    };
+    if (isEditing && editId !== null) {
+      // Update existing client
+      setCliente((prev) => prev.map((item) => (item.id === editId ? { ...item, ...form } : item)));
+    } else {
+      // Add new client
+      const newCliente = {
+        id: cliente.length + 1,
+        ...form,
+      };
+      setCliente([...cliente, newCliente]);
+    }
 
-    setCliente([...cliente, newCliente]);
     setForm({
       name: '',
       telefone: '',
@@ -96,7 +111,36 @@ const Cliente: React.FC<CollapsedItemProps> = ({ open }) => {
       endereco: '',
       nif: '',
     });
+    setOpenCliente(false); // Close modal after submission
+    setIsEditing(false); // Reset editing state
+    setEditId(null); // Clear edit ID
   }
+
+  const handleDelete = (id: number) => {
+    if (window.confirm('Tem certeza que deseja excluir este cliente?')) {
+      setCliente((prev) => prev.filter((item) => item.id !== id));
+    }
+  };
+
+  const handleEdit = (client: {
+    id: number;
+    nif: string;
+    name: string;
+    telefone: string;
+    email: string;
+    endereco: string;
+  }) => {
+    setIsEditing(true);
+    setEditId(client.id);
+    setForm({
+      name: client.name,
+      telefone: client.telefone,
+      email: client.email,
+      endereco: client.endereco,
+      nif: client.nif,
+    });
+    setOpenCliente(true); // Open modal with pre-filled data
+  };
 
   React.useEffect(() => {
     localStorage.setItem('cliente', JSON.stringify(cliente));
@@ -129,33 +173,77 @@ const Cliente: React.FC<CollapsedItemProps> = ({ open }) => {
                   alignItems="center"
                   sx={{ width: '100%', mb: 2 }}
                 >
-                  <Typography variant="h5">Cadastrar Cliente</Typography>
+                  <Typography variant="h5">
+                    {isEditing ? 'Editar Cliente' : 'Cadastrar Cliente'}
+                  </Typography>
                   <Button onClick={handleClose} variant="outlined" color="error">
                     Fechar
                   </Button>
                 </Stack>
 
-                <Stack spacing={2} sx={{ width: '100%' }}>
-                  {['name', 'telefone', 'email', 'endereco', 'nif'].map((field) => (
+                <Grid container spacing={2} sx={{ width: '100%' }}>
+                  <Grid item xs={12} sm={6}>
                     <TextField
-                      key={field}
-                      name={field}
-                      label={field.charAt(0).toUpperCase() + field.slice(1)}
+                      name="name"
+                      label="Nome"
                       variant="filled"
-                      sx={{ width: '100%' }}
-                      value={form[field as keyof typeof form]}
+                      fullWidth
+                      value={form.name}
                       onChange={handleChange}
                     />
-                  ))}
-                  <Button
-                    variant="contained"
-                    color="secondary"
-                    sx={{ height: 40, width: '100%' }}
-                    onClick={onAddClienteSubmit}
-                  >
-                    <Typography variant="body2">Cadastrar</Typography>
-                  </Button>
-                </Stack>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      name="telefone"
+                      label="Telefone"
+                      variant="filled"
+                      type="tel"
+                      fullWidth
+                      value={form.telefone}
+                      onChange={handleChange}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      name="email"
+                      label="Email"
+                      variant="filled"
+                      fullWidth
+                      value={form.email}
+                      onChange={handleChange}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      name="nif"
+                      label="Nif"
+                      variant="filled"
+                      fullWidth
+                      value={form.nif}
+                      onChange={handleChange}
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField
+                      name="endereco"
+                      label="Endereço"
+                      variant="filled"
+                      fullWidth
+                      value={form.endereco}
+                      onChange={handleChange}
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Button
+                      variant="contained"
+                      color="secondary"
+                      sx={{ height: 40, width: '100%' }}
+                      onClick={onAddClienteSubmit}
+                    >
+                      <Typography variant="body2">{isEditing ? 'Salvar' : 'Cadastrar'}</Typography>
+                    </Button>
+                  </Grid>
+                </Grid>
               </Box>
             </Modal>
           </Stack>
@@ -184,10 +272,10 @@ const Cliente: React.FC<CollapsedItemProps> = ({ open }) => {
                     <TableCell>{item.email}</TableCell>
                     <TableCell>{item.endereco}</TableCell>
                     <TableCell align="right">
-                      <IconButton color="primary">
+                      <IconButton color="primary" onClick={() => handleEdit(item)}>
                         <Edit />
                       </IconButton>
-                      <IconButton color="error">
+                      <IconButton color="error" onClick={() => handleDelete(item.id)}>
                         <Delete />
                       </IconButton>
                     </TableCell>

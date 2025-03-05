@@ -290,6 +290,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   fullWidth
                   variant="filled"
                   name="data"
+                  type="date"
                   label="Data"
                   value={form.data}
                   onChange={handleChange}
