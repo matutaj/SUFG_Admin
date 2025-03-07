@@ -22,6 +22,7 @@ import {
   Select,
   InputLabel,
   FormControl,
+  FormHelperText,
 } from '@mui/material';
 import IconifyIcon from 'components/base/IconifyIcon';
 import Delete from 'components/icons/factor/Delete';
@@ -30,9 +31,11 @@ import { SubItem } from 'types/types';
 
 interface Produto {
   id: number;
-  nome: string;
-  preco: number;
-  categoria: string;
+  name: string;
+  shelf: string;
+  prico: number;
+  validade: string;
+  quantidade: number;
 }
 
 interface Fatura {
@@ -70,8 +73,8 @@ const modalStyle = {
 };
 
 const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
-  // Carrega os produtos da loja do localStorage
-  const [loja] = useState<Produto[]>(() => {
+  // Carrega e gerencia os produtos da loja do localStorage
+  const [loja, setLoja] = useState<Produto[]>(() => {
     const lojaSalva = localStorage.getItem('loja');
     return lojaSalva ? JSON.parse(lojaSalva) : [];
   });
@@ -92,6 +95,8 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     produtosSelecionados: [] as { id: string; quantidade: number }[],
   });
 
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+
   const handleOpen = () => setOpenFatura(true);
   const handleClose = () => {
     setOpenFatura(false);
@@ -109,16 +114,36 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       status: 'Pendente',
       produtosSelecionados: [],
     });
+    setErrors({});
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    setErrors((prev) => ({ ...prev, [e.target.name]: '' }));
   };
 
   const handleProdutoChange = (index: number, field: string, value: string | number) => {
     const updatedProdutos = [...form.produtosSelecionados];
     updatedProdutos[index] = { ...updatedProdutos[index], [field]: value };
     setForm((prev) => ({ ...prev, produtosSelecionados: updatedProdutos }));
+
+    // Validação de quantidade
+    if (field === 'quantidade') {
+      const produto = loja.find((p) => p.id.toString() === updatedProdutos[index].id);
+      const quantidade = Number(value);
+      if (produto && quantidade > produto.quantidade) {
+        setErrors((prev) => ({
+          ...prev,
+          [`produto_${index}`]: `Quantidade indisponível. Estoque: ${produto.quantidade}`,
+        }));
+      } else {
+        setErrors((prev) => {
+          const newErrors = { ...prev };
+          delete newErrors[`produto_${index}`];
+          return newErrors;
+        });
+      }
+    }
   };
 
   const adicionarNovoProdutoInput = () => {
@@ -131,20 +156,58 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   const removerProdutoInput = (index: number) => {
     const updatedProdutos = form.produtosSelecionados.filter((_, i) => i !== index);
     setForm((prev) => ({ ...prev, produtosSelecionados: updatedProdutos }));
+    setErrors((prev) => {
+      const newErrors = { ...prev };
+      delete newErrors[`produto_${index}`];
+      return newErrors;
+    });
   };
 
   const calcularTotal = () => {
     return form.produtosSelecionados.reduce((acc, curr) => {
-      const produto = loja.find((p) => p.id.toString() === curr.id); // Alterado de produtos para loja
-      return acc + (produto ? produto.preco * curr.quantidade : 0);
+      const produto = loja.find((p) => p.id.toString() === curr.id);
+      return acc + (produto ? produto.prico * curr.quantidade : 0);
     }, 0);
   };
 
-  const onAddFaturaSubmit = () => {
-    if (!form.cliente.trim() || !form.data.trim() || form.produtosSelecionados.length === 0) {
-      alert('Preencha todos os campos obrigatórios (Nome do Cliente, Data e Produtos)!');
-      return;
+  const validateForm = () => {
+    const newErrors: { [key: string]: string } = {};
+    if (!form.cliente.trim()) newErrors.cliente = 'Nome do cliente é obrigatório';
+    if (!form.data.trim()) newErrors.data = 'Data é obrigatória';
+    if (form.produtosSelecionados.length === 0) {
+      newErrors.produtos = 'Adicione pelo menos um produto';
+    } else {
+      form.produtosSelecionados.forEach((p, index) => {
+        if (!p.id) {
+          newErrors[`produto_${index}`] = 'Selecione um produto';
+        } else {
+          const produto = loja.find((prod) => prod.id.toString() === p.id);
+          if (produto && p.quantidade > produto.quantidade) {
+            newErrors[`produto_${index}`] =
+              `Quantidade indisponível. Estoque: ${produto.quantidade}`;
+          }
+        }
+      });
     }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const onAddFaturaSubmit = () => {
+    if (!validateForm()) return;
+
+    // Reduz o estoque da loja
+    const updatedLoja = loja
+      .map((produto) => {
+        const produtoSelecionado = form.produtosSelecionados.find(
+          (p) => p.id === produto.id.toString(),
+        );
+        if (produtoSelecionado) {
+          return { ...produto, quantidade: produto.quantidade - produtoSelecionado.quantidade };
+        }
+        return produto;
+      })
+      .filter((p) => p.quantidade > 0); // Remove produtos com estoque zerado, se desejar
 
     const newFatura: Fatura = {
       id: faturas.length + 1,
@@ -157,12 +220,13 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       total: calcularTotal(),
       status: form.status,
       produtos: form.produtosSelecionados.map((p) => ({
-        produto: loja.find((prod) => prod.id.toString() === p.id)!, // Alterado de produtos para loja
+        produto: loja.find((prod) => prod.id.toString() === p.id)!,
         quantidade: p.quantidade,
       })),
     };
 
     setFaturas((prev) => [...prev, newFatura]);
+    setLoja(updatedLoja);
     handleClose();
   };
 
@@ -190,10 +254,14 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     }
   };
 
-  // Sincroniza faturas com o localStorage
+  // Sincroniza faturas e loja com o localStorage
   useEffect(() => {
     localStorage.setItem('faturas', JSON.stringify(faturas));
   }, [faturas]);
+
+  useEffect(() => {
+    localStorage.setItem('loja', JSON.stringify(loja));
+  }, [loja]);
 
   return (
     <>
@@ -241,6 +309,8 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   label="Nome do Cliente"
                   value={form.cliente}
                   onChange={handleChange}
+                  error={Boolean(errors.cliente)}
+                  helperText={errors.cliente}
                 />
               </Grid>
               <Grid item xs={12} sm={4}>
@@ -294,6 +364,9 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   label="Data"
                   value={form.data}
                   onChange={handleChange}
+                  InputLabelProps={{ shrink: true }}
+                  error={Boolean(errors.data)}
+                  helperText={errors.data}
                 />
               </Grid>
               <Grid item xs={12} sm={4}>
@@ -311,7 +384,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   fullWidth
                   variant="filled"
                   label="Total a Pagar"
-                  value={`R$${calcularTotal().toFixed(2)}`}
+                  value={`${calcularTotal().toFixed(2)}kz`}
                   InputProps={{ readOnly: true }}
                 />
               </Grid>
@@ -320,22 +393,25 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
             {form.produtosSelecionados.map((produto, index) => (
               <Grid container spacing={2} key={index}>
                 <Grid item xs={12} sm={5}>
-                  <FormControl fullWidth variant="filled">
+                  <FormControl
+                    fullWidth
+                    variant="filled"
+                    error={Boolean(errors[`produto_${index}`])}
+                  >
                     <InputLabel>Produto</InputLabel>
                     <Select
                       value={produto.id}
                       onChange={(e) => handleProdutoChange(index, 'id', e.target.value)}
                     >
-                      {loja.map(
-                        (
-                          p, // Alterado de produtos para loja
-                        ) => (
-                          <MenuItem key={p.id} value={p.id.toString()}>
-                            {p.nome} - R${p.preco}
-                          </MenuItem>
-                        ),
-                      )}
+                      {loja.map((p) => (
+                        <MenuItem key={p.id} value={p.id.toString()}>
+                          {p.name} - {p.prico}kzs (Estoque: {p.quantidade})
+                        </MenuItem>
+                      ))}
                     </Select>
+                    {errors[`produto_${index}`] && (
+                      <FormHelperText>{errors[`produto_${index}`]}</FormHelperText>
+                    )}
                   </FormControl>
                 </Grid>
                 <Grid item xs={8} sm={5}>
@@ -349,6 +425,8 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                       handleProdutoChange(index, 'quantidade', parseInt(e.target.value) || 1)
                     }
                     inputProps={{ min: 1 }}
+                    error={Boolean(errors[`produto_${index}`])}
+                    helperText={errors[`produto_${index}`]}
                   />
                 </Grid>
                 <Grid item xs={4} sm={2}>
@@ -358,6 +436,12 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                 </Grid>
               </Grid>
             ))}
+
+            {errors.produtos && (
+              <Typography color="error" variant="body2">
+                {errors.produtos}
+              </Typography>
+            )}
 
             <Button variant="outlined" color="primary" onClick={adicionarNovoProdutoInput}>
               Adicionar Produto
@@ -402,14 +486,16 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                     <TableCell>{item.telefone}</TableCell>
                     <TableCell>{item.localizacao}</TableCell>
                     <TableCell>{item.email}</TableCell>
-                    <TableCell>{item.data}</TableCell>
-                    <TableCell>R${item.total.toFixed(2)}</TableCell>
+                    <TableCell>
+                      {new Intl.DateTimeFormat('pt-BR').format(new Date(item.data))}
+                    </TableCell>
+                    <TableCell>{item.total.toFixed(2)}kzs</TableCell>
                     <TableCell>{item.status}</TableCell>
                     <TableCell>
                       {item.produtos.map((p, idx) => (
                         <div
                           key={idx}
-                        >{`${p.produto.nome} - ${p.quantidade}x (R$${p.produto.preco})`}</div>
+                        >{`${p.produto.name} - ${p.quantidade}x (${p.produto.prico}kz)`}</div>
                       ))}
                     </TableCell>
                     <TableCell align="right">

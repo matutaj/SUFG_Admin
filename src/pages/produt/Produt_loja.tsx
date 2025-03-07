@@ -6,7 +6,6 @@ import {
   Typography,
   TextField,
   Box,
-  Grid,
   Card,
   CardContent,
   Table,
@@ -19,18 +18,42 @@ import {
   Modal,
   Select,
   MenuItem,
-  SelectChangeEvent,
-  FormHelperText,
   Alert,
 } from '@mui/material';
 import React from 'react';
 import IconifyIcon from 'components/base/IconifyIcon';
-import Edit from 'components/icons/factor/Edit';
+import Delete from 'components/icons/factor/Delete';
 import { SubItem } from 'types/types';
 
 interface CollapsedItemProps {
   subItems?: SubItem[];
   open: boolean;
+}
+
+interface Store {
+  id: number;
+  name: string;
+  sections: StoreSection[];
+}
+
+interface StoreSection {
+  id: number;
+  name: string;
+  shelves: StoreShelf[];
+}
+
+interface StoreShelf {
+  id: number;
+  name: string;
+}
+
+interface StoreProduct {
+  id: number;
+  name: string;
+  shelf: string;
+  prico: number;
+  validade: string;
+  quantidade: number;
 }
 
 const style = {
@@ -52,328 +75,158 @@ const style = {
   overflowY: 'auto',
 };
 
-interface FormErrors {
-  name: string;
-  custoAqui: string;
-  quantidade: string;
-  validade: string;
-  prico: string;
-  categoria: string;
-}
-
-interface TransferFormErrors {
-  transferQuantity: string;
-  shelf: string;
-}
-
-const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
-  const [openProduct, setOpenProduct] = React.useState(false);
-  const [openTransfer, setOpenTransfer] = React.useState(false);
+const StoreManager: React.FC<CollapsedItemProps> = ({ open }) => {
+  const [stores, setStores] = React.useState<Store[]>(() => {
+    const savedStores = localStorage.getItem('stores');
+    return savedStores ? JSON.parse(savedStores) : [];
+  });
+  const [selectedStoreId, setSelectedStoreId] = React.useState<number | null>(() => {
+    const savedStoreId = localStorage.getItem('selectedStoreId');
+    return savedStoreId ? Number(savedStoreId) : null;
+  });
+  const [selectedSectionId, setSelectedSectionId] = React.useState<number | null>(() => {
+    const savedSectionId = localStorage.getItem('selectedStoreSectionId');
+    return savedSectionId ? Number(savedSectionId) : null;
+  });
+  const [openStoreModal, setOpenStoreModal] = React.useState(false);
+  const [openSectionModal, setOpenSectionModal] = React.useState(false);
+  const [openShelfModal, setOpenShelfModal] = React.useState(false);
   const [alert, setAlert] = React.useState<{
     severity: 'success' | 'error' | 'info' | 'warning';
     message: string;
   } | null>(null);
-  const [editProductId, setEditProductId] = React.useState<number | null>(null);
-  const [transferProductId, setTransferProductId] = React.useState<number | null>(null);
 
-  const [form, setForm] = React.useState({
-    name: '',
-    categoria: '',
-    custoAqui: 0,
-    detalhes: '',
-    fornecedor: '',
-    validade: '',
-    prico: 0,
-    quantidade: 0,
-  });
+  const [storeForm, setStoreForm] = React.useState({ name: '' });
+  const [sectionForm, setSectionForm] = React.useState({ name: '' });
+  const [shelfForm, setShelfForm] = React.useState({ name: '' });
 
-  const [transferForm, setTransferForm] = React.useState({
-    transferQuantity: 0,
-    shelf: '',
-  });
-
-  const [formErrors, setFormErrors] = React.useState<FormErrors>({
-    name: '',
-    custoAqui: '',
-    quantidade: '',
-    validade: '',
-    prico: '',
-    categoria: '',
-  });
-
-  const [transferFormErrors, setTransferFormErrors] = React.useState<TransferFormErrors>({
-    transferQuantity: '',
-    shelf: '',
-  });
-
-  const [products, setProducts] = React.useState<
-    {
-      id: number;
-      name: string;
-      categoria: string;
-      custoAqui: number;
-      detalhes: string;
-      fornecedor: string;
-      validade: string;
-      prico: number;
-      quantidade: number;
-    }[]
-  >(() => {
-    const savedProducts = localStorage.getItem('products');
-    return savedProducts ? JSON.parse(savedProducts) : [];
-  });
-
-  const [storeProducts, setStoreProducts] = React.useState<
-    {
-      id: number;
-      name: string;
-      shelf: string;
-      prico: number;
-      validade: string;
-      quantidade: number;
-    }[]
-  >(() => {
+  const [storeProducts] = React.useState<StoreProduct[]>(() => {
     const savedStoreProducts = localStorage.getItem('loja');
     return savedStoreProducts ? JSON.parse(savedStoreProducts) : [];
   });
 
-  const [categories] = React.useState<{ id: number; name: string }[]>(() => {
-    const savedCategories = localStorage.getItem('categoria');
-    return savedCategories ? JSON.parse(savedCategories) : [];
-  });
-
-  const [shelves] = React.useState<string[]>(['Prateleira A', 'Prateleira B', 'Prateleira C']);
-
-  const handleOpen = (productId?: number) => {
-    if (productId) {
-      const productToEdit = products.find((p) => p.id === productId);
-      if (productToEdit) {
-        setForm(productToEdit);
-        setEditProductId(productId);
-      }
-    } else {
-      setForm({
-        name: '',
-        categoria: '',
-        custoAqui: 0,
-        detalhes: '',
-        fornecedor: '',
-        validade: '',
-        prico: 0,
-        quantidade: 0,
-      });
-      setEditProductId(null);
-    }
-    setOpenProduct(true);
-  };
-
-  const handleClose = () => {
-    setOpenProduct(false);
-    setEditProductId(null);
-    setForm({
-      name: '',
-      categoria: '',
-      custoAqui: 0,
-      detalhes: '',
-      fornecedor: '',
-      validade: '',
-      prico: 0,
-      quantidade: 0,
-    });
-    setFormErrors({
-      name: '',
-      custoAqui: '',
-      quantidade: '',
-      validade: '',
-      prico: '',
-      categoria: '',
-    });
-  };
-
-  const handleOpenTransfer = (productId: number) => {
-    setTransferProductId(productId);
-    setTransferForm({
-      transferQuantity: 0,
-      shelf: '',
-    });
-    setOpenTransfer(true);
-  };
-
-  const handleCloseTransfer = () => {
-    setOpenTransfer(false);
-    setTransferProductId(null);
-    setTransferForm({
-      transferQuantity: 0,
-      shelf: '',
-    });
-    setTransferFormErrors({
-      transferQuantity: '',
-      shelf: '',
-    });
-  };
-
-  const [search, setSearch] = React.useState('');
-  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({
-      ...prev,
-      [name]:
-        name === 'custoAqui' || name === 'prico' || name === 'quantidade' ? Number(value) : value,
-    }));
-  };
-
-  const handleTransferChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setTransferForm((prev) => ({
-      ...prev,
-      [name]: name === 'transferQuantity' ? Number(value) : value,
-    }));
-  };
-
-  const handleSelectChange = (e: SelectChangeEvent<string>) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const handleTransferSelectChange = (e: SelectChangeEvent<string>) => {
-    const { name, value } = e.target;
-    setTransferForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const validateForm = () => {
-    const errors: FormErrors = {
-      name: '',
-      custoAqui: '',
-      quantidade: '',
-      validade: '',
-      prico: '',
-      categoria: '',
-    };
-    if (!form.name) errors.name = 'Nome do produto é obrigatório';
-    else if (
-      products.some(
-        (p) =>
-          p.name.toLowerCase() === form.name.toLowerCase() &&
-          (!editProductId || p.id !== editProductId),
-      )
-    )
-      errors.name = 'Este produto já existe';
-    if (form.custoAqui <= 0) errors.custoAqui = 'O custo de aquisição deve ser maior que 0';
-    if (form.quantidade <= 0) errors.quantidade = 'A quantidade deve ser maior que 0';
-    if (form.prico <= 0) errors.prico = 'O preço deve ser maior que 0';
-    if (!form.categoria) errors.categoria = 'A categoria é obrigatória';
-    if (!form.validade || isNaN(new Date(form.validade).getTime()))
-      errors.validade = 'A validade é inválida';
-
-    setFormErrors(errors);
-    return Object.values(errors).every((error) => error === '');
-  };
-
-  const validateTransferForm = () => {
-    const errors: TransferFormErrors = {
-      transferQuantity: '',
-      shelf: '',
-    };
-    const product = products.find((p) => p.id === transferProductId);
-    if (!transferForm.transferQuantity || transferForm.transferQuantity <= 0)
-      errors.transferQuantity = 'A quantidade deve ser maior que 0';
-    else if (product && transferForm.transferQuantity > product.quantidade)
-      errors.transferQuantity = 'Quantidade maior que o estoque disponível';
-    if (!transferForm.shelf) errors.shelf = 'A prateleira é obrigatória';
-
-    setTransferFormErrors(errors);
-    return Object.values(errors).every((error) => error === '');
-  };
-
-  const handleAddProduct = () => {
-    if (validateForm()) {
-      if (editProductId) {
-        const updatedProducts = products.map((product) =>
-          product.id === editProductId ? { ...form, id: editProductId } : product,
-        );
-        setProducts(updatedProducts);
-        localStorage.setItem('products', JSON.stringify(updatedProducts));
-        setAlert({ severity: 'success', message: 'Produto atualizado com sucesso!' });
-      } else {
-        const newProduct = {
-          id: products.length + 1,
-          ...form,
-        };
-        const updatedProducts = [...products, newProduct];
-        setProducts(updatedProducts);
-        localStorage.setItem('products', JSON.stringify(updatedProducts));
-        setAlert({ severity: 'success', message: 'Produto cadastrado com sucesso!' });
-      }
-
-      handleClose();
-      setTimeout(() => setAlert(null), 3000);
-    } else {
-      setAlert({
-        severity: 'error',
-        message:
-          formErrors.name === 'Este produto já existe'
-            ? 'Erro: Este produto já existe!'
-            : 'Erro: Preencha todos os campos corretamente!',
-      });
-      setTimeout(() => setAlert(null), 3000);
-    }
-  };
-
-  const handleTransferProduct = () => {
-    if (validateTransferForm() && transferProductId !== null) {
-      const product = products.find((p) => p.id === transferProductId);
-      if (product) {
-        // Update warehouse products (reduce quantity)
-        const updatedProducts = products.map((p) =>
-          p.id === transferProductId
-            ? { ...p, quantidade: p.quantidade - transferForm.transferQuantity }
-            : p,
-        );
-        setProducts(updatedProducts);
-        localStorage.setItem('products', JSON.stringify(updatedProducts));
-
-        // Add to store products
-        const storeProduct = {
-          id: product.id,
-          name: product.name,
-          shelf: transferForm.shelf,
-          prico: product.prico,
-          validade: product.validade,
-          quantidade: transferForm.transferQuantity,
-        };
-
-        const updatedStoreProducts = [...storeProducts, storeProduct];
-        setStoreProducts(updatedStoreProducts);
-        localStorage.setItem('loja', JSON.stringify(updatedStoreProducts));
-
-        setAlert({ severity: 'success', message: 'Produto transferido para a loja com sucesso!' });
-        handleCloseTransfer();
-        setTimeout(() => setAlert(null), 3000);
-      }
-    } else {
-      setAlert({
-        severity: 'error',
-        message: 'Erro: Preencha todos os campos corretamente!',
-      });
-      setTimeout(() => setAlert(null), 3000);
-    }
-  };
+  React.useEffect(() => {
+    localStorage.setItem('stores', JSON.stringify(stores));
+  }, [stores]);
 
   React.useEffect(() => {
-    localStorage.setItem('products', JSON.stringify(products));
-  }, [products]);
+    localStorage.setItem('selectedStoreId', String(selectedStoreId));
+  }, [selectedStoreId]);
+
+  React.useEffect(() => {
+    localStorage.setItem('selectedStoreSectionId', String(selectedSectionId));
+  }, [selectedSectionId]);
 
   React.useEffect(() => {
     localStorage.setItem('loja', JSON.stringify(storeProducts));
   }, [storeProducts]);
+
+  // Handlers for Store
+  const handleOpenStoreModal = () => setOpenStoreModal(true);
+  const handleCloseStoreModal = () => {
+    setOpenStoreModal(false);
+    setStoreForm({ name: '' });
+  };
+  const handleStoreChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setStoreForm({ name: e.target.value });
+  const handleAddStore = () => {
+    if (storeForm.name) {
+      const newStore: Store = {
+        id: stores.length + 1,
+        name: storeForm.name,
+        sections: [],
+      };
+      setStores([...stores, newStore]);
+      handleCloseStoreModal();
+      setAlert({ severity: 'success', message: 'Loja criada com sucesso!' });
+      setTimeout(() => setAlert(null), 3000);
+    }
+  };
+
+  const handleDeleteStore = (storeId: number) => {
+    if (
+      window.confirm(
+        'Tem certeza que deseja eliminar esta loja? Isso removerá todas as suas seções e prateleiras.',
+      )
+    ) {
+      const updatedStores = stores.filter((s) => s.id !== storeId);
+      setStores(updatedStores);
+      if (selectedStoreId === storeId) {
+        setSelectedStoreId(null);
+        setSelectedSectionId(null);
+      }
+      setAlert({ severity: 'success', message: 'Loja eliminada com sucesso!' });
+      setTimeout(() => setAlert(null), 3000);
+    }
+  };
+
+  // Handlers for Section
+  const handleOpenSectionModal = () => setOpenSectionModal(true);
+  const handleCloseSectionModal = () => {
+    setOpenSectionModal(false);
+    setSectionForm({ name: '' });
+  };
+  const handleSectionChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setSectionForm({ name: e.target.value });
+  const handleAddSection = () => {
+    if (sectionForm.name && selectedStoreId) {
+      const updatedStores = stores.map((s) =>
+        s.id === selectedStoreId
+          ? {
+              ...s,
+              sections: [
+                ...s.sections,
+                { id: s.sections.length + 1, name: sectionForm.name, shelves: [] },
+              ],
+            }
+          : s,
+      );
+      setStores(updatedStores);
+      handleCloseSectionModal();
+      setAlert({ severity: 'success', message: 'Seção criada com sucesso!' });
+      setTimeout(() => setAlert(null), 3000);
+    }
+  };
+
+  // Handlers for Shelf
+  const handleOpenShelfModal = () => setOpenShelfModal(true);
+  const handleCloseShelfModal = () => {
+    setOpenShelfModal(false);
+    setShelfForm({ name: '' });
+  };
+  const handleShelfChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setShelfForm({ name: e.target.value });
+  const handleAddShelf = () => {
+    if (shelfForm.name && selectedStoreId && selectedSectionId) {
+      const updatedStores = stores.map((s) =>
+        s.id === selectedStoreId
+          ? {
+              ...s,
+              sections: s.sections.map((sec) =>
+                sec.id === selectedSectionId
+                  ? {
+                      ...sec,
+                      shelves: [
+                        ...sec.shelves,
+                        { id: sec.shelves.length + 1, name: shelfForm.name },
+                      ],
+                    }
+                  : sec,
+              ),
+            }
+          : s,
+      );
+      setStores(updatedStores);
+      handleCloseShelfModal();
+      setAlert({ severity: 'success', message: 'Prateleira criada com sucesso!' });
+      setTimeout(() => setAlert(null), 3000);
+    }
+  };
+
+  const selectedStore = stores.find((s) => s.id === selectedStoreId);
+  const sections = selectedStore?.sections || [];
+  const selectedSection = sections.find((sec) => sec.id === selectedSectionId);
+  const shelves = selectedSection?.shelves || [];
 
   return (
     <>
@@ -385,285 +238,247 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
 
       <Paper sx={{ p: 2, width: '100%' }}>
         <Collapse in={open}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Typography variant="h5">Produto Na loja</Typography>
-            <TextField
-              label="Pesquisar"
-              variant="outlined"
-              size="small"
-              value={search}
-              onChange={handleSearch}
-            />
-            {/*  <Button
+          <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
+            <Typography variant="h5">Lojas</Typography>
+            <Select
+              value={selectedStoreId || ''}
+              onChange={(e) => {
+                setSelectedStoreId(Number(e.target.value));
+                setSelectedSectionId(null);
+              }}
+              displayEmpty
+            >
+              <MenuItem value="" disabled>
+                Selecione uma Loja
+              </MenuItem>
+              {stores.map((s) => (
+                <MenuItem key={s.id} value={s.id}>
+                  {s.name}
+                </MenuItem>
+              ))}
+            </Select>
+            {selectedStoreId && (
+              <Select
+                value={selectedSectionId || ''}
+                onChange={(e) => setSelectedSectionId(Number(e.target.value))}
+                displayEmpty
+              >
+                <MenuItem value="" disabled>
+                  Selecione uma Seção
+                </MenuItem>
+                {sections.map((sec) => (
+                  <MenuItem key={sec.id} value={sec.id}>
+                    {sec.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            )}
+            <Button
               variant="contained"
               color="secondary"
-              onClick={() => handleOpen()}
+              onClick={handleOpenStoreModal}
               startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
             >
-              <Typography variant="body2">Adicionar Produto</Typography>
-            </Button> */}
+              Nova Loja
+            </Button>
+            {selectedStoreId && (
+              <Button
+                variant="contained"
+                color="secondary"
+                onClick={handleOpenSectionModal}
+                startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
+              >
+                Nova Seção
+              </Button>
+            )}
+            {selectedSectionId && (
+              <Button
+                variant="contained"
+                color="secondary"
+                onClick={handleOpenShelfModal}
+                startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
+              >
+                Nova Prateleira
+              </Button>
+            )}
           </Stack>
         </Collapse>
       </Paper>
 
-      <Modal open={openProduct} onClose={handleClose}>
-        <Box sx={style} component="form" noValidate autoComplete="off">
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="center"
-            sx={{ width: '100%', mb: 8 }}
-          >
-            <Typography id="modal-modal-title" variant="h5" component="h2">
-              Cadastrar Produtos
-            </Typography>
-            <Button onClick={handleClose} variant="outlined" color="error">
-              Fechar
-            </Button>
-          </Stack>
-          <Stack sx={{ width: '100%' }} spacing={3}>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  name="name"
-                  label="Nome do Produto"
-                  type="text"
-                  sx={{ width: '100%' }}
-                  value={form.name}
-                  onChange={handleChange}
-                  error={Boolean(formErrors.name)}
-                  helperText={formErrors.name}
-                />
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  name="custoAqui"
-                  label="Custo de Aquisição"
-                  type="number"
-                  sx={{ width: '100%' }}
-                  value={form.custoAqui}
-                  onChange={handleChange}
-                  error={Boolean(formErrors.custoAqui)}
-                  helperText={formErrors.custoAqui}
-                />
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  name="quantidade"
-                  label="Quantidade do Produto"
-                  type="number"
-                  sx={{ width: '100%' }}
-                  value={form.quantidade}
-                  onChange={handleChange}
-                  error={Boolean(formErrors.quantidade)}
-                  helperText={formErrors.quantidade}
-                />
-              </Grid>
-            </Grid>
-
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  name="validade"
-                  label="Validade do Produto"
-                  type="date"
-                  sx={{ width: '100%' }}
-                  value={form.validade}
-                  onChange={handleChange}
-                  InputLabelProps={{ shrink: true }}
-                  error={Boolean(formErrors.validade)}
-                  helperText={formErrors.validade}
-                />
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  name="prico"
-                  label="Preço do Produto"
-                  type="number"
-                  sx={{ width: '100%' }}
-                  value={form.prico}
-                  onChange={handleChange}
-                  error={Boolean(formErrors.prico)}
-                  helperText={formErrors.prico}
-                />
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  name="detalhes"
-                  label="Detalhes do Produto"
-                  type="text"
-                  sx={{ width: '100%' }}
-                  value={form.detalhes}
-                  onChange={handleChange}
-                />
-              </Grid>
-            </Grid>
-
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
-                <Select
-                  name="categoria"
-                  value={form.categoria}
-                  onChange={handleSelectChange}
-                  displayEmpty
-                  error={Boolean(formErrors.categoria)}
-                  fullWidth
-                >
-                  <MenuItem value="" disabled>
-                    Selecione uma Categoria
-                  </MenuItem>
-                  {categories.map((cat) => (
-                    <MenuItem key={cat.id} value={cat.name}>
-                      {cat.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-                {formErrors.categoria && (
-                  <FormHelperText error>{formErrors.categoria}</FormHelperText>
-                )}
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  name="fornecedor"
-                  label="Fornecedor do Produto"
-                  type="text"
-                  sx={{ width: '100%' }}
-                  value={form.fornecedor}
-                  onChange={handleChange}
-                />
-              </Grid>
-            </Grid>
-
-            <Button variant="contained" color="secondary" onClick={handleAddProduct}>
-              Cadastrar
-            </Button>
-          </Stack>
-        </Box>
-      </Modal>
-
-      <Modal open={openTransfer} onClose={handleCloseTransfer}>
-        <Box sx={style} component="form" noValidate autoComplete="off">
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="center"
-            sx={{ width: '100%', mb: 8 }}
-          >
-            <Typography id="modal-modal-title" variant="h5" component="h2">
-              Transferir Produto para Loja
-            </Typography>
-            <Button onClick={handleCloseTransfer} variant="outlined" color="error">
-              Fechar
-            </Button>
-          </Stack>
-          <Stack sx={{ width: '100%' }} spacing={3}>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  name="transferQuantity"
-                  label="Quantidade a Transferir"
-                  type="number"
-                  sx={{ width: '100%' }}
-                  value={transferForm.transferQuantity}
-                  onChange={handleTransferChange}
-                  error={Boolean(transferFormErrors.transferQuantity)}
-                  helperText={
-                    transferFormErrors.transferQuantity ||
-                    `Estoque disponível: ${
-                      products.find((p) => p.id === transferProductId)?.quantidade || 0
-                    }`
-                  }
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <Select
-                  name="shelf"
-                  value={transferForm.shelf}
-                  onChange={handleTransferSelectChange}
-                  displayEmpty
-                  error={Boolean(transferFormErrors.shelf)}
-                  fullWidth
-                >
-                  <MenuItem value="" disabled>
-                    Selecione uma Prateleira
-                  </MenuItem>
-                  {shelves.map((shelf) => (
-                    <MenuItem key={shelf} value={shelf}>
-                      {shelf}
-                    </MenuItem>
-                  ))}
-                </Select>
-                {transferFormErrors.shelf && (
-                  <FormHelperText error>{transferFormErrors.shelf}</FormHelperText>
-                )}
-              </Grid>
-            </Grid>
-            <Button variant="contained" color="secondary" onClick={handleTransferProduct}>
-              Transferir
-            </Button>
-          </Stack>
-        </Box>
-      </Modal>
-
+      {/* Store List */}
       <Card sx={{ mt: 4 }}>
         <CardContent>
+          <Typography variant="h6" mb={2}>
+            Lojas Criadas
+          </Typography>
           <TableContainer component={Paper}>
             <Table>
               <TableHead>
                 <TableRow>
-                  {[
-                    'ID',
-                    'Nome do Produto',
-                    'Categoria',
-                    'Preço',
-                    'Validade',
-                    'Custo de Aquisição',
-                    'Fornecedor',
-                    'Quantidade',
-                    'Ações',
-                  ].map((header) => (
-                    <TableCell key={header}>
-                      <strong>{header}</strong>
-                    </TableCell>
-                  ))}
+                  <TableCell>
+                    <strong>ID</strong>
+                  </TableCell>
+                  <TableCell>
+                    <strong>Nome</strong>
+                  </TableCell>
+                  <TableCell>
+                    <strong>Seções</strong>
+                  </TableCell>
+                  <TableCell>
+                    <strong>Prateleiras</strong>
+                  </TableCell>
+                  <TableCell>
+                    <strong>Ações</strong>
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {products.map((product) => (
-                  <TableRow key={product.id}>
-                    <TableCell>{product.id}</TableCell>
-                    <TableCell>{product.name}</TableCell>
-                    <TableCell>{product.categoria}</TableCell>
-                    <TableCell>{product.prico}</TableCell>
+                {stores.map((store) => (
+                  <TableRow key={store.id}>
+                    <TableCell>{store.id}</TableCell>
+                    <TableCell>{store.name}</TableCell>
                     <TableCell>
-                      {product.validade && !isNaN(new Date(product.validade).getTime())
-                        ? new Intl.DateTimeFormat('pt-BR', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                          }).format(new Date(product.validade))
-                        : 'Data inválida'}
+                      {store.sections.length > 0
+                        ? store.sections.map((s) => s.name).join(', ')
+                        : 'Nenhuma seção'}
                     </TableCell>
-                    <TableCell>{product.custoAqui}</TableCell>
-                    <TableCell>{product.fornecedor}</TableCell>
-                    <TableCell>{product.quantidade}</TableCell>
-                    <TableCell align="right">
-                      <IconButton color="primary" onClick={() => handleOpen(product.id)}>
-                        <Edit />
-                      </IconButton>
-                      <IconButton color="secondary" onClick={() => handleOpenTransfer(product.id)}>
-                        <IconifyIcon icon="mdi:store" />
+                    <TableCell>
+                      {store.sections.length > 0
+                        ? store.sections
+                            .flatMap((s) => s.shelves.map((sh) => ` ${sh.name}`))
+                            .join(', ') || 'Nenhuma prateleira'
+                        : 'Nenhuma prateleira'}
+                    </TableCell>
+                    <TableCell>
+                      <IconButton color="error" onClick={() => handleDeleteStore(store.id)}>
+                        <Delete />
                       </IconButton>
                     </TableCell>
                   </TableRow>
                 ))}
+                {stores.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center">
+                      Nenhuma loja criada ainda.
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </TableContainer>
         </CardContent>
       </Card>
+
+      {/* Store Modal */}
+      <Modal open={openStoreModal} onClose={handleCloseStoreModal}>
+        <Box sx={style}>
+          <Typography variant="h5" mb={2}>
+            Criar Loja
+          </Typography>
+          <TextField
+            label="Nome da Loja"
+            value={storeForm.name}
+            onChange={handleStoreChange}
+            fullWidth
+          />
+          <Button variant="contained" color="secondary" onClick={handleAddStore} sx={{ mt: 2 }}>
+            Criar
+          </Button>
+        </Box>
+      </Modal>
+
+      {/* Section Modal */}
+      <Modal open={openSectionModal} onClose={handleCloseSectionModal}>
+        <Box sx={style}>
+          <Typography variant="h5" mb={2}>
+            Criar Seção
+          </Typography>
+          <TextField
+            label="Nome da Seção"
+            value={sectionForm.name}
+            onChange={handleSectionChange}
+            fullWidth
+          />
+          <Button variant="contained" color="secondary" onClick={handleAddSection} sx={{ mt: 2 }}>
+            Criar
+          </Button>
+        </Box>
+      </Modal>
+
+      {/* Shelf Modal */}
+      <Modal open={openShelfModal} onClose={handleCloseShelfModal}>
+        <Box sx={style}>
+          <Typography variant="h5" mb={2}>
+            Criar Prateleira
+          </Typography>
+          <TextField
+            label="Nome da Prateleira"
+            value={shelfForm.name}
+            onChange={handleShelfChange}
+            fullWidth
+          />
+          <Button variant="contained" color="secondary" onClick={handleAddShelf} sx={{ mt: 2 }}>
+            Criar
+          </Button>
+        </Box>
+      </Modal>
+
+      {/* Store Products Table */}
+      {selectedSectionId && (
+        <Card sx={{ mt: 4 }}>
+          <CardContent>
+            <Typography variant="h6" mb={2}>
+              Produtos na Loja
+            </Typography>
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    {['ID', 'Nome', 'Prateleira', 'Preço', 'Validade', 'Quantidade'].map(
+                      (header) => (
+                        <TableCell key={header}>
+                          <strong>{header}</strong>
+                        </TableCell>
+                      ),
+                    )}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {storeProducts
+                    .filter((p) => shelves.some((shelf) => shelf.name === p.shelf))
+                    .map((product) => (
+                      <TableRow key={`${product.id}-${product.shelf}`}>
+                        <TableCell>{product.id}</TableCell>
+                        <TableCell>{product.name || '-'}</TableCell>
+                        <TableCell>{product.shelf || '-'}</TableCell>
+                        <TableCell>{Number(product.prico) || 0}</TableCell>
+                        <TableCell>
+                          {product.validade && !isNaN(new Date(product.validade).getTime())
+                            ? new Intl.DateTimeFormat('pt-BR', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                              }).format(new Date(product.validade))
+                            : '-'}
+                        </TableCell>
+                        <TableCell>{Number(product.quantidade) || 0}</TableCell>
+                      </TableRow>
+                    ))}
+                  {storeProducts.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} align="center">
+                        Nenhum produto transferido para a loja ainda.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
+      )}
     </>
   );
 };
 
-export default ProductManager;
+export default StoreManager;

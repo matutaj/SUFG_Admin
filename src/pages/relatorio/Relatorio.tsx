@@ -15,15 +15,56 @@ import {
   Button,
   Stack,
   TextField,
+  Box,
+  Alert,
 } from '@mui/material';
 import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { SelectChangeEvent } from '@mui/material';
 
-interface Product {
+// Tipagem para jsPDF com autoTable
+type JsPDFWithAutoTable = jsPDF & {
+  autoTable: (options: {
+    head: string[][];
+    body: (string | number)[][];
+    startY: number;
+    theme: string;
+    headStyles?: { fillColor: [number, number, number] };
+  }) => void;
+};
+
+// Interfaces ajustadas para os dados reais
+interface StoreProduct {
+  id: number;
+  name: string;
+  shelf: string;
+  prico: number;
+  validade: string;
+  quantidade: number;
+}
+
+interface FaturaProduct {
+  produto: StoreProduct;
+  quantidade: number;
+}
+
+interface Fatura {
+  id: number;
+  cliente: string;
+  nif: string;
+  telefone: string;
+  localizacao: string;
+  email: string;
+  data: string;
+  total: number;
+  status: string;
+  produtos: FaturaProduct[];
+}
+
+interface ReportData {
   id: string;
   name: string;
-  categoria: string;
   quantidadeVendida?: number;
   valorTotal?: number;
   dataVenda?: string;
@@ -34,23 +75,92 @@ interface Product {
   valorTransacao?: number;
   dataTransacao?: string;
   status?: string;
+  cliente?: string;
 }
 
 const ReportPage = () => {
   const [reportType, setReportType] = useState<string>('vendas_por_periodo');
-  const [reportData, setReportData] = useState<Product[]>([]);
+  const [reportData, setReportData] = useState<ReportData[]>([]);
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [dateError, setDateError] = useState<string>('');
 
   useEffect(() => {
-    const storedData = JSON.parse(localStorage.getItem('products') || '[]');
-    setReportData(storedData);
-  }, []);
+    const faturas: Fatura[] = JSON.parse(localStorage.getItem('faturas') || '[]');
+    const loja: StoreProduct[] = JSON.parse(localStorage.getItem('loja') || '[]');
+    generateReportData(faturas, loja);
+  }, [reportType]);
 
-  // Atualizado para o tipo correto SelectChangeEvent
+  const generateReportData = (faturas: Fatura[], loja: StoreProduct[]) => {
+    let data: ReportData[] = [];
+    switch (reportType) {
+      case 'vendas_por_periodo':
+        data = faturas.flatMap((fatura) =>
+          fatura.produtos.map((p) => ({
+            id: `${fatura.id}-${p.produto.id}`,
+            name: p.produto.name,
+            quantidadeVendida: p.quantidade,
+            valorTotal: p.produto.prico * p.quantidade,
+            dataVenda: fatura.data,
+            cliente: fatura.cliente,
+            status: fatura.status,
+          })),
+        );
+        break;
+      case 'produtos_mais_vendidos': {
+        const productSales: { [key: string]: { name: string; quantidadeVendida: number } } = {};
+        faturas.forEach((fatura) => {
+          fatura.produtos.forEach((p) => {
+            if (productSales[p.produto.id]) {
+              productSales[p.produto.id].quantidadeVendida += p.quantidade;
+            } else {
+              productSales[p.produto.id] = {
+                name: p.produto.name,
+                quantidadeVendida: p.quantidade,
+              };
+            }
+          });
+        });
+        data = Object.entries(productSales).map(([id, info]) => ({
+          id,
+          name: info.name,
+          quantidadeVendida: info.quantidadeVendida,
+        }));
+        data.sort((a, b) => (b.quantidadeVendida || 0) - (a.quantidadeVendida || 0));
+        break;
+      }
+      case 'movimentacao_stock':
+        data = loja.map((product) => ({
+          id: product.id.toString(),
+          name: product.name,
+          prico: product.prico,
+          validade: product.validade,
+          quantidade: product.quantidade,
+          status: product.quantidade > 0 ? 'Em Estoque' : 'Fora de Estoque',
+        }));
+        break;
+      case 'transacao_clientes_fornecedores':
+        data = faturas.map((fatura) => ({
+          id: fatura.id.toString(),
+          name: fatura.cliente,
+          tipo: 'Cliente',
+          valorTransacao: fatura.total,
+          dataTransacao: fatura.data,
+          cliente: fatura.cliente,
+          status: fatura.status,
+        }));
+        break;
+      default:
+        data = [];
+    }
+    setReportData(data);
+  };
+
   const handleReportTypeChange = (event: SelectChangeEvent<string>) => {
     setReportType(event.target.value);
+    setStartDate('');
+    setEndDate('');
+    setDateError('');
   };
 
   const handleStartDateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -76,79 +186,61 @@ const ReportPage = () => {
   const filterReportData = () => {
     if (!startDate || !endDate || dateError) return reportData;
 
-    const filteredData = reportData.filter((product) => {
-      const productDate = new Date(product.validade || '');
-      return productDate >= new Date(startDate) && productDate <= new Date(endDate);
-    });
+    const start = new Date(startDate);
+    const end = new Date(endDate);
 
-    return filteredData;
+    return reportData.filter((item) => {
+      const date = new Date(item.dataVenda || item.dataTransacao || item.validade || '');
+      return date >= start && date <= end;
+    });
   };
 
   const getTableHeaders = () => {
     switch (reportType) {
       case 'vendas_por_periodo':
-        return ['ID', 'Produto', 'Categoria', 'Quantidade Vendida', 'Valor Total', 'Data de Venda'];
+        return ['ID', 'Produto', 'Quantidade Vendida', 'Valor Total', 'Data', 'Cliente', 'Status'];
       case 'produtos_mais_vendidos':
-        return ['ID', 'Nome', 'Categoria', 'Quantidade Vendida'];
+        return ['ID', 'Produto', 'Quantidade Vendida'];
       case 'movimentacao_stock':
-        return [
-          'ID',
-          'Nome',
-          'Categoria',
-          'Preço',
-          'Validade',
-          'Quantidade',
-          'Entrada',
-          'Saída',
-          'Status',
-        ];
+        return ['ID', 'Produto', 'Preço', 'Validade', 'Quantidade', 'Status'];
       case 'transacao_clientes_fornecedores':
-        return [
-          'ID',
-          'Nome',
-          'Tipo',
-          'Valor Transacionado',
-          'Data',
-          'Cliente',
-          'Fornecedor',
-          'Status',
-        ];
+        return ['ID', 'Cliente', 'Tipo', 'Valor', 'Data', 'Status'];
       default:
-        return ['ID', 'Nome', 'Categoria', 'Preço', 'Validade', 'Quantidade', 'Status'];
+        return [];
     }
   };
 
-  const getRowData = (product: Product) => {
+  const getRowData = (item: ReportData) => {
     switch (reportType) {
       case 'vendas_por_periodo':
         return [
-          product.id,
-          product.name,
-          product.categoria,
-          product.quantidadeVendida || 0,
-          product.valorTotal || 0,
-          new Date(product.dataVenda || '').toLocaleDateString(),
+          item.id,
+          item.name,
+          item.quantidadeVendida || 0,
+          `Kz${item.valorTotal?.toFixed(2) || '0.00'}`,
+          new Date(item.dataVenda || '').toLocaleDateString('pt-BR'),
+          item.cliente || '-',
+          item.status || '-',
         ];
       case 'produtos_mais_vendidos':
-        return [product.id, product.name, product.categoria, product.quantidadeVendida || 0];
+        return [item.id, item.name, item.quantidadeVendida || 0];
       case 'movimentacao_stock':
         return [
-          product.id,
-          product.name,
-          product.categoria,
-          product.prico,
-          new Date(product.validade || '').toLocaleDateString(),
-          product.quantidade,
-          product.quantidade && product.quantidade > 0 ? 'Em Estoque' : 'Fora de Estoque',
+          item.id,
+          item.name,
+          `Kz${item.prico?.toFixed(2) || '0.00'}`,
+          new Date(item.validade || '').toLocaleDateString('pt-BR'),
+          item.quantidade || 0,
+          item.status || '-',
         ];
       case 'transacao_clientes_fornecedores':
         return [
-          product.id,
-          product.name,
-          product.tipo,
-          product.valorTransacao || 0,
-          new Date(product.dataTransacao || '').toLocaleDateString(),
-          product.status,
+          item.id,
+          item.name,
+          item.tipo || '-',
+          `Kz${item.valorTransacao?.toFixed(2) || '0.00'}`,
+          new Date(item.dataTransacao || '').toLocaleDateString('pt-BR'),
+          item.status || '-',
         ];
       default:
         return [];
@@ -156,90 +248,89 @@ const ReportPage = () => {
   };
 
   const exportPDF = () => {
-    const doc = new jsPDF();
-
-    // Adicionando o logotipo (se houver)
-    const logo = 'data:image/png;base64,...'; // Substitua com o caminho para a imagem base64 do seu logotipo
-    doc.addImage(logo, 'PNG', 10, 10, 50, 20);
-
-    // Título do relatório
-    doc.setFontSize(18);
-    doc.text('Relatório de Produtos', 60, 20);
-
-    // Informações do tipo de relatório e datas
-    doc.setFontSize(12);
-    doc.text(`Tipo de Relatório: ${reportType.replace(/_/g, ' ')}`, 10, 30);
-    doc.text(`Data de Início: ${startDate || 'Não especificada'}`, 10, 40);
-    doc.text(`Data de Fim: ${endDate || 'Não especificada'}`, 10, 50);
-
-    // Adicionando os dados do relatório
+    const doc = new jsPDF() as JsPDFWithAutoTable;
     const headers = getTableHeaders();
-    const rows = filterReportData().map((product) => getRowData(product));
+    const rows = filterReportData().map((item) => getRowData(item));
 
+    // Título e informações
+    doc.setFontSize(18);
+    doc.text('Relatório de Gestão', 14, 20);
+    doc.setFontSize(12);
+    doc.text(`Tipo: ${reportType.replace(/_/g, ' ').toUpperCase()}`, 14, 30);
+    doc.text(`Período: ${startDate || 'N/A'} a ${endDate || 'N/A'}`, 14, 40);
+
+    // Tabela
     doc.autoTable({
       head: [headers],
       body: rows,
-      startY: 60,
+      startY: 50,
       theme: 'striped',
+      headStyles: { fillColor: [22, 160, 133] },
     });
 
-    doc.save('relatorio.pdf');
+    doc.save(`relatorio_${reportType}.pdf`);
   };
 
   const exportExcel = () => {
+    const headers = getTableHeaders();
     const filteredData = filterReportData();
-    const ws = XLSX.utils.json_to_sheet(
-      filteredData.map((product) => ({
-        ...getRowData(product),
-      })),
-    );
+    const data = filteredData.map((item) => {
+      const row = getRowData(item);
+      return headers.reduce((obj: { [key: string]: string | number }, header, index) => {
+        obj[header] = row[index];
+        return obj;
+      }, {});
+    });
+
+    const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Relatório');
-    XLSX.writeFile(wb, 'relatorio.xlsx');
+    XLSX.writeFile(wb, `relatorio_${reportType}.xlsx`);
   };
 
   return (
     <Paper sx={{ p: 3, width: '100%' }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h5">Relatório de Produtos</Typography>
-      </Stack>
+      <Typography variant="h5" gutterBottom>
+        Relatórios
+      </Typography>
 
-      <Stack direction="row" spacing={2} mb={3}>
-        <FormControl sx={{ minWidth: 150 }}>
-          <InputLabel>Tipo de Relatório</InputLabel>
-          <Select value={reportType} onChange={handleReportTypeChange}>
-            <MenuItem value="vendas_por_periodo">Vendas por Período</MenuItem>
-            <MenuItem value="produtos_mais_vendidos">Produtos Mais Vendidos</MenuItem>
-            <MenuItem value="movimentacao_stock">Movimentação do Estoque</MenuItem>
-            <MenuItem value="transacao_clientes_fornecedores">
-              Transação por Clientes/Fornecedores
-            </MenuItem>
-          </Select>
-        </FormControl>
+      <Box sx={{ mb: 3 }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+          <FormControl sx={{ minWidth: 200 }}>
+            <InputLabel>Tipo de Relatório</InputLabel>
+            <Select value={reportType} onChange={handleReportTypeChange}>
+              <MenuItem value="vendas_por_periodo">Vendas por Período</MenuItem>
+              <MenuItem value="produtos_mais_vendidos">Produtos Mais Vendidos</MenuItem>
+              <MenuItem value="movimentacao_stock">Movimentação do Estoque</MenuItem>
+              <MenuItem value="transacao_clientes_fornecedores">Transações por Clientes</MenuItem>
+            </Select>
+          </FormControl>
 
-        <TextField
-          type="date"
-          label="Data de Início"
-          value={startDate}
-          onChange={handleStartDateChange}
-          InputLabelProps={{
-            shrink: true,
-          }}
-          error={!!dateError}
-          helperText={dateError}
-        />
-        <TextField
-          type="date"
-          label="Data de Fim"
-          value={endDate}
-          onChange={handleEndDateChange}
-          InputLabelProps={{
-            shrink: true,
-          }}
-          error={!!dateError}
-          helperText={dateError}
-        />
-      </Stack>
+          <TextField
+            type="date"
+            label="Data de Início"
+            value={startDate}
+            onChange={handleStartDateChange}
+            InputLabelProps={{ shrink: true }}
+            sx={{ width: { xs: '100%', sm: 180 } }}
+            error={!!dateError}
+          />
+          <TextField
+            type="date"
+            label="Data de Fim"
+            value={endDate}
+            onChange={handleEndDateChange}
+            InputLabelProps={{ shrink: true }}
+            sx={{ width: { xs: '100%', sm: 180 } }}
+            error={!!dateError}
+          />
+        </Stack>
+        {dateError && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            {dateError}
+          </Alert>
+        )}
+      </Box>
 
       <TableContainer component={Paper}>
         <Table>
@@ -253,22 +344,40 @@ const ReportPage = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {filterReportData().map((product: Product) => (
-              <TableRow key={product.id}>
-                {getRowData(product).map((cell, index) => (
-                  <TableCell key={index}>{cell}</TableCell>
-                ))}
+            {filterReportData().length > 0 ? (
+              filterReportData().map((item) => (
+                <TableRow key={item.id}>
+                  {getRowData(item).map((cell, index) => (
+                    <TableCell key={index}>{cell}</TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={getTableHeaders().length} align="center">
+                  Nenhum dado disponível para o relatório selecionado
+                </TableCell>
               </TableRow>
-            ))}
+            )}
           </TableBody>
         </Table>
       </TableContainer>
 
-      <Stack direction="row" spacing={2} mt={3}>
-        <Button variant="contained" color="primary" onClick={exportPDF}>
+      <Stack direction="row" spacing={2} mt={3} justifyContent="flex-end">
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={exportPDF}
+          disabled={reportData.length === 0}
+        >
           Exportar PDF
         </Button>
-        <Button variant="contained" color="secondary" onClick={exportExcel}>
+        <Button
+          variant="contained"
+          color="secondary"
+          onClick={exportExcel}
+          disabled={reportData.length === 0}
+        >
           Exportar Excel
         </Button>
       </Stack>
