@@ -24,18 +24,21 @@ export const drawerItems: DrawerItem[] = [
   {
     id: 3,
     icon: Doughnut,
-    title: 'Produtos', // '/pages/produtos'
+    title: ' Gestão de Produtos', // '/pages/produtos'
     collapsible: true,
+    active: true,
     subList: [
       {
         id: 31,
-        title: 'Produto Loja',
+        title: 'Lojas',
         path: `/${rootPaths.pagesRoot}/produt/loja`,
+        active: true,
       },
       {
         id: 32,
-        title: 'Produto Armazém',
+        title: 'Armazéns',
         path: `/${rootPaths.pagesRoot}/produt/armanzem`,
+        active: true,
       },
     ],
   },
@@ -45,13 +48,15 @@ export const drawerItems: DrawerItem[] = [
     title: 'Categoria',
     path: `/${rootPaths.pagesRoot}/categorias`, // '/pages/categorias'
     collapsible: false,
+    active: true,
   },
   {
     id: 5,
     icon: ShoppingBag,
-    title: 'Stock',
+    title: 'Estoque',
     path: `/${rootPaths.pagesRoot}/stock`, // '/pages/estoque'
     collapsible: false,
+    active: true,
   },
   {
     id: 6,
@@ -59,6 +64,7 @@ export const drawerItems: DrawerItem[] = [
     title: 'Relatório',
     path: `/${rootPaths.pagesRoot}/relatorio`, // '/pages/estoque'
     collapsible: false,
+    active: true,
   },
   {
     id: 7,
@@ -66,6 +72,7 @@ export const drawerItems: DrawerItem[] = [
     title: 'Cliente',
     path: `/${rootPaths.pagesRoot}/cliente`, // '/pages/funcionarios'
     collapsible: false,
+    active: true,
   },
   {
     id: 7,
@@ -73,6 +80,7 @@ export const drawerItems: DrawerItem[] = [
     title: 'Faturação',
     path: `/${rootPaths.pagesRoot}/faturacao`, // '/pages/funcionarios'
     collapsible: false,
+    active: true,
   },
   {
     id: 6,
@@ -80,6 +88,7 @@ export const drawerItems: DrawerItem[] = [
     title: 'Vendas',
     path: `/${rootPaths.pagesRoot}/venda`, // '/pages/vendas'
     collapsible: false,
+    active: true,
   },
   {
     id: 7,
@@ -87,6 +96,7 @@ export const drawerItems: DrawerItem[] = [
     title: 'Funcionários',
     path: `/${rootPaths.pagesRoot}/funcionario`, // '/pages/funcionarios'
     collapsible: false,
+    active: true,
   },
   {
     id: 10,
