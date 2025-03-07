@@ -105,7 +105,6 @@ const StoreManager: React.FC<CollapsedItemProps> = ({ open }) => {
     return savedStoreProducts ? JSON.parse(savedStoreProducts) : [];
   });
 
-  // Save to localStorage whenever state changes
   React.useEffect(() => {
     localStorage.setItem('stores', JSON.stringify(stores));
   }, [stores]);
@@ -446,9 +445,7 @@ const StoreManager: React.FC<CollapsedItemProps> = ({ open }) => {
                 </TableHead>
                 <TableBody>
                   {storeProducts
-                    .filter((p) =>
-                      shelves.some((shelf) => shelf.name === p.shelf && shelf.id <= shelves.length),
-                    )
+                    .filter((p) => shelves.some((shelf) => shelf.name === p.shelf))
                     .map((product) => (
                       <TableRow key={`${product.id}-${product.shelf}`}>
                         <TableCell>{product.id}</TableCell>
