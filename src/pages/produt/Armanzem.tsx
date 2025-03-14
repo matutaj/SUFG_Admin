@@ -37,18 +37,28 @@ interface CollapsedItemProps {
 interface Warehouse {
   id: number;
   name: string;
+  description: string;
   sections: Section[];
 }
 
 interface Section {
   id: number;
   name: string;
+  description: string;
+  corridors: Corridor[];
+}
+
+interface Corridor {
+  id: number;
+  name: string;
+  description: string;
   shelves: Shelf[];
 }
 
 interface Shelf {
   id: number;
   name: string;
+  description: string;
 }
 
 interface Product {
@@ -63,6 +73,7 @@ interface Product {
   quantidade: number;
   warehouseId: number;
   sectionId: number;
+  corridorId: number;
   shelfId: number;
 }
 
@@ -99,7 +110,7 @@ const style = {
   transform: 'translate(-50%, -50%)',
   width: { xs: '90%', sm: '80%', md: 980 },
   maxWidth: '100%',
-  height: { xs: '100%', sm: '50%', md: 500 },
+  height: { xs: '100%', sm: 'auto', md: 600 },
   maxHeight: '90%',
   bgcolor: 'background.paper',
   boxShadow: 24,
@@ -134,6 +145,12 @@ interface TransferForm {
   shelfId: number;
 }
 
+interface WarehouseForm {
+  name: string;
+  description: string;
+  sections: { id: number; corridorIds: number[]; shelfIds: number[] }[];
+}
+
 const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
   const [warehouses, setWarehouses] = React.useState<Warehouse[]>(() => {
     const savedWarehouses = localStorage.getItem('warehouses');
@@ -147,9 +164,11 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
     const savedSectionId = localStorage.getItem('selectedSectionId');
     return savedSectionId ? Number(savedSectionId) : null;
   });
+  const [selectedCorridorId, setSelectedCorridorId] = React.useState<number | null>(() => {
+    const savedCorridorId = localStorage.getItem('selectedCorridorId');
+    return savedCorridorId ? Number(savedCorridorId) : null;
+  });
   const [openWarehouseModal, setOpenWarehouseModal] = React.useState(false);
-  const [openSectionModal, setOpenSectionModal] = React.useState(false);
-  const [openShelfModal, setOpenShelfModal] = React.useState(false);
   const [openProductModal, setOpenProductModal] = React.useState(false);
   const [openTransferModal, setOpenTransferModal] = React.useState(false);
   const [alert, setAlert] = React.useState<{
@@ -157,9 +176,11 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
     message: string;
   } | null>(null);
 
-  const [warehouseForm, setWarehouseForm] = React.useState({ name: '' });
-  const [sectionForm, setSectionForm] = React.useState({ name: '' });
-  const [shelfForm, setShelfForm] = React.useState({ name: '' });
+  const [warehouseForm, setWarehouseForm] = React.useState<WarehouseForm>({
+    name: '',
+    description: '',
+    sections: [],
+  });
   const [editProductId, setEditProductId] = React.useState<number | null>(null);
   const [transferProductId, setTransferProductId] = React.useState<number | null>(null);
 
@@ -174,6 +195,7 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
     quantidade: 0,
     warehouseId: selectedWarehouseId || 0,
     sectionId: selectedSectionId || 0,
+    corridorId: selectedCorridorId || 0,
     shelfId: 0,
   });
 
@@ -220,6 +242,21 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
     return savedCategories ? JSON.parse(savedCategories) : [];
   });
 
+  const [sections] = React.useState<Section[]>(() => {
+    const savedSections = localStorage.getItem('secao');
+    return savedSections ? JSON.parse(savedSections) : [];
+  });
+
+  const [corridors] = React.useState<Corridor[]>(() => {
+    const savedCorridors = localStorage.getItem('corredor');
+    return savedCorridors ? JSON.parse(savedCorridors) : [];
+  });
+
+  const [shelves] = React.useState<Shelf[]>(() => {
+    const savedShelves = localStorage.getItem('prateleira');
+    return savedShelves ? JSON.parse(savedShelves) : [];
+  });
+
   React.useEffect(() => {
     localStorage.setItem('warehouses', JSON.stringify(warehouses));
   }, [warehouses]);
@@ -237,6 +274,10 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
   }, [selectedSectionId]);
 
   React.useEffect(() => {
+    localStorage.setItem('selectedCorridorId', String(selectedCorridorId));
+  }, [selectedCorridorId]);
+
+  React.useEffect(() => {
     localStorage.setItem('stores', JSON.stringify(stores));
   }, [stores]);
 
@@ -248,20 +289,73 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
   const handleOpenWarehouseModal = () => setOpenWarehouseModal(true);
   const handleCloseWarehouseModal = () => {
     setOpenWarehouseModal(false);
-    setWarehouseForm({ name: '' });
+    setWarehouseForm({ name: '', description: '', sections: [] });
   };
-  const handleWarehouseChange = (e: React.ChangeEvent<HTMLInputElement>) =>
-    setWarehouseForm({ name: e.target.value });
+
+  const handleWarehouseChange = (
+    e: React.ChangeEvent<HTMLInputElement> | SelectChangeEvent<number[]>,
+    sectionId?: number,
+    field?: 'corridorIds' | 'shelfIds',
+  ) => {
+    const { name, value } = e.target;
+
+    if (!sectionId && name === 'sections') {
+      const newSectionIds = value as number[];
+      /*       const currentSectionIds = warehouseForm.sections.map((s) => s.id);
+       */ const newSections = newSectionIds.map((id) => {
+        const existingSection = warehouseForm.sections.find((s) => s.id === id);
+        return existingSection || { id, corridorIds: [], shelfIds: [] };
+      });
+      setWarehouseForm((prev) => ({
+        ...prev,
+        sections: newSections,
+      }));
+    } else if (sectionId && field) {
+      setWarehouseForm((prev) => ({
+        ...prev,
+        sections: prev.sections.map((s) =>
+          s.id === sectionId ? { ...s, [field]: value as number[] } : s,
+        ),
+      }));
+    } else {
+      setWarehouseForm((prev) => ({
+        ...prev,
+        [name]: value as string,
+      }));
+    }
+  };
+
   const handleAddWarehouse = () => {
-    if (warehouseForm.name) {
+    if (warehouseForm.name && warehouseForm.sections.length > 0) {
       const newWarehouse: Warehouse = {
         id: warehouses.length + 1,
         name: warehouseForm.name,
-        sections: [],
+        description: warehouseForm.description,
+        sections: warehouseForm.sections.map((sectionForm) => {
+          const sectionData = sections.find((s) => s.id === sectionForm.id) || {
+            id: sectionForm.id,
+            name: `Seção ${sectionForm.id}`,
+            description: '',
+            corridors: [],
+          };
+          return {
+            ...sectionData,
+            corridors: corridors
+              .filter((c) => sectionForm.corridorIds.includes(c.id))
+              .map((corridor) => ({
+                ...corridor,
+                shelves: [],
+              })),
+            shelves: shelves.filter((s) => sectionForm.shelfIds.includes(s.id)),
+          };
+        }),
       };
       setWarehouses([...warehouses, newWarehouse]);
       handleCloseWarehouseModal();
       setAlert({ severity: 'success', message: 'Armazém criado com sucesso!' });
+      setTimeout(() => setAlert(null), 3000);
+    } else {
+      setAlert({ severity: 'error', message: 'Nome e pelo menos uma seção são obrigatórios!' });
       setTimeout(() => setAlert(null), 3000);
     }
   };
@@ -269,7 +363,7 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
   const handleDeleteWarehouse = (warehouseId: number) => {
     if (
       window.confirm(
-        'Tem certeza que deseja eliminar este armazém? Isso removerá todas as suas seções, prateleiras e produtos associados.',
+        'Tem certeza que deseja eliminar este armazém? Isso removerá todos os produtos associados.',
       )
     ) {
       const updatedWarehouses = warehouses.filter((w) => w.id !== warehouseId);
@@ -279,68 +373,9 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
       if (selectedWarehouseId === warehouseId) {
         setSelectedWarehouseId(null);
         setSelectedSectionId(null);
+        setSelectedCorridorId(null);
       }
       setAlert({ severity: 'success', message: 'Armazém eliminado com sucesso!' });
-      setTimeout(() => setAlert(null), 3000);
-    }
-  };
-
-  // Handlers for Section
-  const handleOpenSectionModal = () => setOpenSectionModal(true);
-  const handleCloseSectionModal = () => {
-    setOpenSectionModal(false);
-    setSectionForm({ name: '' });
-  };
-  const handleSectionChange = (e: React.ChangeEvent<HTMLInputElement>) =>
-    setSectionForm({ name: e.target.value });
-  const handleAddSection = () => {
-    if (sectionForm.name && selectedWarehouseId) {
-      const updatedWarehouses = warehouses.map((w) =>
-        w.id === selectedWarehouseId
-          ? {
-              ...w,
-              sections: [
-                ...w.sections,
-                { id: w.sections.length + 1, name: sectionForm.name, shelves: [] },
-              ],
-            }
-          : w,
-      );
-      setWarehouses(updatedWarehouses);
-      handleCloseSectionModal();
-      setAlert({ severity: 'success', message: 'Seção criada com sucesso!' });
-      setTimeout(() => setAlert(null), 3000);
-    }
-  };
-
-  // Handlers for Shelf
-  const handleOpenShelfModal = () => setOpenShelfModal(true);
-  const handleCloseShelfModal = () => {
-    setOpenShelfModal(false);
-    setShelfForm({ name: '' });
-  };
-  const handleShelfChange = (e: React.ChangeEvent<HTMLInputElement>) =>
-    setShelfForm({ name: e.target.value });
-  const handleAddShelf = () => {
-    if (shelfForm.name && selectedWarehouseId && selectedSectionId) {
-      const updatedWarehouses = warehouses.map((w) =>
-        w.id === selectedWarehouseId
-          ? {
-              ...w,
-              sections: w.sections.map((s) =>
-                s.id === selectedSectionId
-                  ? {
-                      ...s,
-                      shelves: [...s.shelves, { id: s.shelves.length + 1, name: shelfForm.name }],
-                    }
-                  : s,
-              ),
-            }
-          : w,
-      );
-      setWarehouses(updatedWarehouses);
-      handleCloseShelfModal();
-      setAlert({ severity: 'success', message: 'Prateleira criada com sucesso!' });
       setTimeout(() => setAlert(null), 3000);
     }
   };
@@ -365,6 +400,7 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
         quantidade: 0,
         warehouseId: selectedWarehouseId || 0,
         sectionId: selectedSectionId || 0,
+        corridorId: selectedCorridorId || 0,
         shelfId: 0,
       });
       setEditProductId(null);
@@ -386,6 +422,7 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
       quantidade: 0,
       warehouseId: selectedWarehouseId || 0,
       sectionId: selectedSectionId || 0,
+      corridorId: selectedCorridorId || 0,
       shelfId: 0,
     });
     setFormErrors({
@@ -445,8 +482,8 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
     setTransferForm((prev) => ({
       ...prev,
       [name]: Number(value) || 0,
-      ...(name === 'storeId' && { sectionId: 0, shelfId: 0 }), // Reset section and shelf when store changes
-      ...(name === 'sectionId' && { shelfId: 0 }), // Reset shelf when section changes
+      ...(name === 'storeId' && { sectionId: 0, shelfId: 0 }),
+      ...(name === 'sectionId' && { shelfId: 0 }),
     }));
   };
 
@@ -517,7 +554,6 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
       const productToTransfer = products.find((p) => p.id === transferProductId);
       if (!productToTransfer) return;
 
-      // Reduz a quantidade no produto original
       const updatedProducts = products.map((product) =>
         product.id === transferProductId
           ? { ...product, quantidade: product.quantidade - transferForm.transferQuantity }
@@ -525,7 +561,6 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
       );
       setProducts(updatedProducts);
 
-      // Adiciona o produto à loja
       const destStore = stores.find((s) => s.id === transferForm.storeId);
       const destSection = destStore?.sections.find((s) => s.id === transferForm.sectionId);
       const destShelf = destSection?.shelves.find((s) => s.id === transferForm.shelfId)?.name;
@@ -542,7 +577,6 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
         setStoreProducts([...storeProducts, newStoreProduct]);
       }
 
-      // Mensagem com detalhes da transferência
       const destStoreName = destStore?.name;
       const destSectionName = destSection?.name;
 
@@ -557,9 +591,11 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
   };
 
   const selectedWarehouse = warehouses.find((w) => w.id === selectedWarehouseId);
-  const sections = selectedWarehouse?.sections || [];
-  const selectedSection = sections.find((s) => s.id === selectedSectionId);
-  const shelves = selectedSection?.shelves || [];
+  const warehouseSections = selectedWarehouse?.sections || [];
+  const warehouseCorridors =
+    warehouseSections.find((s) => s.id === selectedSectionId)?.corridors || [];
+  const warehouseShelves =
+    warehouseCorridors.find((c) => c.id === selectedCorridorId)?.shelves || [];
 
   const transferStore = stores.find((s) => s.id === transferForm.storeId);
   const transferSections = transferStore?.sections || [];
@@ -583,6 +619,7 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
               onChange={(e) => {
                 setSelectedWarehouseId(Number(e.target.value));
                 setSelectedSectionId(null);
+                setSelectedCorridorId(null);
               }}
               displayEmpty
             >
@@ -604,9 +641,25 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
                 <MenuItem value="" disabled>
                   Selecione uma Seção
                 </MenuItem>
-                {sections.map((s) => (
+                {warehouseSections.map((s) => (
                   <MenuItem key={s.id} value={s.id}>
                     {s.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            )}
+            {selectedSectionId && (
+              <Select
+                value={selectedCorridorId || ''}
+                onChange={(e) => setSelectedCorridorId(Number(e.target.value))}
+                displayEmpty
+              >
+                <MenuItem value="" disabled>
+                  Selecione um Corredor
+                </MenuItem>
+                {warehouseCorridors.map((c) => (
+                  <MenuItem key={c.id} value={c.id}>
+                    {c.name}
                   </MenuItem>
                 ))}
               </Select>
@@ -614,17 +667,7 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
             <Button variant="contained" color="secondary" onClick={handleOpenWarehouseModal}>
               Novo Armazém
             </Button>
-            {selectedWarehouseId && (
-              <Button variant="contained" color="secondary" onClick={handleOpenSectionModal}>
-                Nova Seção
-              </Button>
-            )}
-            {selectedSectionId && (
-              <Button variant="contained" color="secondary" onClick={handleOpenShelfModal}>
-                Nova Prateleira
-              </Button>
-            )}
-            {selectedSectionId && (
+            {selectedCorridorId && (
               <Button
                 variant="contained"
                 color="secondary"
@@ -637,7 +680,6 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
         </Collapse>
       </Paper>
 
-      {/* Warehouse List */}
       <Card sx={{ mt: 4 }}>
         <CardContent>
           <Typography variant="h6" mb={2}>
@@ -654,10 +696,10 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
                     <strong>Nome</strong>
                   </TableCell>
                   <TableCell>
-                    <strong>Seções</strong>
+                    <strong>Descrição</strong>
                   </TableCell>
                   <TableCell>
-                    <strong>Prateleiras</strong>
+                    <strong>Seções</strong>
                   </TableCell>
                   <TableCell>
                     <strong>Ações</strong>
@@ -669,17 +711,18 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
                   <TableRow key={warehouse.id}>
                     <TableCell>{warehouse.id}</TableCell>
                     <TableCell>{warehouse.name}</TableCell>
+                    <TableCell>{warehouse.description}</TableCell>
                     <TableCell>
-                      {warehouse.sections.length > 0
-                        ? warehouse.sections.map((s) => s.name).join(', ')
+                      {warehouse.sections?.length > 0
+                        ? warehouse.sections.map((s) => (
+                            <div key={s.id}>
+                              <strong>{s.name}</strong>: Corredores (
+                              {s.corridors?.map((c) => c.name).join(', ') || 'Nenhum'}), Prateleiras
+                              {/*                               ({s.description?.map((sh) => sh.name).join(', ') || 'Nenhuma'})
+                               */}{' '}
+                            </div>
+                          ))
                         : 'Nenhuma seção'}
-                    </TableCell>
-                    <TableCell>
-                      {warehouse.sections.length > 0
-                        ? warehouse.sections
-                            .flatMap((s) => s.shelves.map((sh) => ` ${sh.name}`))
-                            .join(', ') || 'Nenhuma prateleira'
-                        : 'Nenhuma prateleira'}
                     </TableCell>
                     <TableCell>
                       <IconButton color="error" onClick={() => handleDeleteWarehouse(warehouse.id)}>
@@ -701,61 +744,122 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
         </CardContent>
       </Card>
 
-      {/* Warehouse Modal */}
       <Modal open={openWarehouseModal} onClose={handleCloseWarehouseModal}>
-        <Box sx={style}>
+        <Box sx={style} component="form" noValidate autoComplete="off">
           <Typography variant="h5" mb={2}>
             Criar Armazém
           </Typography>
-          <TextField
-            label="Nome do Armazém"
-            value={warehouseForm.name}
-            onChange={handleWarehouseChange}
-            fullWidth
-          />
-          <Button variant="contained" color="secondary" onClick={handleAddWarehouse} sx={{ mt: 2 }}>
-            Criar
-          </Button>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Nome do Armazém"
+                name="name"
+                value={warehouseForm.name}
+                onChange={handleWarehouseChange as React.ChangeEventHandler<HTMLInputElement>}
+                fullWidth
+                required
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Descrição"
+                name="description"
+                value={warehouseForm.description}
+                onChange={handleWarehouseChange as React.ChangeEventHandler<HTMLInputElement>}
+                fullWidth
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <Select
+                multiple
+                name="sections"
+                value={warehouseForm.sections.map((s) => s.id) || []}
+                onChange={(e) => handleWarehouseChange(e)}
+                displayEmpty
+                fullWidth
+                renderValue={(selected) =>
+                  selected.length === 0
+                    ? 'Selecione várias seções'
+                    : sections
+                        .filter((s) => selected.includes(s.id))
+                        .map((s) => s.name)
+                        .join(', ')
+                }
+              >
+                {sections.map((s) => (
+                  <MenuItem key={s.id} value={s.id}>
+                    {s.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </Grid>
+            {warehouseForm.sections?.map((section) => (
+              <React.Fragment key={section.id}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle1">{`Corredores da ${sections.find((s) => s.id === section.id)?.name || 'Seção ' + section.id}`}</Typography>
+                  <Select
+                    multiple
+                    value={section.corridorIds || []}
+                    onChange={(e) => handleWarehouseChange(e, section.id, 'corridorIds')}
+                    displayEmpty
+                    fullWidth
+                    renderValue={(selected) =>
+                      selected.length === 0
+                        ? 'Selecione vários corredores'
+                        : corridors
+                            .filter((c) => selected.includes(c.id))
+                            .map((c) => c.name)
+                            .join(', ')
+                    }
+                  >
+                    {corridors.map((c) => (
+                      <MenuItem key={c.id} value={c.id}>
+                        {c.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle1">{`Prateleiras da ${sections.find((s) => s.id === section.id)?.name || 'Seção ' + section.id}`}</Typography>
+                  <Select
+                    multiple
+                    value={section.shelfIds || []}
+                    onChange={(e) => handleWarehouseChange(e, section.id, 'shelfIds')}
+                    displayEmpty
+                    fullWidth
+                    renderValue={(selected) =>
+                      selected.length === 0
+                        ? 'Selecione várias prateleiras'
+                        : shelves
+                            .filter((s) => selected.includes(s.id))
+                            .map((s) => s.name)
+                            .join(', ')
+                    }
+                  >
+                    {shelves.map((s) => (
+                      <MenuItem key={s.id} value={s.id}>
+                        {s.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </Grid>
+              </React.Fragment>
+            ))}
+            <Grid item xs={12}>
+              <Button
+                variant="contained"
+                color="secondary"
+                onClick={handleAddWarehouse}
+                fullWidth
+                sx={{ mt: 2 }}
+              >
+                Criar
+              </Button>
+            </Grid>
+          </Grid>
         </Box>
       </Modal>
 
-      {/* Section Modal */}
-      <Modal open={openSectionModal} onClose={handleCloseSectionModal}>
-        <Box sx={style}>
-          <Typography variant="h5" mb={2}>
-            Criar Seção
-          </Typography>
-          <TextField
-            label="Nome da Seção"
-            value={sectionForm.name}
-            onChange={handleSectionChange}
-            fullWidth
-          />
-          <Button variant="contained" color="secondary" onClick={handleAddSection} sx={{ mt: 2 }}>
-            Criar
-          </Button>
-        </Box>
-      </Modal>
-
-      {/* Shelf Modal */}
-      <Modal open={openShelfModal} onClose={handleCloseShelfModal}>
-        <Box sx={style}>
-          <Typography variant="h5" mb={2}>
-            Criar Prateleira
-          </Typography>
-          <TextField
-            label="Nome da Prateleira"
-            value={shelfForm.name}
-            onChange={handleShelfChange}
-            fullWidth
-          />
-          <Button variant="contained" color="secondary" onClick={handleAddShelf} sx={{ mt: 2 }}>
-            Criar
-          </Button>
-        </Box>
-      </Modal>
-
-      {/* Product Modal */}
       <Modal open={openProductModal} onClose={handleCloseProductModal}>
         <Box sx={style} component="form" noValidate autoComplete="off">
           <Typography variant="h5" mb={2}>
@@ -874,7 +978,7 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
                   <MenuItem value={0} disabled>
                     Selecione uma Prateleira
                   </MenuItem>
-                  {shelves.map((s) => (
+                  {warehouseShelves.map((s) => (
                     <MenuItem key={s.id} value={s.id}>
                       {s.name}
                     </MenuItem>
@@ -889,7 +993,6 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
         </Box>
       </Modal>
 
-      {/* Transfer Modal */}
       <Modal open={openTransferModal} onClose={handleCloseTransferModal}>
         <Box sx={style} component="form" noValidate autoComplete="off">
           <Typography variant="h5" mb={2}>
@@ -990,8 +1093,7 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
         </Box>
       </Modal>
 
-      {/* Product Table */}
-      {selectedSectionId && (
+      {selectedCorridorId && (
         <Card sx={{ mt: 4 }}>
           <CardContent>
             <TableContainer component={Paper}>
@@ -1005,6 +1107,8 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
                       'Custo de Aquisição',
                       'Fornecedor',
                       'Quantidade',
+                      'Seção',
+                      'Corredor',
                       'Prateleira',
                       'Ações',
                     ].map((header) => (
@@ -1018,7 +1122,9 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
                   {products
                     .filter(
                       (p) =>
-                        p.warehouseId === selectedWarehouseId && p.sectionId === selectedSectionId,
+                        p.warehouseId === selectedWarehouseId &&
+                        p.sectionId === selectedSectionId &&
+                        p.corridorId === selectedCorridorId,
                     )
                     .map((product) => (
                       <TableRow key={product.id}>
@@ -1033,7 +1139,14 @@ const ProductManager: React.FC<CollapsedItemProps> = ({ open }) => {
                           {isNaN(product.quantidade) ? 'N/A' : product.quantidade}
                         </TableCell>
                         <TableCell>
-                          {shelves.find((s) => s.id === product.shelfId)?.name || 'N/A'}
+                          {warehouseSections.find((s) => s.id === product.sectionId)?.name || 'N/A'}
+                        </TableCell>
+                        <TableCell>
+                          {warehouseCorridors.find((c) => c.id === product.corridorId)?.name ||
+                            'N/A'}
+                        </TableCell>
+                        <TableCell>
+                          {warehouseShelves.find((s) => s.id === product.shelfId)?.name || 'N/A'}
                         </TableCell>
                         <TableCell>
                           <IconButton

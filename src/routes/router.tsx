@@ -10,6 +10,9 @@ import Cliente from 'pages/cliente/Cliente';
 import Faturacao from 'pages/faturacao/Faturacao';
 import Relatorio from 'pages/relatorio/Relatorio';
 import Loja from 'pages/produt/Produt_loja';
+import Corredor from 'pages/corredor/Corredor';
+import Prateleira from 'pages/prateleira/prateleira';
+import Secao from 'pages/seccao/seccao';
 
 const App = lazy(() => import('App'));
 const MainLayout = lazy(() => import('layouts/main-layout'));
@@ -76,6 +79,18 @@ export const routes = [
           {
             path: paths.estoque,
             element: <Stock />,
+          },
+          {
+            path: paths.corredor,
+            element: <Corredor open={true} />,
+          },
+          {
+            path: paths.prateleira,
+            element: <Prateleira open={true} />,
+          },
+          {
+            path: paths.seccao,
+            element: <Secao open={true} />,
           },
           {
             path: paths.funcionarios,

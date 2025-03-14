@@ -40,6 +40,12 @@ export const drawerItems: DrawerItem[] = [
         path: `/${rootPaths.pagesRoot}/produt/armanzem`,
         active: true,
       },
+      {
+        id: 33,
+        title: 'Estoque',
+        path: `/${rootPaths.pagesRoot}/stock`, // '/pages/estoque'
+        active: true,
+      },
     ],
   },
   {
@@ -50,13 +56,33 @@ export const drawerItems: DrawerItem[] = [
     collapsible: false,
     active: true,
   },
+
   {
     id: 5,
     icon: ShoppingBag,
-    title: 'Estoque',
-    path: `/${rootPaths.pagesRoot}/stock`, // '/pages/estoque'
-    collapsible: false,
+    title: 'Zona SCR',
+    collapsible: true,
     active: true,
+    subList: [
+      {
+        id: 31,
+        title: 'Secção',
+        path: `/${rootPaths.pagesRoot}/seccao`,
+        active: true,
+      },
+      {
+        id: 32,
+        title: 'Corredor',
+        path: `/${rootPaths.pagesRoot}/corredor`,
+        active: true,
+      },
+      {
+        id: 32,
+        title: 'Prateleira',
+        path: `/${rootPaths.pagesRoot}/prateleira`,
+        active: true,
+      },
+    ],
   },
   {
     id: 6,
