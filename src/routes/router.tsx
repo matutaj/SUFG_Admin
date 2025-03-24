@@ -11,8 +11,8 @@ import Faturacao from 'pages/faturacao/Faturacao';
 import Relatorio from 'pages/relatorio/Relatorio';
 import Loja from 'pages/produt/Produt_loja';
 import Corredor from 'pages/corredor/Corredor';
-import Prateleira from 'pages/prateleira/prateleira';
-import Secao from 'pages/seccao/seccao';
+import Prateleira from 'pages/prateleira/Prateleira';
+import Secao from 'pages/seccao/Seccao';
 
 const App = lazy(() => import('App'));
 const MainLayout = lazy(() => import('layouts/main-layout'));

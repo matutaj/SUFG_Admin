@@ -21,13 +21,15 @@ import Modal from '@mui/material/Modal';
 import React from 'react';
 import Delete from 'components/icons/factor/Delete';
 import Edit from 'components/icons/factor/Edit';
+import { getShelves, createShelf, updateShelf, deleteShelf } from '../../api/methods'; // Ajuste o caminho
+import { Prateleira } from '../../types/models'; // Importa a interface correta
 
 interface CollapsedItemProps {
   open: boolean;
 }
 
 const style = {
-  position: 'absolute',
+  position: 'absolute' as const,
   top: '50%',
   left: '50%',
   transform: 'translate(-50%, -50%)',
@@ -38,86 +40,103 @@ const style = {
   bgcolor: 'background.paper',
   boxShadow: 24,
   display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'start',
-  alignItems: 'center',
+  flexDirection: 'column' as const,
+  justifyContent: 'start' as const,
+  alignItems: 'center' as const,
   backgroundColor: '#f9f9f9',
   p: 4,
-  overflowY: 'auto',
-  scrollbarWidth: 'thin',
+  overflowY: 'auto' as const,
+  scrollbarWidth: 'thin' as const,
   scrollbarColor: '#6c63ff #f1f1f1',
 };
 
-const Prateleira = ({ open }: CollapsedItemProps) => {
+const PrateleiraComponent = ({ open }: CollapsedItemProps) => {
   const [openPrateleira, setOpenPrateleira] = React.useState(false);
-  const [editPrateleiraId, setEditPrateleiraId] = React.useState<number | null>(null);
+  const [editPrateleiraId, setEditPrateleiraId] = React.useState<string | null>(null); // ID como string (UUID)
+  const [nomePrateleira, setNomePrateleira] = React.useState('');
+  const [descricao, setDescricao] = React.useState('');
+  const [prateleiras, setPrateleiras] = React.useState<Prateleira[]>([]);
+  const [errors, setErrors] = React.useState<{ nomePrateleira?: string; descricao?: string }>({});
+  const [loading, setLoading] = React.useState(false);
+
   const handleOpen = () => setOpenPrateleira(true);
   const handleClose = () => {
     setOpenPrateleira(false);
     setEditPrateleiraId(null);
-    setName('');
-    setDescription('');
+    setNomePrateleira('');
+    setDescricao('');
     setErrors({});
   };
-  const [name, setName] = React.useState('');
-  const [description, setDescription] = React.useState('');
-  const [prateleira, setPrateleira] = React.useState<
-    { id: number; name: string; description: string }[]
-  >(JSON.parse(localStorage.getItem('prateleira') || '[]'));
 
-  const [errors, setErrors] = React.useState<{ name?: string; description?: string }>({});
+  // Buscar prateleiras da API
+  const fetchShelves = async () => {
+    try {
+      setLoading(true);
+      const data = await getShelves();
+      setPrateleiras(data);
+    } catch (error) {
+      console.error('Erro ao buscar prateleiras:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  function onAddPrateleiraSubmit(name: string, description: string) {
-    const newErrors: { name?: string; description?: string } = {};
-    if (!name.trim()) newErrors.name = 'O nome da prateleira é obrigatório.';
-    if (!description.trim()) newErrors.description = 'A descrição é obrigatória.';
+  React.useEffect(() => {
+    fetchShelves();
+  }, []);
+
+  const onAddPrateleiraSubmit = async (nomePrateleira: string, descricao: string) => {
+    const newErrors: { nomePrateleira?: string; descricao?: string } = {};
+    if (!nomePrateleira.trim()) newErrors.nomePrateleira = 'O nome da prateleira é obrigatório.';
+    if (!descricao.trim()) newErrors.descricao = 'A descrição é obrigatória.';
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     }
 
-    if (editPrateleiraId) {
-      // Editar prateleira existente
-      setPrateleira(
-        prateleira.map((prat) =>
-          prat.id === editPrateleiraId ? { ...prat, name, description } : prat,
-        ),
-      );
-    } else {
-      // Adicionar nova prateleira
-      const newPrateleira = {
-        id: prateleira.length + 1,
-        name,
-        description,
-      };
-      setPrateleira([...prateleira, newPrateleira]);
+    try {
+      setLoading(true);
+      if (editPrateleiraId) {
+        // Editar prateleira existente
+        await updateShelf(editPrateleiraId, { nomePrateleira, descricao });
+      } else {
+        // Criar nova prateleira
+        await createShelf({ nomePrateleira, descricao });
+      }
+      await fetchShelves(); // Atualiza a lista
+      handleClose();
+    } catch (error) {
+      console.error('Erro ao salvar prateleira:', error);
+      setErrors({ nomePrateleira: 'Erro ao salvar. Tente novamente.' });
+    } finally {
+      setLoading(false);
     }
+  };
 
-    setName('');
-    setDescription('');
-    setErrors({});
-    handleClose();
-  }
-
-  const handleEdit = (id: number) => {
-    const prateleiraToEdit = prateleira.find((prat) => prat.id === id);
+  const handleEdit = (id: string) => {
+    const prateleiraToEdit = prateleiras.find((prat) => prat.id === id);
     if (prateleiraToEdit) {
-      setName(prateleiraToEdit.name);
-      setDescription(prateleiraToEdit.description);
+      setNomePrateleira(prateleiraToEdit.nomePrateleira || '');
+      setDescricao(prateleiraToEdit.descricao || '');
       setEditPrateleiraId(id);
       handleOpen();
     }
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm('Tem certeza que deseja excluir esta prateleira?')) {
-      setPrateleira(prateleira.filter((prat) => prat.id !== id));
+      try {
+        setLoading(true);
+        await deleteShelf(id);
+        await fetchShelves(); // Atualiza a lista
+      } catch (error) {
+        console.error('Erro ao excluir prateleira:', error);
+      } finally {
+        setLoading(false);
+      }
     }
   };
-
-  React.useEffect(() => {
-    localStorage.setItem('prateleira', JSON.stringify(prateleira));
-  }, [prateleira]);
 
   return (
     <>
@@ -138,6 +157,7 @@ const Prateleira = ({ open }: CollapsedItemProps) => {
               sx={(theme) => ({ p: theme.spacing(0.625, 1.5), borderRadius: 1.5 })}
               startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
               onClick={handleOpen}
+              disabled={loading}
             >
               <Typography variant="body2">Adicionar</Typography>
             </Button>
@@ -155,9 +175,9 @@ const Prateleira = ({ open }: CollapsedItemProps) => {
                   sx={{ width: '100%', mb: 2 }}
                 >
                   <Typography id="modal-modal-title" variant="h5" component="h2">
-                    Cadastrar Prateleira
+                    {editPrateleiraId ? 'Editar Prateleira' : 'Cadastrar Prateleira'}
                   </Typography>
-                  <Button onClick={handleClose} variant="outlined" color="error">
+                  <Button onClick={handleClose} variant="outlined" color="error" disabled={loading}>
                     Fechar
                   </Button>
                 </Stack>
@@ -165,31 +185,36 @@ const Prateleira = ({ open }: CollapsedItemProps) => {
                 <Stack spacing={2} sx={{ width: '100%' }}>
                   <TextField
                     id="shelf-name"
-                    onChange={(e) => setName(e.target.value)}
-                    value={name}
+                    onChange={(e) => setNomePrateleira(e.target.value)}
+                    value={nomePrateleira}
                     label="Nome da Prateleira"
                     variant="filled"
                     sx={{ width: '100%' }}
-                    error={Boolean(errors.name)}
-                    helperText={errors.name}
+                    error={Boolean(errors.nomePrateleira)}
+                    helperText={errors.nomePrateleira}
+                    disabled={loading}
                   />
                   <TextField
                     id="shelf-description"
-                    onChange={(e) => setDescription(e.target.value)}
-                    value={description}
+                    onChange={(e) => setDescricao(e.target.value)}
+                    value={descricao}
                     label="Descrição"
                     variant="filled"
                     sx={{ width: '100%' }}
-                    error={Boolean(errors.description)}
-                    helperText={errors.description}
+                    error={Boolean(errors.descricao)}
+                    helperText={errors.descricao}
+                    disabled={loading}
                   />
                   <Button
                     variant="contained"
                     color="secondary"
                     sx={{ height: 40, width: '100%' }}
-                    onClick={() => onAddPrateleiraSubmit(name, description)}
+                    onClick={() => onAddPrateleiraSubmit(nomePrateleira, descricao)}
+                    disabled={loading}
                   >
-                    <Typography variant="body2">Cadastrar</Typography>
+                    <Typography variant="body2">
+                      {loading ? 'Salvando...' : editPrateleiraId ? 'Atualizar' : 'Cadastrar'}
+                    </Typography>
                   </Button>
                 </Stack>
               </Box>
@@ -204,9 +229,6 @@ const Prateleira = ({ open }: CollapsedItemProps) => {
               <TableHead>
                 <TableRow>
                   <TableCell>
-                    <strong>ID da Prateleira</strong>
-                  </TableCell>
-                  <TableCell>
                     <strong>Nome da Prateleira</strong>
                   </TableCell>
                   <TableCell>
@@ -218,25 +240,38 @@ const Prateleira = ({ open }: CollapsedItemProps) => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {prateleira.length > 0 ? (
-                  prateleira.map((prateleira) => (
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={3} align="center">
+                      Carregando...
+                    </TableCell>
+                  </TableRow>
+                ) : prateleiras.length > 0 ? (
+                  prateleiras.map((prateleira) => (
                     <TableRow key={prateleira.id}>
-                      <TableCell>{prateleira.id}</TableCell>
-                      <TableCell>{prateleira.name}</TableCell>
-                      <TableCell>{prateleira.description}</TableCell>
+                      <TableCell>{prateleira.nomePrateleira || 'Sem nome'}</TableCell>
+                      <TableCell>{prateleira.descricao || 'Sem descrição'}</TableCell>
                       <TableCell align="right">
-                        <IconButton color="primary" onClick={() => handleEdit(prateleira.id)}>
-                          <Edit>edit</Edit>
+                        <IconButton
+                          color="primary"
+                          onClick={() => handleEdit(prateleira.id!)}
+                          disabled={loading}
+                        >
+                          <Edit />
                         </IconButton>
-                        <IconButton color="error" onClick={() => handleDelete(prateleira.id)}>
-                          <Delete>delete</Delete>
+                        <IconButton
+                          color="error"
+                          onClick={() => handleDelete(prateleira.id!)}
+                          disabled={loading}
+                        >
+                          <Delete />
                         </IconButton>
                       </TableCell>
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={4} align="center">
+                    <TableCell colSpan={3} align="center">
                       Nenhuma prateleira cadastrada.
                     </TableCell>
                   </TableRow>
@@ -250,4 +285,4 @@ const Prateleira = ({ open }: CollapsedItemProps) => {
   );
 };
 
-export default Prateleira;
+export default PrateleiraComponent;

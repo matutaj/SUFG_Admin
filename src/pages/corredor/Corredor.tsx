@@ -21,13 +21,15 @@ import Modal from '@mui/material/Modal';
 import React from 'react';
 import Delete from 'components/icons/factor/Delete';
 import Edit from 'components/icons/factor/Edit';
+import { getCorridors, createCorridor, updateCorridor, deleteCorridor } from '../../api/methods';
+import { Corredor } from '../../types/models';
 
 interface CollapsedItemProps {
   open: boolean;
 }
 
 const style = {
-  position: 'absolute',
+  position: 'absolute' as const,
   top: '50%',
   left: '50%',
   transform: 'translate(-50%, -50%)',
@@ -38,86 +40,101 @@ const style = {
   bgcolor: 'background.paper',
   boxShadow: 24,
   display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'start',
-  alignItems: 'center',
+  flexDirection: 'column' as const,
+  justifyContent: 'start' as const,
+  alignItems: 'center' as const,
   backgroundColor: '#f9f9f9',
   p: 4,
-  overflowY: 'auto',
-  scrollbarWidth: 'thin',
+  overflowY: 'auto' as const,
+  scrollbarWidth: 'thin' as const,
   scrollbarColor: '#6c63ff #f1f1f1',
 };
 
-const Corredor = ({ open }: CollapsedItemProps) => {
+const CorredorComponent = ({ open }: CollapsedItemProps) => {
   const [openCorredor, setOpenCorredor] = React.useState(false);
-  const [editCorredorId, setEditCorredorId] = React.useState<number | null>(null);
+  const [editCorredorId, setEditCorredorId] = React.useState<string | null>(null);
+  const [nomeCorredor, setNomeCorredor] = React.useState('');
+  const [descricao, setDescricao] = React.useState('');
+  const [corredores, setCorredores] = React.useState<Corredor[]>([]);
+  const [errors, setErrors] = React.useState<{ nomeCorredor?: string; descricao?: string }>({});
+  const [loading, setLoading] = React.useState(false);
+
   const handleOpen = () => setOpenCorredor(true);
   const handleClose = () => {
     setOpenCorredor(false);
     setEditCorredorId(null);
-    setName('');
-    setDescription('');
+    setNomeCorredor('');
+    setDescricao('');
     setErrors({});
   };
-  const [name, setName] = React.useState('');
-  const [description, setDescription] = React.useState('');
-  const [corredor, setCorredor] = React.useState<
-    { id: number; name: string; description: string }[]
-  >(JSON.parse(localStorage.getItem('corredor') || '[]'));
 
-  const [errors, setErrors] = React.useState<{ name?: string; description?: string }>({});
+  const fetchCorridors = async () => {
+    try {
+      setLoading(true);
+      const data = await getCorridors();
+      console.log('Dados retornados pela API:', data); // Log para depuração
+      setCorredores(data);
+    } catch (error) {
+      console.error('Erro ao buscar corredores:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  function onAddCorredorSubmit(name: string, description: string) {
-    const newErrors: { name?: string; description?: string } = {};
-    if (!name.trim()) newErrors.name = 'O nome do corredor é obrigatório.';
-    if (!description.trim()) newErrors.description = 'A descrição é obrigatória.';
+  React.useEffect(() => {
+    fetchCorridors();
+  }, []);
+
+  const onAddCorredorSubmit = async (nomeCorredor: string, descricao: string) => {
+    const newErrors: { nomeCorredor?: string; descricao?: string } = {};
+    if (!nomeCorredor.trim()) newErrors.nomeCorredor = 'O nome do corredor é obrigatório.';
+    if (!descricao.trim()) newErrors.descricao = 'A descrição é obrigatória.';
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     }
 
-    if (editCorredorId) {
-      // Editar corredor existente
-      setCorredor(
-        corredor.map((corr) =>
-          corr.id === editCorredorId ? { ...corr, name, description } : corr,
-        ),
-      );
-    } else {
-      // Adicionar novo corredor
-      const newCorredor = {
-        id: corredor.length + 1,
-        name,
-        description,
-      };
-      setCorredor([...corredor, newCorredor]);
+    try {
+      setLoading(true);
+      if (editCorredorId) {
+        await updateCorridor(editCorredorId, { nomeCorredor, descricao });
+      } else {
+        await createCorridor({ nomeCorredor, descricao });
+      }
+      await fetchCorridors();
+      handleClose();
+    } catch (error) {
+      console.error('Erro ao salvar corredor:', error);
+      setErrors({ nomeCorredor: 'Erro ao salvar. Tente novamente.' });
+    } finally {
+      setLoading(false);
     }
+  };
 
-    setName('');
-    setDescription('');
-    setErrors({});
-    handleClose();
-  }
-
-  const handleEdit = (id: number) => {
-    const corredorToEdit = corredor.find((corr) => corr.id === id);
+  const handleEdit = (id: string) => {
+    const corredorToEdit = corredores.find((corr) => corr.id === id);
     if (corredorToEdit) {
-      setName(corredorToEdit.name);
-      setDescription(corredorToEdit.description);
+      setNomeCorredor(corredorToEdit.nomeCorredor || '');
+      setDescricao(corredorToEdit.descricao || '');
       setEditCorredorId(id);
       handleOpen();
     }
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm('Tem certeza que deseja excluir este corredor?')) {
-      setCorredor(corredor.filter((corr) => corr.id !== id));
+      try {
+        setLoading(true);
+        await deleteCorridor(id);
+        await fetchCorridors();
+      } catch (error) {
+        console.error('Erro ao excluir corredor:', error);
+      } finally {
+        setLoading(false);
+      }
     }
   };
-
-  React.useEffect(() => {
-    localStorage.setItem('corredor', JSON.stringify(corredor));
-  }, [corredor]);
 
   return (
     <>
@@ -138,6 +155,7 @@ const Corredor = ({ open }: CollapsedItemProps) => {
               sx={(theme) => ({ p: theme.spacing(0.625, 1.5), borderRadius: 1.5 })}
               startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
               onClick={handleOpen}
+              disabled={loading}
             >
               <Typography variant="body2">Adicionar</Typography>
             </Button>
@@ -155,9 +173,9 @@ const Corredor = ({ open }: CollapsedItemProps) => {
                   sx={{ width: '100%', mb: 2 }}
                 >
                   <Typography id="modal-modal-title" variant="h5" component="h2">
-                    Cadastrar Corredor
+                    {editCorredorId ? 'Editar Corredor' : 'Cadastrar Corredor'}
                   </Typography>
-                  <Button onClick={handleClose} variant="outlined" color="error">
+                  <Button onClick={handleClose} variant="outlined" color="error" disabled={loading}>
                     Fechar
                   </Button>
                 </Stack>
@@ -165,31 +183,36 @@ const Corredor = ({ open }: CollapsedItemProps) => {
                 <Stack spacing={2} sx={{ width: '100%' }}>
                   <TextField
                     id="corridor-name"
-                    onChange={(e) => setName(e.target.value)}
-                    value={name}
+                    onChange={(e) => setNomeCorredor(e.target.value)}
+                    value={nomeCorredor}
                     label="Nome do Corredor"
                     variant="filled"
                     sx={{ width: '100%' }}
-                    error={Boolean(errors.name)}
-                    helperText={errors.name}
+                    error={Boolean(errors.nomeCorredor)}
+                    helperText={errors.nomeCorredor}
+                    disabled={loading}
                   />
                   <TextField
                     id="corridor-description"
-                    onChange={(e) => setDescription(e.target.value)}
-                    value={description}
+                    onChange={(e) => setDescricao(e.target.value)}
+                    value={descricao}
                     label="Descrição"
                     variant="filled"
                     sx={{ width: '100%' }}
-                    error={Boolean(errors.description)}
-                    helperText={errors.description}
+                    error={Boolean(errors.descricao)}
+                    helperText={errors.descricao}
+                    disabled={loading}
                   />
                   <Button
                     variant="contained"
                     color="secondary"
                     sx={{ height: 40, width: '100%' }}
-                    onClick={() => onAddCorredorSubmit(name, description)}
+                    onClick={() => onAddCorredorSubmit(nomeCorredor, descricao)}
+                    disabled={loading}
                   >
-                    <Typography variant="body2">Cadastrar</Typography>
+                    <Typography variant="body2">
+                      {loading ? 'Salvando...' : editCorredorId ? 'Atualizar' : 'Cadastrar'}
+                    </Typography>
                   </Button>
                 </Stack>
               </Box>
@@ -204,9 +227,6 @@ const Corredor = ({ open }: CollapsedItemProps) => {
               <TableHead>
                 <TableRow>
                   <TableCell>
-                    <strong>ID do Corredor</strong>
-                  </TableCell>
-                  <TableCell>
                     <strong>Nome do Corredor</strong>
                   </TableCell>
                   <TableCell>
@@ -218,25 +238,38 @@ const Corredor = ({ open }: CollapsedItemProps) => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {corredor.length > 0 ? (
-                  corredor.map((corredor) => (
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={3} align="center">
+                      Carregando...
+                    </TableCell>
+                  </TableRow>
+                ) : corredores.length > 0 ? (
+                  corredores.map((corredor) => (
                     <TableRow key={corredor.id}>
-                      <TableCell>{corredor.id}</TableCell>
-                      <TableCell>{corredor.name}</TableCell>
-                      <TableCell>{corredor.description}</TableCell>
+                      <TableCell>{corredor.nomeCorredor || 'Sem nome'}</TableCell>
+                      <TableCell>{corredor.descricao || 'Sem descrição'}</TableCell>
                       <TableCell align="right">
-                        <IconButton color="primary" onClick={() => handleEdit(corredor.id)}>
-                          <Edit>edit</Edit>
+                        <IconButton
+                          color="primary"
+                          onClick={() => handleEdit(corredor.id!)}
+                          disabled={loading}
+                        >
+                          <Edit />
                         </IconButton>
-                        <IconButton color="error" onClick={() => handleDelete(corredor.id)}>
-                          <Delete>delete</Delete>
+                        <IconButton
+                          color="error"
+                          onClick={() => handleDelete(corredor.id!)}
+                          disabled={loading}
+                        >
+                          <Delete />
                         </IconButton>
                       </TableCell>
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={4} align="center">
+                    <TableCell colSpan={3} align="center">
                       Nenhum corredor cadastrado.
                     </TableCell>
                   </TableRow>
@@ -250,4 +283,4 @@ const Corredor = ({ open }: CollapsedItemProps) => {
   );
 };
 
-export default Corredor;
+export default CorredorComponent;
