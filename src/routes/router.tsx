@@ -13,13 +13,14 @@ import Loja from 'pages/produt/Produt_loja';
 import Corredor from 'pages/corredor/Corredor';
 import Prateleira from 'pages/prateleira/Prateleira';
 import Secao from 'pages/seccao/Seccao';
+import Caixas from 'pages/caixa/caixa';
 
 const App = lazy(() => import('App'));
 const MainLayout = lazy(() => import('layouts/main-layout'));
 const Categoria = lazy(() => import('pages/categoria/Categoria'));
 const AuthLayout = lazy(() => import('layouts/auth-layout'));
 const Dashboard = lazy(() => import('pages/dashboard/Dashboard'));
-const Armanzem = lazy(() => import('pages/produt/Armanzem'));
+const Armanzem = lazy(() => import('pages/produt/Localizacao'));
 const Login = lazy(() => import('pages/authentication/Login'));
 const Signup = lazy(() => import('pages/authentication/Signup'));
 const ErrorPage = lazy(() => import('pages/errors/ErrorPage'));
@@ -66,15 +67,19 @@ export const routes = [
           },
           {
             path: paths.loja,
-            element: <Loja subItems={undefined} open={true} />,
+            element: <Loja open={true} />,
           },
           {
-            path: paths.armanzem,
-            element: <Armanzem subItems={undefined} open={true} />,
+            path: paths.localizacao,
+            element: <Armanzem open={true} />,
           },
           {
             path: paths.categorias,
-            element: <Categoria subItems={undefined} open={true} />,
+            element: <Categoria open={true} />,
+          },
+          {
+            path: paths.caixa,
+            element: <Caixas open={true} />,
           },
           {
             path: paths.estoque,

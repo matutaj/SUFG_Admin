@@ -15,9 +15,10 @@ import {
   TableHead,
   TableRow,
   IconButton,
+  Modal,
+  Alert,
 } from '@mui/material';
 import IconifyIcon from 'components/base/IconifyIcon';
-import Modal from '@mui/material/Modal';
 import React from 'react';
 import Delete from 'components/icons/factor/Delete';
 import Edit from 'components/icons/factor/Edit';
@@ -50,20 +51,24 @@ const style = {
   scrollbarColor: '#6c63ff #f1f1f1',
 };
 
-const SeccaoComponent = ({ open }: CollapsedItemProps) => {
+const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const [openSeccao, setOpenSeccao] = React.useState(false);
   const [editSeccaoId, setEditSeccaoId] = React.useState<string | null>(null);
-  const [nomeSeccao, setNomeSeccao] = React.useState(''); // Corrigido para nomeSeccao
+  const [nomeSeccao, setNomeSeccao] = React.useState('');
   const [descricao, setDescricao] = React.useState('');
   const [secoes, setSecoes] = React.useState<Seccao[]>([]);
-  const [errors, setErrors] = React.useState<{ nomeSeccao?: string; descricao?: string }>({}); // Corrigido para nomeSeccao
+  const [errors, setErrors] = React.useState<{ nomeSeccao?: string; descricao?: string }>({});
   const [loading, setLoading] = React.useState(false);
+  const [alert, setAlert] = React.useState<{
+    severity: 'success' | 'error' | 'info' | 'warning';
+    message: string;
+  } | null>(null);
 
   const handleOpen = () => setOpenSeccao(true);
   const handleClose = () => {
     setOpenSeccao(false);
     setEditSeccaoId(null);
-    setNomeSeccao(''); // Corrigido para nomeSeccao
+    setNomeSeccao('');
     setDescricao('');
     setErrors({});
   };
@@ -72,9 +77,22 @@ const SeccaoComponent = ({ open }: CollapsedItemProps) => {
     try {
       setLoading(true);
       const data = await getSections();
+      console.log('Dados retornados por getSections:', JSON.stringify(data, null, 2));
+
+      if (!Array.isArray(data)) {
+        throw new Error('A resposta de getSections não é um array');
+      }
+
+      const idSet = new Set(data.map((sec: Seccao) => sec.id));
+      if (idSet.size !== data.length) {
+        console.warn('IDs duplicados encontrados nos dados de seções:', data);
+      }
+
       setSecoes(data);
     } catch (error) {
       console.error('Erro ao buscar seções:', error);
+      setAlert({ severity: 'error', message: 'Erro ao carregar seções!' });
+      setTimeout(() => setAlert(null), 3000);
     } finally {
       setLoading(false);
     }
@@ -84,10 +102,13 @@ const SeccaoComponent = ({ open }: CollapsedItemProps) => {
     fetchSections();
   }, []);
 
-  const onAddSeccaoSubmit = async (nomeSeccao: string, descricao: string) => {
-    // Corrigido para nomeSeccao
-    const newErrors: { nomeSeccao?: string; descricao?: string } = {}; // Corrigido para nomeSeccao
-    if (!nomeSeccao.trim()) newErrors.nomeSeccao = 'O nome da seção é obrigatório.'; // Corrigido para nomeSeccao
+  React.useEffect(() => {
+    console.log('Estado secoes atualizado:', JSON.stringify(secoes, null, 2));
+  }, [secoes]);
+
+  const onAddSeccaoSubmit = async () => {
+    const newErrors: { nomeSeccao?: string; descricao?: string } = {};
+    if (!nomeSeccao.trim()) newErrors.nomeSeccao = 'O nome da seção é obrigatório.';
     if (!descricao.trim()) newErrors.descricao = 'A descrição é obrigatória.';
 
     if (Object.keys(newErrors).length > 0) {
@@ -97,26 +118,38 @@ const SeccaoComponent = ({ open }: CollapsedItemProps) => {
 
     try {
       setLoading(true);
+      const sectionData = {
+        nomeSeccao: nomeSeccao.trim(),
+        descricao: descricao.trim(),
+      };
+      console.log('Dados enviados para a API:', sectionData);
+
       if (editSeccaoId) {
-        await updateSection(editSeccaoId, { nomeSeccao, descricao }); // Corrigido para nomeSeccao
+        await updateSection(editSeccaoId, sectionData);
+        setAlert({ severity: 'success', message: 'Seção atualizada com sucesso!' });
       } else {
-        await createSection({ nomeSeccao, descricao }); // Corrigido para nomeSeccao
+        const response = await createSection(sectionData);
+        console.log('Resposta de createSection:', JSON.stringify(response, null, 2));
+        setAlert({ severity: 'success', message: 'Seção cadastrada com sucesso!' });
       }
       await fetchSections();
       handleClose();
+      setTimeout(() => setAlert(null), 3000);
     } catch (error) {
       console.error('Erro ao salvar seção:', error);
-      setErrors({ nomeSeccao: 'Erro ao salvar. Tente novamente.' }); // Corrigido para nomeSeccao
+      setAlert({ severity: 'error', message: 'Erro ao salvar seção!' });
+      setErrors({ nomeSeccao: 'Erro ao salvar. Tente novamente.' });
+      setTimeout(() => setAlert(null), 3000);
     } finally {
       setLoading(false);
     }
   };
 
   const handleEdit = (id: string) => {
-    const SeccaoToEdit = secoes.find((sec) => sec.id === id);
-    if (SeccaoToEdit) {
-      setNomeSeccao(SeccaoToEdit.nomeSeccao || ''); // Corrigido para nomeSeccao
-      setDescricao(SeccaoToEdit.descricao || '');
+    const seccaoToEdit = secoes.find((sec) => sec.id === id);
+    if (seccaoToEdit) {
+      setNomeSeccao(seccaoToEdit.nomeSeccao || '');
+      setDescricao(seccaoToEdit.descricao || '');
       setEditSeccaoId(id);
       handleOpen();
     }
@@ -127,9 +160,13 @@ const SeccaoComponent = ({ open }: CollapsedItemProps) => {
       try {
         setLoading(true);
         await deleteSection(id);
+        setAlert({ severity: 'success', message: 'Seção excluída com sucesso!' });
         await fetchSections();
+        setTimeout(() => setAlert(null), 3000);
       } catch (error) {
         console.error('Erro ao excluir seção:', error);
+        setAlert({ severity: 'error', message: 'Erro ao excluir seção!' });
+        setTimeout(() => setAlert(null), 3000);
       } finally {
         setLoading(false);
       }
@@ -138,6 +175,12 @@ const SeccaoComponent = ({ open }: CollapsedItemProps) => {
 
   return (
     <>
+      {alert && (
+        <Box sx={{ position: 'fixed', top: 20, right: 40, zIndex: 9999 }}>
+          <Alert severity={alert.severity}>{alert.message}</Alert>
+        </Box>
+      )}
+
       <Paper sx={(theme) => ({ p: theme.spacing(2, 2.5), width: '100%' })}>
         <Collapse in={open}>
           <Stack
@@ -146,9 +189,7 @@ const SeccaoComponent = ({ open }: CollapsedItemProps) => {
             alignItems="center"
             sx={{ width: '100%', mb: 2 }}
           >
-            <Typography id="modal-modal-title" variant="h5" component="h2">
-              Cadastrar Seção
-            </Typography>
+            <Typography variant="h5">Cadastrar Seção</Typography>
             <Button
               variant="contained"
               color="secondary"
@@ -159,67 +200,64 @@ const SeccaoComponent = ({ open }: CollapsedItemProps) => {
             >
               <Typography variant="body2">Adicionar</Typography>
             </Button>
-            <Modal
-              open={openSeccao}
-              onClose={handleClose}
-              aria-labelledby="modal-modal-title"
-              aria-describedby="modal-modal-description"
-            >
-              <Box sx={style} component="form" noValidate autoComplete="off">
-                <Stack
-                  direction="row"
-                  justifyContent="space-between"
-                  alignItems="center"
-                  sx={{ width: '100%', mb: 2 }}
-                >
-                  <Typography id="modal-modal-title" variant="h5" component="h2">
-                    {editSeccaoId ? 'Editar Seção' : 'Cadastrar Seção'}
-                  </Typography>
-                  <Button onClick={handleClose} variant="outlined" color="error" disabled={loading}>
-                    Fechar
-                  </Button>
-                </Stack>
-
-                <Stack spacing={2} sx={{ width: '100%' }}>
-                  <TextField
-                    id="section-name"
-                    onChange={(e) => setNomeSeccao(e.target.value)} // Corrigido para nomeSeccao
-                    value={nomeSeccao} // Corrigido para nomeSeccao
-                    label="Nome da Seção"
-                    variant="filled"
-                    sx={{ width: '100%' }}
-                    error={Boolean(errors.nomeSeccao)} // Corrigido para nomeSeccao
-                    helperText={errors.nomeSeccao} // Corrigido para nomeSeccao
-                    disabled={loading}
-                  />
-                  <TextField
-                    id="section-description"
-                    onChange={(e) => setDescricao(e.target.value)}
-                    value={descricao}
-                    label="Descrição"
-                    variant="filled"
-                    sx={{ width: '100%' }}
-                    error={Boolean(errors.descricao)}
-                    helperText={errors.descricao}
-                    disabled={loading}
-                  />
-                  <Button
-                    variant="contained"
-                    color="secondary"
-                    sx={{ height: 40, width: '100%' }}
-                    onClick={() => onAddSeccaoSubmit(nomeSeccao, descricao)} // Corrigido para nomeSeccao
-                    disabled={loading}
-                  >
-                    <Typography variant="body2">
-                      {loading ? 'Salvando...' : editSeccaoId ? 'Atualizar' : 'Cadastrar'}
-                    </Typography>
-                  </Button>
-                </Stack>
-              </Box>
-            </Modal>
           </Stack>
         </Collapse>
       </Paper>
+
+      <Modal open={openSeccao} onClose={handleClose}>
+        <Box sx={style} component="form" noValidate autoComplete="off">
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            sx={{ width: '100%', mb: 2 }}
+          >
+            <Typography variant="h5">
+              {editSeccaoId ? 'Editar Seção' : 'Cadastrar Seção'}
+            </Typography>
+            <Button onClick={handleClose} variant="outlined" color="error" disabled={loading}>
+              Fechar
+            </Button>
+          </Stack>
+
+          <Stack spacing={2} sx={{ width: '100%' }}>
+            <TextField
+              id="section-name"
+              onChange={(e) => setNomeSeccao(e.target.value)}
+              value={nomeSeccao}
+              label="Nome da Seção"
+              variant="filled"
+              error={Boolean(errors.nomeSeccao)}
+              helperText={errors.nomeSeccao}
+              disabled={loading}
+              fullWidth
+            />
+            <TextField
+              id="section-description"
+              onChange={(e) => setDescricao(e.target.value)}
+              value={descricao}
+              label="Descrição"
+              variant="filled"
+              error={Boolean(errors.descricao)}
+              helperText={errors.descricao}
+              disabled={loading}
+              fullWidth
+            />
+            <Button
+              variant="contained"
+              color="secondary"
+              onClick={onAddSeccaoSubmit}
+              disabled={loading}
+              fullWidth
+            >
+              <Typography variant="body2">
+                {loading ? 'Salvando...' : editSeccaoId ? 'Atualizar' : 'Cadastrar'}
+              </Typography>
+            </Button>
+          </Stack>
+        </Box>
+      </Modal>
+
       <Card sx={{ maxWidth: '100%', margin: 'auto', mt: 4 }}>
         <CardContent>
           <TableContainer component={Paper}>
@@ -240,27 +278,26 @@ const SeccaoComponent = ({ open }: CollapsedItemProps) => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={3} align="center">
+                    <TableCell colSpan={4} align="center">
                       Carregando...
                     </TableCell>
                   </TableRow>
                 ) : secoes.length > 0 ? (
-                  secoes.map((Seccao) => (
-                    <TableRow key={Seccao.id}>
-                      <TableCell>{Seccao.nomeSeccao || 'Sem nome'}</TableCell> // Corrigido para
-                      nomeSeccao
-                      <TableCell>{Seccao.descricao || 'Sem descrição'}</TableCell>
+                  secoes.map((seccao, index) => (
+                    <TableRow key={seccao.id || `temp-${index}`}>
+                      <TableCell>{seccao.nomeSeccao || 'Sem nome'}</TableCell>
+                      <TableCell>{seccao.descricao || 'Sem descrição'}</TableCell>
                       <TableCell align="right">
                         <IconButton
                           color="primary"
-                          onClick={() => handleEdit(Seccao.id!)}
+                          onClick={() => handleEdit(seccao.id!)}
                           disabled={loading}
                         >
                           <Edit />
                         </IconButton>
                         <IconButton
                           color="error"
-                          onClick={() => handleDelete(Seccao.id!)}
+                          onClick={() => handleDelete(seccao.id!)}
                           disabled={loading}
                         >
                           <Delete />
@@ -270,7 +307,7 @@ const SeccaoComponent = ({ open }: CollapsedItemProps) => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={3} align="center">
+                    <TableCell colSpan={4} align="center">
                       Nenhuma seção cadastrada.
                     </TableCell>
                   </TableRow>

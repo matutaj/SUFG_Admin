@@ -30,16 +30,16 @@ export const drawerItems: DrawerItem[] = [
     subList: [
       {
         id: 31,
-        title: 'Lojas',
+        title: 'Produtos',
         path: `/${rootPaths.pagesRoot}/produt/loja`,
         active: true,
       },
-      {
+      /*  {
         id: 32,
-        title: 'Armazéns',
-        path: `/${rootPaths.pagesRoot}/produt/armanzem`,
+        title: 'Localização',
+        path: `/${rootPaths.pagesRoot}/produt/localizacao`,
         active: true,
-      },
+      }, */
       {
         id: 33,
         title: 'Estoque',
@@ -56,11 +56,18 @@ export const drawerItems: DrawerItem[] = [
     collapsible: false,
     active: true,
   },
-
+  {
+    id: 4,
+    icon: Categoria,
+    title: 'caixa',
+    path: `/${rootPaths.pagesRoot}/caixa`, // '/pages/categorias'
+    collapsible: false,
+    active: true,
+  },
   {
     id: 5,
     icon: ShoppingBag,
-    title: 'Zona SCR',
+    title: 'Zona SCRL',
     collapsible: true,
     active: true,
     subList: [
@@ -80,6 +87,12 @@ export const drawerItems: DrawerItem[] = [
         id: 32,
         title: 'Prateleira',
         path: `/${rootPaths.pagesRoot}/prateleira`,
+        active: true,
+      },
+      {
+        id: 34,
+        title: 'Localização',
+        path: `/${rootPaths.pagesRoot}/produt/localizacao`,
         active: true,
       },
     ],

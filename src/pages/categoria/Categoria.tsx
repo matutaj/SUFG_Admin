@@ -15,21 +15,27 @@ import {
   TableHead,
   TableRow,
   IconButton,
+  Modal,
+  Alert,
 } from '@mui/material';
-import { SubItem } from 'types/types';
-import IconifyIcon from 'components/base/IconifyIcon';
-import Modal from '@mui/material/Modal';
 import React from 'react';
-import Delete from 'components/icons/factor/Delete';
+import IconifyIcon from 'components/base/IconifyIcon';
 import Edit from 'components/icons/factor/Edit';
+import Delete from 'components/icons/factor/Delete';
+import { CategoriaProduto } from '../../types/models';
+import {
+  getProductCategories,
+  createProductCategory,
+  updateProductCategory,
+  deleteProductCategory,
+} from '../../api/methods';
 
 interface CollapsedItemProps {
-  subItems: SubItem[] | undefined;
   open: boolean;
 }
 
 const style = {
-  position: 'absolute',
+  position: 'absolute' as const,
   top: '50%',
   left: '50%',
   transform: 'translate(-50%, -50%)',
@@ -40,87 +46,137 @@ const style = {
   bgcolor: 'background.paper',
   boxShadow: 24,
   display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'start',
-  alignItems: 'center',
+  flexDirection: 'column' as const,
+  justifyContent: 'start' as const,
+  alignItems: 'center' as const,
   backgroundColor: '#f9f9f9',
   p: 4,
-  overflowY: 'auto',
-  scrollbarWidth: 'thin',
+  overflowY: 'auto' as const,
+  scrollbarWidth: 'thin' as const,
   scrollbarColor: '#6c63ff #f1f1f1',
 };
 
-const Categoria = ({ open }: CollapsedItemProps) => {
+const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
   const [openCategoria, setOpenCategoria] = React.useState(false);
-  const [editCategoriaId, setEditCategoriaId] = React.useState<number | null>(null);
+  const [editCategoriaId, setEditCategoriaId] = React.useState<string | null>(null);
+  const [nomeCategoria, setNomeCategoria] = React.useState('');
+  const [descricao, setDescricao] = React.useState('');
+  const [categorias, setCategorias] = React.useState<CategoriaProduto[]>([]);
+  const [errors, setErrors] = React.useState<{ nomeCategoria?: string; descricao?: string }>({});
+  const [loading, setLoading] = React.useState(false);
+  const [alert, setAlert] = React.useState<{
+    severity: 'success' | 'error' | 'info' | 'warning';
+    message: string;
+  } | null>(null);
+
   const handleOpen = () => setOpenCategoria(true);
   const handleClose = () => {
     setOpenCategoria(false);
     setEditCategoriaId(null);
-    setName('');
-    setDescription('');
+    setNomeCategoria('');
+    setDescricao('');
     setErrors({});
   };
-  const [name, setName] = React.useState('');
-  const [description, setDescription] = React.useState('');
-  const [categoria, setCategoria] = React.useState<
-    { id: number; name: string; description: string }[]
-  >(JSON.parse(localStorage.getItem('categoria') || '[]'));
 
-  const [errors, setErrors] = React.useState<{ name?: string; description?: string }>({});
+  const fetchCategories = async () => {
+    try {
+      setLoading(true);
+      const data = await getProductCategories();
+      console.log('Dados retornados por getProductCategories:', JSON.stringify(data, null, 2));
 
-  function onAddCategoriaSubmit(name: string, description: string) {
-    const newErrors: { name?: string; description?: string } = {};
-    if (!name.trim()) newErrors.name = 'O nome da categoria é obrigatório.';
-    if (!description.trim()) newErrors.description = 'A descrição é obrigatória.';
+      const idSet = new Set(data.map((cat: CategoriaProduto) => cat.id));
+      if (idSet.size !== data.length) {
+        console.warn('IDs duplicados encontrados nos dados de categorias:', data);
+      }
+
+      setCategorias(data);
+    } catch (error) {
+      console.error('Erro ao buscar categorias:', error);
+      setAlert({ severity: 'error', message: 'Erro ao carregar categorias!' });
+      setTimeout(() => setAlert(null), 3000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const handleAddCategoria = async () => {
+    const newErrors: { nomeCategoria?: string; descricao?: string } = {};
+    if (!nomeCategoria.trim()) newErrors.nomeCategoria = 'O nome da categoria é obrigatório.';
+    if (!descricao.trim()) newErrors.descricao = 'A descrição é obrigatória.';
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     }
 
-    if (editCategoriaId) {
-      // Editar categoria existente
-      setCategoria(
-        categoria.map((cat) => (cat.id === editCategoriaId ? { ...cat, name, description } : cat)),
-      );
-    } else {
-      // Adicionar nova categoria
-      const newsCategoria = {
-        id: categoria.length + 1,
-        name,
-        description,
+    try {
+      setLoading(true);
+      const categoriaData = {
+        nomeCategoria: nomeCategoria.trim(), // Garantindo que não haja espaços extras
+        descricao: descricao.trim(), // Garantindo que a descrição seja enviada corretamente
       };
-      setCategoria([...categoria, newsCategoria]);
+      console.log('Dados enviados para a API:', categoriaData); // Log para depuração
+
+      if (editCategoriaId) {
+        await updateProductCategory(editCategoriaId, categoriaData);
+        setAlert({ severity: 'success', message: 'Categoria atualizada com sucesso!' });
+      } else {
+        await createProductCategory(categoriaData);
+        setAlert({ severity: 'success', message: 'Categoria cadastrada com sucesso!' });
+      }
+      await fetchCategories();
+      handleClose();
+      setTimeout(() => setAlert(null), 3000);
+    } catch (error) {
+      console.error('Erro ao salvar categoria:', error);
+      setAlert({ severity: 'error', message: 'Erro ao salvar categoria!' });
+      setErrors({ nomeCategoria: 'Erro ao salvar. Tente novamente.' });
+      setTimeout(() => setAlert(null), 3000);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    setName('');
-    setDescription('');
-    setErrors({});
-    handleClose();
-  }
-
-  const handleEdit = (id: number) => {
-    const categoriaToEdit = categoria.find((cat) => cat.id === id);
+  const handleEdit = (id: string) => {
+    const categoriaToEdit = categorias.find((cat) => cat.id === id);
     if (categoriaToEdit) {
-      setName(categoriaToEdit.name);
-      setDescription(categoriaToEdit.description);
+      setNomeCategoria(categoriaToEdit.nomeCategoria || '');
+      setDescricao(categoriaToEdit.descricao || ''); // Garantindo que a descrição seja carregada
       setEditCategoriaId(id);
       handleOpen();
     }
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm('Tem certeza que deseja excluir esta categoria?')) {
-      setCategoria(categoria.filter((cat) => cat.id !== id));
+      try {
+        setLoading(true);
+        await deleteProductCategory(id);
+        await fetchCategories();
+        setAlert({ severity: 'success', message: 'Categoria excluída com sucesso!' });
+        setTimeout(() => setAlert(null), 3000);
+      } catch (error) {
+        console.error('Erro ao excluir categoria:', error);
+        setAlert({ severity: 'error', message: 'Erro ao excluir categoria!' });
+        setTimeout(() => setAlert(null), 3000);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
-  React.useEffect(() => {
-    localStorage.setItem('categoria', JSON.stringify(categoria));
-  }, [categoria]);
-
   return (
     <>
+      {alert && (
+        <Box sx={{ position: 'fixed', top: 20, right: 40, zIndex: 9999 }}>
+          <Alert severity={alert.severity}>{alert.message}</Alert>
+        </Box>
+      )}
+
       <Paper sx={(theme) => ({ p: theme.spacing(2, 2.5), width: '100%' })}>
         <Collapse in={open}>
           <Stack
@@ -129,83 +185,79 @@ const Categoria = ({ open }: CollapsedItemProps) => {
             alignItems="center"
             sx={{ width: '100%', mb: 2 }}
           >
-            <Typography id="modal-modal-title" variant="h5" component="h2">
-              Cadastrar Categoria
-            </Typography>
+            <Typography variant="h5">Cadastrar Categoria</Typography>
             <Button
               variant="contained"
               color="secondary"
               sx={(theme) => ({ p: theme.spacing(0.625, 1.5), borderRadius: 1.5 })}
               startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
               onClick={handleOpen}
+              disabled={loading}
             >
               <Typography variant="body2">Adicionar</Typography>
             </Button>
-            <Modal
-              open={openCategoria}
-              onClose={handleClose}
-              aria-labelledby="modal-modal-title"
-              aria-describedby="modal-modal-description"
-            >
-              <Box sx={style} component="form" noValidate autoComplete="off">
-                <Stack
-                  direction="row"
-                  justifyContent="space-between"
-                  alignItems="center"
-                  sx={{ width: '100%', mb: 2 }}
-                >
-                  <Typography id="modal-modal-title" variant="h5" component="h2">
-                    Cadastrar Categoria de Produtos
-                  </Typography>
-                  <Button onClick={handleClose} variant="outlined" color="error">
-                    Fechar
-                  </Button>
-                </Stack>
-
-                <Stack spacing={2} sx={{ width: '100%' }}>
-                  <TextField
-                    id="product-cost"
-                    onChange={(e) => setName(e.target.value)}
-                    value={name}
-                    label="Nome da Categoria"
-                    variant="filled"
-                    sx={{ width: '100%' }}
-                    error={Boolean(errors.name)}
-                    helperText={errors.name}
-                  />
-                  <TextField
-                    id="product-name-duplicate"
-                    onChange={(e) => setDescription(e.target.value)}
-                    value={description}
-                    label="Descrição"
-                    variant="filled"
-                    sx={{ width: '100%' }}
-                    error={Boolean(errors.description)}
-                    helperText={errors.description}
-                  />
-                  <Button
-                    variant="contained"
-                    color="secondary"
-                    sx={{ height: 40, width: '100%' }}
-                    onClick={() => onAddCategoriaSubmit(name, description)}
-                  >
-                    <Typography variant="body2">Cadastrar</Typography>
-                  </Button>
-                </Stack>
-              </Box>
-            </Modal>
           </Stack>
         </Collapse>
       </Paper>
+
+      <Modal open={openCategoria} onClose={handleClose}>
+        <Box sx={style} component="form" noValidate autoComplete="off">
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            sx={{ width: '100%', mb: 2 }}
+          >
+            <Typography variant="h5">
+              {editCategoriaId ? 'Editar Categoria' : 'Cadastrar Categoria de Produtos'}
+            </Typography>
+            <Button onClick={handleClose} variant="outlined" color="error" disabled={loading}>
+              Fechar
+            </Button>
+          </Stack>
+
+          <Stack spacing={2} sx={{ width: '100%' }}>
+            <TextField
+              label="Nome da Categoria"
+              value={nomeCategoria}
+              onChange={(e) => setNomeCategoria(e.target.value)}
+              variant="filled"
+              error={Boolean(errors.nomeCategoria)}
+              helperText={errors.nomeCategoria}
+              disabled={loading}
+              fullWidth
+            />
+            <TextField
+              label="Descrição"
+              value={descricao}
+              onChange={(e) => setDescricao(e.target.value)}
+              variant="filled"
+              error={Boolean(errors.descricao)}
+              helperText={errors.descricao}
+              disabled={loading}
+              fullWidth
+            />
+            <Button
+              variant="contained"
+              color="secondary"
+              onClick={handleAddCategoria}
+              disabled={loading}
+              fullWidth
+            >
+              <Typography variant="body2">
+                {loading ? 'Salvando...' : editCategoriaId ? 'Atualizar' : 'Cadastrar'}
+              </Typography>
+            </Button>
+          </Stack>
+        </Box>
+      </Modal>
+
       <Card sx={{ maxWidth: '100%', margin: 'auto', mt: 4 }}>
         <CardContent>
           <TableContainer component={Paper}>
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>
-                    <strong>ID da Categoria</strong>
-                  </TableCell>
                   <TableCell>
                     <strong>Nome da Categoria</strong>
                   </TableCell>
@@ -218,25 +270,38 @@ const Categoria = ({ open }: CollapsedItemProps) => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {categoria.length > 0 ? (
-                  categoria.map((categoria) => (
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={3} align="center">
+                      Carregando...
+                    </TableCell>
+                  </TableRow>
+                ) : categorias.length > 0 ? (
+                  categorias.map((categoria) => (
                     <TableRow key={categoria.id}>
-                      <TableCell>{categoria.id}</TableCell>
-                      <TableCell>{categoria.name}</TableCell>
-                      <TableCell>{categoria.description}</TableCell>
+                      <TableCell>{categoria.nomeCategoria || 'Sem nome'}</TableCell>
+                      <TableCell>{categoria.descricao || 'Sem descrição'}</TableCell>
                       <TableCell align="right">
-                        <IconButton color="primary" onClick={() => handleEdit(categoria.id)}>
-                          <Edit>edit</Edit>
+                        <IconButton
+                          color="primary"
+                          onClick={() => handleEdit(categoria.id!)}
+                          disabled={loading}
+                        >
+                          <Edit />
                         </IconButton>
-                        <IconButton color="error" onClick={() => handleDelete(categoria.id)}>
-                          <Delete>delete</Delete>
+                        <IconButton
+                          color="error"
+                          onClick={() => handleDelete(categoria.id!)}
+                          disabled={loading}
+                        >
+                          <Delete />
                         </IconButton>
                       </TableCell>
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={4} align="center">
+                    <TableCell colSpan={3} align="center">
                       Nenhuma categoria cadastrada.
                     </TableCell>
                   </TableRow>
