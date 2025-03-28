@@ -210,22 +210,22 @@ export const deleteSale = async (id: string): Promise<void> => {
 
 // Clients
 export const getClients = async (): Promise<Cliente[]> => {
-  const response = await api.get(`/clientes`);
+  const response = await api.get(`/cliente`);
   return response.data;
 };
 
 export const createClient = async (data: Cliente): Promise<Cliente> => {
-  const response = await api.post(`/clientes`, data);
+  const response = await api.post(`/cliente`, data);
   return response.data;
 };
 
 export const updateClient = async (id: string, data: Cliente): Promise<Cliente> => {
-  const response = await api.put(`/clientes/${id}`, data);
+  const response = await api.put(`/cliente/${id}`, data);
   return response.data;
 };
 
 export const deleteClient = async (id: string): Promise<void> => {
-  const response = await api.delete(`/clientes/${id}`);
+  const response = await api.delete(`/cliente/${id}`);
   return response.data;
 };
 

@@ -208,7 +208,7 @@ export interface FuncionarioCaixa {
   estadoCaixa: boolean;
   quantidadaFaturada: number;
   horarioAbertura: string;
-  horarioFechamento: string;
+  horarioFechamento: string | null;
   caixas?: Caixa;
   funcionarios?: Funcionario;
   vendas?: Venda[];

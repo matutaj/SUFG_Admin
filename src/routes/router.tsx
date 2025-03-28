@@ -99,7 +99,7 @@ export const routes = [
           },
           {
             path: paths.funcionarios,
-            element: <Funcionario subItems={undefined} open={true} />,
+            element: <Funcionario open={true} />,
           },
           {
             path: paths.vendas,
@@ -111,7 +111,7 @@ export const routes = [
           },
           {
             path: paths.cliente,
-            element: <Cliente subItems={undefined} open={true} />,
+            element: <Cliente open={true} />,
           },
           {
             path: paths.faturacao,
