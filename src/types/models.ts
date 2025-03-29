@@ -278,3 +278,99 @@ export interface FuncaoPermissao {
   createdAt?: string;
   updatedAt?: string;
 }
+
+// src/types/models.ts
+
+// Interface para vendas com nome do funcionário
+export interface VendaComFuncionario {
+  id: string;
+  idCliente?: string;
+  idFuncionario?: string;
+  data: string;
+  valorTotal: number;
+  quantidade?: number;
+  status?: string;
+  funcionarioNome: string;
+  produto?: { nomeProduto: string };
+  cliente?: { nome: string };
+}
+
+// Interface para produtos mais vendidos
+export interface ProdutoMaisVendido {
+  id_produto: string;
+  nomeProduto: string;
+  quantidadeVendida: number;
+  valorTotal: number;
+}
+
+// Interface para faturamento por período
+export interface FaturamentoPorPeriodo {
+  totalFaturado: number;
+  vendas: VendaComFuncionario[];
+}
+
+// Interface para quantidade faturada por caixa
+export interface QuantidadeFaturadaPorCaixa {
+  idCaixa: string;
+  nomeCaixa: string;
+  quantidadeFaturada: number;
+  funcionarios: string[];
+}
+
+// Interface para estoque atual
+export interface EstoqueAtual {
+  id_produto: string;
+  nomeProduto: string;
+  quantidadeEstoque: number;
+  localizacoes: { id: string; nome: string }[];
+}
+
+// Interface para entradas de estoque com nome do funcionário
+export interface EntradaEstoqueComFuncionario {
+  id: string;
+  idProduto?: string;
+  quantidade: number;
+  data: string;
+  funcionarioNome: string;
+  produto?: { nomeProduto: string };
+}
+
+// Interface para transferências com nome do funcionário
+export interface TransferenciaComFuncionario {
+  id: string;
+  idProduto?: string;
+  quantidade: number;
+  data: string;
+  funcionarioNome: string;
+  produto?: { nomeProduto: string };
+}
+
+// Interface para produtos abaixo do mínimo
+export interface ProdutoAbaixoMinimo {
+  id_produto: string;
+  nomeProduto: string;
+  quantidadeAtual: number;
+  quantidadeMinima: number;
+  localizacao: string;
+}
+
+// Interface para atividade de funcionários no caixa
+export interface FuncionarioCaixaComNome {
+  id: string;
+  idFuncionario?: string;
+  idCaixa?: string;
+  data: string;
+  funcionarioNome: string;
+  caixa?: { nome: string };
+}
+
+// Interface para período mais vendido por produto
+export interface PeriodoMaisVendidoPorProduto {
+  id_produto: string;
+  nomeProduto: string;
+  periodo: string;
+  quantidadeVendida: number;
+  valorTotal: number;
+}
+
+// ... (outras interfaces existentes como Cliente, Produto, etc., se já estiverem no arquivo)
