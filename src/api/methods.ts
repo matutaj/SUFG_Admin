@@ -20,8 +20,18 @@ import {
   Funcao,
   Permissao,
   FuncionarioFuncao,
+  VendaComFuncionario,
   FuncionarioPermissao,
   FuncaoPermissao,
+  ProdutoMaisVendido,
+  FaturamentoPorPeriodo,
+  QuantidadeFaturadaPorCaixa,
+  EstoqueAtual,
+  EntradaEstoqueComFuncionario,
+  TransferenciaComFuncionario,
+  ProdutoAbaixoMinimo,
+  FuncionarioCaixaComNome,
+  PeriodoMaisVendidoPorProduto,
 } from '../types/models';
 
 // Stock Entry
@@ -234,7 +244,104 @@ export const getCorridors = async (): Promise<Corredor[]> => {
   const response = await api.get(`/corredores`);
   return response.data;
 };
+// Relatórios
+export const getSalesByPeriod = async (
+  startDate: string,
+  endDate: string,
+): Promise<VendaComFuncionario[]> => {
+  const response = await api.get('/relatorio/vendas-periodo', {
+    params: { dataInicio: startDate, dataFim: endDate },
+  });
+  return response.data;
+};
 
+export const getSalesByClient = async (
+  idCliente: string,
+  startDate: string,
+  endDate: string,
+): Promise<VendaComFuncionario[]> => {
+  const response = await api.get(`/relatorio/vendas-cliente/${idCliente}`, {
+    params: { dataInicio: startDate, dataFim: endDate },
+  });
+  return response.data;
+};
+
+export const getTopSellingProducts = async (
+  startDate: string,
+  endDate: string,
+): Promise<ProdutoMaisVendido[]> => {
+  const response = await api.get('/relatorio/produtos-mais-vendidos', {
+    params: { dataInicio: startDate, dataFim: endDate },
+  });
+  return response.data;
+};
+
+export const getRevenueByPeriod = async (
+  startDate: string,
+  endDate: string,
+): Promise<FaturamentoPorPeriodo> => {
+  const response = await api.get('/relatorio/faturamento-periodo', {
+    params: { dataInicio: startDate, dataFim: endDate },
+  });
+  return response.data;
+};
+
+export const getRevenueByCashRegister = async (
+  startDate: string,
+  endDate: string,
+): Promise<QuantidadeFaturadaPorCaixa[]> => {
+  const response = await api.get('/relatorio/faturamento-caixa', {
+    params: { dataInicio: startDate, dataFim: endDate },
+  });
+  return response.data;
+};
+
+export const getCurrentStock = async (): Promise<EstoqueAtual[]> => {
+  const response = await api.get('/relatorio/estoque-atual');
+  return response.data;
+};
+
+export const getStockEntriesByPeriod = async (
+  startDate: string,
+  endDate: string,
+): Promise<EntradaEstoqueComFuncionario[]> => {
+  const response = await api.get('/relatorio/entradas-estoque', {
+    params: { dataInicio: startDate, dataFim: endDate },
+  });
+  return response.data;
+};
+
+export const getTransfersByPeriod = async (
+  startDate: string,
+  endDate: string,
+): Promise<TransferenciaComFuncionario[]> => {
+  const response = await api.get('/relatorio/transferencias', {
+    params: { dataInicio: startDate, dataFim: endDate },
+  });
+  return response.data;
+};
+
+export const getProductsBelowMinimum = async (): Promise<ProdutoAbaixoMinimo[]> => {
+  const response = await api.get('/relatorio/produtos-abaixo-minimo');
+  return response.data;
+};
+
+export const getCashierActivity = async (
+  startDate: string,
+  endDate: string,
+): Promise<FuncionarioCaixaComNome[]> => {
+  const response = await api.get('/relatorio/atividade-caixa', {
+    params: { dataInicio: startDate, dataFim: endDate },
+  });
+  return response.data;
+};
+
+export const getTopSellingPeriodByProduct = async (
+  idProduto: string,
+): Promise<PeriodoMaisVendidoPorProduto> => {
+  const response = await api.get(`/relatorio/periodo-mais-vendido/${idProduto}`);
+  return response.data;
+};
 export const createCorridor = async (data: Corredor): Promise<Corredor> => {
   const response = await api.post(`/corredores`, data);
   return response.data;
