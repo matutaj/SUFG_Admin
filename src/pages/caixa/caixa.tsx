@@ -253,7 +253,7 @@ const Caixas: React.FC<CollapsedItemProps> = ({ open }) => {
             <Table>
               <TableHead>
                 <TableRow>
-                  {['ID', 'Nome do Caixa', 'Descrição', 'Funcionários', 'Alertas', 'Ações'].map(
+                  {['Nome do Caixa', 'Descrição', 'Funcionários', 'Alertas', 'Ações'].map(
                     (header) => (
                       <TableCell key={header} sx={{ fontWeight: 'bold' }}>
                         {header}
@@ -278,7 +278,6 @@ const Caixas: React.FC<CollapsedItemProps> = ({ open }) => {
                 ) : (
                   caixas.map((item) => (
                     <TableRow key={item.id}>
-                      <TableCell>{item.id}</TableCell>
                       <TableCell>{item.nomeCaixa}</TableCell>
                       <TableCell>{item.descricao || '-'}</TableCell>
                       <TableCell>
