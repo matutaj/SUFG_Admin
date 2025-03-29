@@ -39,7 +39,6 @@ import {
   createSale,
 } from '../../api/methods';
 
-// Tipo auxiliar para criação de venda, sem id_venda
 interface VendaCreateInput {
   id_cliente: string;
   dataEmissao: string;
@@ -73,24 +72,32 @@ interface Fatura {
   funcionariosCaixa?: FuncionarioCaixa;
 }
 
+interface ApiError {
+  response?: {
+    data: {
+      message?: string;
+    };
+  };
+}
+
 interface CollapsedItemProps {
   subItems?: SubItem[];
   open: boolean;
 }
 
 const modalStyle = {
-  position: 'absolute',
+  position: 'absolute' as const,
   top: '50%',
   left: '50%',
   transform: 'translate(-50%, -50%)',
-  width: { xs: '90%', sm: '80%', md: 900 },
+  width: { xs: '90vw', sm: '80vw', md: 900 },
   maxWidth: '100%',
-  height: { xs: '100%', sm: '60%', md: 700 },
-  maxHeight: '90%',
+  height: { xs: '90vh', sm: '80vh', md: 700 },
+  maxHeight: '90vh',
   bgcolor: 'background.paper',
   boxShadow: 24,
-  p: 4,
-  overflowY: 'auto',
+  p: { xs: 2, sm: 3, md: 4 },
+  overflowY: 'auto' as const,
   borderRadius: 2,
 };
 
@@ -260,7 +267,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       };
 
       console.log('Dados enviados para criar venda:', JSON.stringify(vendaData, null, 2));
-      const createdVenda = await createSale(vendaData as Venda); // Conversão temporária, ajuste se necessário
+      const createdVenda = await createSale(vendaData as Venda);
       console.log('Venda criada:', createdVenda);
 
       const updatedLoja = loja
@@ -294,12 +301,13 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       setFaturas((prev) => [...prev, newFatura]);
       setLoja(updatedLoja);
       handleClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erro ao criar fatura:', error);
-      if (error.response) {
-        console.error('Detalhes do erro:', error.response.data);
+      if (error instanceof Error && 'response' in error) {
+        const apiError = error as ApiError;
+        console.error('Detalhes do erro:', apiError.response?.data);
         alert(
-          `Falha ao cadastrar fatura: ${error.response.data.message || 'Erro interno no servidor'}`,
+          `Falha ao cadastrar fatura: ${apiError.response?.data.message || 'Erro interno no servidor'}`,
         );
       } else {
         alert('Falha ao cadastrar fatura. Verifique sua conexão ou tente novamente.');
@@ -324,7 +332,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         status: fatura.status,
         produtosSelecionados: fatura.produtos.map((p) => ({
           id: p.produto.id.toString(),
-          quantidade: p.quantidade, // Corrigido de "quantity" para "quantidade"
+          quantidade: p.quantidade,
         })),
         funcionariosCaixaId: fatura.funcionariosCaixa?.id || '',
       });
@@ -409,12 +417,13 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       console.log('Resposta do servidor:', createdCaixa);
       setFuncionariosCaixa((prev) => [...prev, createdCaixa]);
       handleCloseCaixaForm();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erro ao criar caixa:', error);
-      if (error.response) {
-        console.error('Detalhes do erro do servidor:', error.response.data);
+      if (error instanceof Error && 'response' in error) {
+        const apiError = error as ApiError;
+        console.error('Detalhes do erro do servidor:', apiError.response?.data);
         alert(
-          `Falha ao abrir o caixa: ${error.response.data.message || 'Erro interno no servidor'}`,
+          `Falha ao abrir o caixa: ${apiError.response?.data.message || 'Erro interno no servidor'}`,
         );
       } else {
         alert('Falha ao abrir o caixa. Verifique sua conexão ou tente novamente.');
@@ -447,18 +456,29 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
 
   return (
     <>
-      <Paper sx={{ p: 2, width: '100%', borderRadius: 2 }}>
+      <Paper sx={{ p: { xs: 1, sm: 2 }, width: '100%', borderRadius: 2 }}>
         <Collapse in={open}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            justifyContent="space-between"
+            alignItems={{ xs: 'stretch', sm: 'center' }}
+            spacing={1}
+          >
             <Typography variant="h5" fontWeight="bold">
               Faturação
             </Typography>
-            <Stack direction="row" spacing={2}>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={1}
+              sx={{ width: { xs: '100%', sm: 'auto' } }}
+            >
               <Button
                 variant="contained"
                 color="secondary"
                 onClick={handleOpen}
                 startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
+                size="small"
+                fullWidth={true}
               >
                 Adicionar Fatura
               </Button>
@@ -467,6 +487,8 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                 color="primary"
                 onClick={handleOpenCaixa}
                 startIcon={<IconifyIcon icon="mdi:cash-register" />}
+                size="small"
+                fullWidth={true}
               >
                 Abrir Caixa
               </Button>
@@ -475,6 +497,8 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                 color="info"
                 onClick={handleOpenCaixaList}
                 startIcon={<IconifyIcon icon="mdi:cash-register" />}
+                size="small"
+                fullWidth={true}
               >
                 Ver Caixas
               </Button>
@@ -485,23 +509,18 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
 
       <Modal open={openFatura} onClose={handleClose}>
         <Box sx={modalStyle}>
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="center"
-            sx={{ mb: 4, width: '100%' }}
-          >
-            <Typography variant="h5" fontWeight="bold">
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+            <Typography variant="h5" fontWeight="bold" fontSize={{ xs: 18, sm: 24 }}>
               Cadastrar Fatura
             </Typography>
-            <Button variant="outlined" color="error" onClick={handleClose}>
+            <Button variant="outlined" color="error" onClick={handleClose} size="small">
               Fechar
             </Button>
           </Stack>
 
-          <Stack spacing={3} sx={{ width: '100%' }}>
+          <Stack spacing={2}>
             <Grid container spacing={2}>
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={6} md={4}>
                 <TextField
                   fullWidth
                   variant="filled"
@@ -513,7 +532,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   helperText={errors.cliente}
                 />
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={6} md={4}>
                 <TextField
                   fullWidth
                   variant="filled"
@@ -523,7 +542,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   onChange={handleTextFieldChange}
                 />
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={6} md={4}>
                 <TextField
                   fullWidth
                   variant="filled"
@@ -534,7 +553,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   onChange={handleTextFieldChange}
                 />
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={6} md={4}>
                 <TextField
                   fullWidth
                   variant="filled"
@@ -544,7 +563,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   onChange={handleTextFieldChange}
                 />
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={6} md={4}>
                 <TextField
                   fullWidth
                   variant="filled"
@@ -555,7 +574,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   onChange={handleTextFieldChange}
                 />
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={6} md={4}>
                 <TextField
                   fullWidth
                   variant="filled"
@@ -569,7 +588,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   helperText={errors.data}
                 />
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={6} md={4}>
                 <TextField
                   fullWidth
                   variant="filled"
@@ -579,7 +598,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   onChange={handleTextFieldChange}
                 />
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={6} md={4}>
                 <FormControl fullWidth variant="filled" error={Boolean(errors.funcionariosCaixaId)}>
                   <InputLabel>Caixa</InputLabel>
                   <Select
@@ -600,7 +619,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   )}
                 </FormControl>
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={6} md={4}>
                 <TextField
                   fullWidth
                   variant="filled"
@@ -612,8 +631,8 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
             </Grid>
 
             {form.produtosSelecionados.map((produto, index) => (
-              <Grid container spacing={2} key={index}>
-                <Grid item xs={12} sm={5}>
+              <Grid container spacing={1} key={index} alignItems="center">
+                <Grid item xs={12} sm={6} md={5}>
                   <FormControl
                     fullWidth
                     variant="filled"
@@ -635,7 +654,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                     )}
                   </FormControl>
                 </Grid>
-                <Grid item xs={8} sm={5}>
+                <Grid item xs={8} sm={4} md={5}>
                   <TextField
                     fullWidth
                     variant="filled"
@@ -650,7 +669,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                     helperText={errors[`produto_${index}`]}
                   />
                 </Grid>
-                <Grid item xs={4} sm={2}>
+                <Grid item xs={4} sm={2} md={2}>
                   <IconButton color="error" onClick={() => removerProdutoInput(index)}>
                     <Delete />
                   </IconButton>
@@ -664,34 +683,42 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
               </Typography>
             )}
 
-            <Button variant="outlined" color="primary" onClick={adicionarNovoProdutoInput}>
-              Adicionar Produto
-            </Button>
-
-            <Button variant="contained" color="secondary" onClick={onAddFaturaSubmit}>
-              Cadastrar Fatura
-            </Button>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              <Button
+                variant="outlined"
+                color="primary"
+                onClick={adicionarNovoProdutoInput}
+                fullWidth={true}
+                size="small"
+              >
+                Adicionar Produto
+              </Button>
+              <Button
+                variant="contained"
+                color="secondary"
+                onClick={onAddFaturaSubmit}
+                fullWidth={true}
+                size="small"
+              >
+                Cadastrar Fatura
+              </Button>
+            </Stack>
           </Stack>
         </Box>
       </Modal>
 
       <Modal open={openCaixaForm} onClose={handleCloseCaixaForm}>
         <Box sx={modalStyle}>
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="center"
-            sx={{ mb: 4, width: '100%' }}
-          >
-            <Typography variant="h5" fontWeight="bold">
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+            <Typography variant="h5" fontWeight="bold" fontSize={{ xs: 18, sm: 24 }}>
               Abrir Novo Caixa
             </Typography>
-            <Button variant="outlined" color="error" onClick={handleCloseCaixaForm}>
+            <Button variant="outlined" color="error" onClick={handleCloseCaixaForm} size="small">
               Fechar
             </Button>
           </Stack>
 
-          <Stack spacing={3} sx={{ width: '100%' }}>
+          <Stack spacing={2}>
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth variant="filled" error={Boolean(caixaErrors.funcionarioId)}>
@@ -732,7 +759,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
               </Grid>
             </Grid>
 
-            <Button variant="contained" color="primary" onClick={onAddCaixaSubmit}>
+            <Button variant="contained" color="primary" onClick={onAddCaixaSubmit} size="small">
               Abrir Caixa
             </Button>
           </Stack>
@@ -741,47 +768,62 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
 
       <Modal open={openCaixaList} onClose={handleCloseCaixaList}>
         <Box sx={modalStyle}>
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="center"
-            sx={{ mb: 4, width: '100%' }}
-          >
-            <Typography variant="h5" fontWeight="bold">
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+            <Typography variant="h5" fontWeight="bold" fontSize={{ xs: 18, sm: 24 }}>
               Caixas Abertos
             </Typography>
-            <Button variant="outlined" color="error" onClick={handleCloseCaixaList}>
+            <Button variant="outlined" color="error" onClick={handleCloseCaixaList} size="small">
               Fechar
             </Button>
           </Stack>
 
           <TableContainer component={Paper}>
-            <Table>
+            <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 'bold' }}>ID</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Caixa</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Funcionário</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Estado</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Abertura</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Fechamento</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Ações</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', fontSize: { xs: 12, sm: 14 } }}>
+                    ID
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', fontSize: { xs: 12, sm: 14 } }}>
+                    Caixa
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', fontSize: { xs: 12, sm: 14 } }}>
+                    Funcionário
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', fontSize: { xs: 12, sm: 14 } }}>
+                    Estado
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', fontSize: { xs: 12, sm: 14 } }}>
+                    Abertura
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', fontSize: { xs: 12, sm: 14 } }}>
+                    Fechamento
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', fontSize: { xs: 12, sm: 14 } }}>
+                    Ações
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {funcionariosCaixa.map((item) => (
                   <TableRow key={item.id}>
-                    <TableCell>{item.id}</TableCell>
-                    <TableCell>{item.caixas?.nomeCaixa || 'N/A'}</TableCell>
-                    <TableCell>{item.funcionarios?.nomeFuncionario || 'N/A'}</TableCell>
-                    <TableCell>{item.estadoCaixa ? 'Aberto' : 'Fechado'}</TableCell>
-                    <TableCell>
+                    <TableCell sx={{ fontSize: { xs: 12, sm: 14 } }}>{item.id}</TableCell>
+                    <TableCell sx={{ fontSize: { xs: 12, sm: 14 } }}>
+                      {item.caixas?.nomeCaixa || 'N/A'}
+                    </TableCell>
+                    <TableCell sx={{ fontSize: { xs: 12, sm: 14 } }}>
+                      {item.funcionarios?.nomeFuncionario || 'N/A'}
+                    </TableCell>
+                    <TableCell sx={{ fontSize: { xs: 12, sm: 14 } }}>
+                      {item.estadoCaixa ? 'Aberto' : 'Fechado'}
+                    </TableCell>
+                    <TableCell sx={{ fontSize: { xs: 12, sm: 14 } }}>
                       {new Intl.DateTimeFormat('pt-BR', {
                         dateStyle: 'short',
                         timeStyle: 'short',
                       }).format(new Date(item.horarioAbertura))}
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={{ fontSize: { xs: 12, sm: 14 } }}>
                       {item.horarioFechamento
                         ? new Intl.DateTimeFormat('pt-BR', {
                             dateStyle: 'short',
@@ -795,8 +837,9 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                           variant="contained"
                           color="error"
                           onClick={() => handleFecharCaixa(item.id!)}
+                          size="small"
                         >
-                          Fechar Caixa
+                          Fechar
                         </Button>
                       )}
                     </TableCell>
@@ -808,10 +851,10 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         </Box>
       </Modal>
 
-      <Card sx={{ mt: 4, borderRadius: 2 }}>
-        <CardContent>
+      <Card sx={{ mt: 2, borderRadius: 2 }}>
+        <CardContent sx={{ p: { xs: 1, sm: 2 } }}>
           <TableContainer component={Paper}>
-            <Table>
+            <Table size="small">
               <TableHead>
                 <TableRow>
                   {[
@@ -827,7 +870,20 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                     'Caixa',
                     'Ações',
                   ].map((header) => (
-                    <TableCell key={header} sx={{ fontWeight: 'bold' }}>
+                    <TableCell
+                      key={header}
+                      sx={{
+                        fontWeight: 'bold',
+                        fontSize: { xs: 12, sm: 14 },
+                        display: {
+                          xs:
+                            header === 'Cliente' || header === 'Total' || header === 'Ações'
+                              ? 'table-cell'
+                              : 'none',
+                          sm: 'table-cell',
+                        },
+                      }}
+                    >
                       {header}
                     </TableCell>
                   ))}
@@ -836,31 +892,93 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
               <TableBody>
                 {faturas.map((item) => (
                   <TableRow key={item.id}>
-                    <TableCell>{item.cliente}</TableCell>
-                    <TableCell>{item.nif}</TableCell>
-                    <TableCell>{item.telefone}</TableCell>
-                    <TableCell>{item.localizacao}</TableCell>
-                    <TableCell>{item.email}</TableCell>
-                    <TableCell>
+                    <TableCell sx={{ fontSize: { xs: 12, sm: 14 } }}>{item.cliente}</TableCell>
+                    <TableCell
+                      sx={{
+                        fontSize: { xs: 12, sm: 14 },
+                        display: { xs: 'none', sm: 'table-cell' },
+                      }}
+                    >
+                      {item.nif}
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        fontSize: { xs: 12, sm: 14 },
+                        display: { xs: 'none', sm: 'table-cell' },
+                      }}
+                    >
+                      {item.telefone}
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        fontSize: { xs: 12, sm: 14 },
+                        display: { xs: 'none', sm: 'table-cell' },
+                      }}
+                    >
+                      {item.localizacao}
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        fontSize: { xs: 12, sm: 14 },
+                        display: { xs: 'none', sm: 'table-cell' },
+                      }}
+                    >
+                      {item.email}
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        fontSize: { xs: 12, sm: 14 },
+                        display: { xs: 'none', sm: 'table-cell' },
+                      }}
+                    >
                       {new Intl.DateTimeFormat('pt-BR').format(new Date(item.data))}
                     </TableCell>
-                    <TableCell>{calcularTotalFatura(item).toFixed(2)}kzs</TableCell>
-                    <TableCell>{item.status}</TableCell>
-                    <TableCell>
+                    <TableCell sx={{ fontSize: { xs: 12, sm: 14 } }}>
+                      {calcularTotalFatura(item).toFixed(2)}kzs
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        fontSize: { xs: 12, sm: 14 },
+                        display: { xs: 'none', sm: 'table-cell' },
+                      }}
+                    >
+                      {item.status}
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        fontSize: { xs: 12, sm: 14 },
+                        display: { xs: 'none', sm: 'table-cell' },
+                      }}
+                    >
                       {item.produtos.map((p, idx) => (
-                        <div
-                          key={idx}
-                        >{`${p.produto.name} - ${p.quantidade}x (${p.produto.prico}kz)`}</div>
+                        <div key={idx}>{`${p.produto.name} - ${p.quantidade}x`}</div>
                       ))}
                     </TableCell>
-                    <TableCell>{item.funcionariosCaixa?.caixas?.nomeCaixa || 'N/A'}</TableCell>
+                    <TableCell
+                      sx={{
+                        fontSize: { xs: 12, sm: 14 },
+                        display: { xs: 'none', sm: 'table-cell' },
+                      }}
+                    >
+                      {item.funcionariosCaixa?.caixas?.nomeCaixa || 'N/A'}
+                    </TableCell>
                     <TableCell align="right">
-                      <IconButton color="primary" onClick={() => editarFatura(item.id)}>
-                        <Edit />
-                      </IconButton>
-                      <IconButton color="error" onClick={() => excluirFatura(item.id)}>
-                        <Delete />
-                      </IconButton>
+                      <Stack direction="row" spacing={0.5}>
+                        <IconButton
+                          color="primary"
+                          onClick={() => editarFatura(item.id)}
+                          size="small"
+                        >
+                          <Edit />
+                        </IconButton>
+                        <IconButton
+                          color="error"
+                          onClick={() => excluirFatura(item.id)}
+                          size="small"
+                        >
+                          <Delete />
+                        </IconButton>
+                      </Stack>
                     </TableCell>
                   </TableRow>
                 ))}
