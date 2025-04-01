@@ -727,18 +727,11 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                   <TableCell>
                     <strong>Categoria</strong>
                   </TableCell>
-                  <TableCell>
-                    <strong>Custo Aquisição</strong>
-                  </TableCell>
+
                   <TableCell>
                     <strong>Preço Venda</strong>
                   </TableCell>
-                  <TableCell>
-                    <strong>Quantidade</strong>
-                  </TableCell>
-                  <TableCell>
-                    <strong>Unidade</strong>
-                  </TableCell>
+
                   <TableCell>
                     <strong>Código Barras</strong>
                   </TableCell>
@@ -766,10 +759,7 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                         {categories.find((cat) => cat.id === product.id_categoriaProduto)
                           ?.nomeCategoria || 'N/A'}
                       </TableCell>
-                      <TableCell>{product.custoAquisicao || 'N/A'}</TableCell>
                       <TableCell>{product.precoVenda || 0}</TableCell>
-                      <TableCell>{product.quantidadeEstoque || 0}</TableCell>
-                      <TableCell>{product.unidadeMedida || 'N/A'}</TableCell>
                       <TableCell>{product.codigoBarras || 'N/A'}</TableCell>
                       <TableCell>
                         <Button

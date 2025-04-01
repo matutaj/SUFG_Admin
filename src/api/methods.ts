@@ -383,22 +383,22 @@ export const deleteProductCategory = async (id: string): Promise<void> => {
 
 // Suppliers
 export const getSuppliers = async (): Promise<Fornecedor[]> => {
-  const response = await api.get(`/fornecedores`);
+  const response = await api.get(`/fornecedor`);
   return response.data;
 };
 
 export const createSupplier = async (data: Fornecedor): Promise<Fornecedor> => {
-  const response = await api.post(`/fornecedores`, data);
+  const response = await api.post(`/fornecedor`, data);
   return response.data;
 };
 
 export const updateSupplier = async (id: string, data: Fornecedor): Promise<Fornecedor> => {
-  const response = await api.put(`/fornecedores/${id}`, data);
+  const response = await api.put(`/fornecedor/${id}`, data);
   return response.data;
 };
 
 export const deleteSupplier = async (id: string): Promise<void> => {
-  const response = await api.delete(`/fornecedores/${id}`);
+  const response = await api.delete(`/fornecedor/${id}`);
   return response.data;
 };
 

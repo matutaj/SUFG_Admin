@@ -5,7 +5,7 @@ import Progress from 'components/loading/Progress';
 import LinearLoader from 'components/loading/LinearLoader';
 import Stock from 'pages/stock/Stock';
 import Funcionario from 'pages/funcionario/Funcionario';
-import Venda from 'pages/venda/Venda';
+import Fornecedor from 'pages/venda/Fornecedor';
 import Cliente from 'pages/cliente/Cliente';
 import Faturacao from 'pages/faturacao/Faturacao';
 import Relatorio from 'pages/relatorio/Relatorio';
@@ -83,7 +83,7 @@ export const routes = [
           },
           {
             path: paths.estoque,
-            element: <Stock />,
+            element: <Stock open={true} />,
           },
           {
             path: paths.corredor,
@@ -103,7 +103,7 @@ export const routes = [
           },
           {
             path: paths.vendas,
-            element: <Venda />,
+            element: <Fornecedor open={true} />,
           },
           {
             path: paths.relatorio,
