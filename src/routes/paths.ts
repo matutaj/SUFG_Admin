@@ -20,6 +20,7 @@ export default {
   relatorio: `/${rootPaths.pagesRoot}/relatorio`,
   corredor: `/${rootPaths.pagesRoot}/corredor`,
   caixa: `/${rootPaths.pagesRoot}/caixa`,
+  localProduto: `/${rootPaths.pagesRoot}produt/produtoLocalizacao`,
   seccao: `/${rootPaths.pagesRoot}/seccao`,
   prateleira: `/${rootPaths.pagesRoot}/prateleira`,
   faturacao: `/${rootPaths.pagesRoot}/faturacao`,

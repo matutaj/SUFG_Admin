@@ -9,9 +9,10 @@ import Fornecedor from 'pages/venda/Fornecedor';
 import Cliente from 'pages/cliente/Cliente';
 import Faturacao from 'pages/faturacao/Faturacao';
 import Relatorio from 'pages/relatorio/Relatorio';
-import Loja from 'pages/produt/Produt_loja';
+import Loja from 'pages/produt';
 import Corredor from 'pages/corredor/Corredor';
 import Prateleira from 'pages/prateleira/Prateleira';
+import LocalProduto from 'pages/produt/ProdutoLocalizacao';
 import Secao from 'pages/seccao/Seccao';
 import Caixas from 'pages/caixa/caixa';
 
@@ -20,7 +21,7 @@ const MainLayout = lazy(() => import('layouts/main-layout'));
 const Categoria = lazy(() => import('pages/categoria/Categoria'));
 const AuthLayout = lazy(() => import('layouts/auth-layout'));
 const Dashboard = lazy(() => import('pages/dashboard/Dashboard'));
-const Armanzem = lazy(() => import('pages/produt/Localizacao'));
+const Armanzem = lazy(() => import('pages/localizacao/Localizacao'));
 const Login = lazy(() => import('pages/authentication/Login'));
 const Signup = lazy(() => import('pages/authentication/Signup'));
 const ErrorPage = lazy(() => import('pages/errors/ErrorPage'));
@@ -104,6 +105,10 @@ export const routes = [
           {
             path: paths.vendas,
             element: <Fornecedor open={true} />,
+          },
+          {
+            path: paths.localProduto,
+            element: <LocalProduto open={true} />,
           },
           {
             path: paths.relatorio,
