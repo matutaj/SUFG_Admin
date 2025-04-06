@@ -126,12 +126,7 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
 
       // Busca de funcionários (já funcionando)
       const employeesData = await getEmployees();
-      console.log('Funcionários retornados:', employeesData);
       setEmployees(employeesData);
-
-      if (productsData.length === 0) setFetchError('Nenhum produto encontrado.');
-      if (suppliers.length === 0) setFetchError('Nenhum fornecedor encontrado.');
-      if (employeesData.length === 0) setFetchError('Nenhum funcionário encontrado.');
     } catch (error) {
       console.error('Erro geral ao buscar dados:', error);
       setFetchError('Erro ao carregar os dados. Verifique o console para mais detalhes.');
@@ -469,7 +464,6 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
               <TableHead>
                 <TableRow>
                   {[
-                    'ID',
                     'Produto',
                     'Quantidade',
                     'Data de Entrada',
@@ -487,7 +481,6 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
               <TableBody>
                 {stockEntries.map((item) => (
                   <TableRow key={item.id}>
-                    <TableCell>{item.id}</TableCell>
                     <TableCell>
                       {products.find((p) => p.id === item.id_produto)?.nomeProduto ||
                         item.id_produto}

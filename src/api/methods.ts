@@ -241,7 +241,7 @@ export const deleteClient = async (id: string): Promise<void> => {
 
 // Corridors
 export const getCorridors = async (): Promise<Corredor[]> => {
-  const response = await api.get(`/corredores`);
+  const response = await api.get(`/corredor`);
   return response.data;
 };
 // Relatórios
@@ -343,17 +343,17 @@ export const getTopSellingPeriodByProduct = async (
   return response.data;
 };
 export const createCorridor = async (data: Corredor): Promise<Corredor> => {
-  const response = await api.post(`/corredores`, data);
+  const response = await api.post(`/corredor`, data);
   return response.data;
 };
 
 export const updateCorridor = async (id: string, data: Corredor): Promise<Corredor> => {
-  const response = await api.put(`/corredores/${id}`, data);
+  const response = await api.put(`/corredor/${id}`, data);
   return response.data;
 };
 
 export const deleteCorridor = async (id: string): Promise<void> => {
-  const response = await api.delete(`/corredores/${id}`);
+  const response = await api.delete(`/corredor/${id}`);
   return response.data;
 };
 
@@ -619,5 +619,24 @@ export const updateAlert = async (id: string, data: Alerta): Promise<Alerta> => 
 
 export const deleteAlert = async (id: string): Promise<void> => {
   const response = await api.delete(`/alertas/${id}`);
+  return response.data;
+};
+
+// Stock Management
+export const getStock = async (): Promise<EstoqueAtual[]> => {
+  const response = await api.get(`/estoque`);
+  return response.data;
+};
+
+export const updateStock = async (
+  idProduto: string,
+  data: Partial<EstoqueAtual>,
+): Promise<EstoqueAtual> => {
+  const response = await api.put(`/estoque/${idProduto}`, data);
+  return response.data;
+};
+
+export const getStockByProduct = async (idProduto: string): Promise<EstoqueAtual> => {
+  const response = await api.get(`/estoque/${idProduto}`);
   return response.data;
 };

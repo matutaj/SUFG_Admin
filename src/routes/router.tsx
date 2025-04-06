@@ -15,6 +15,7 @@ import Prateleira from 'pages/prateleira/Prateleira';
 import LocalProduto from 'pages/produt/ProdutoLocalizacao';
 import Secao from 'pages/seccao/Seccao';
 import Caixas from 'pages/caixa/caixa';
+import { StockProvider } from 'pages/stock/StockContext'; // Importa o StockProvider
 
 const App = lazy(() => import('App'));
 const MainLayout = lazy(() => import('layouts/main-layout'));
@@ -36,7 +37,7 @@ export const routes = [
     children: [
       {
         path: '/',
-        element: <Login />, // 🔥 Redireciona "/" para o login
+        element: <Login />, // Redireciona "/" para o login
       },
       {
         path: rootPaths.authRoot,
@@ -56,14 +57,18 @@ export const routes = [
         path: rootPaths.pagesRoot,
         element: (
           <MainLayout>
-            <Suspense fallback={<LinearLoader />}>
-              <Outlet />
-            </Suspense>
+            <StockProvider>
+              {' '}
+              {/* Adiciona o StockProvider aqui */}
+              <Suspense fallback={<LinearLoader />}>
+                <Outlet />
+              </Suspense>
+            </StockProvider>
           </MainLayout>
         ),
         children: [
           {
-            path: paths.dashboard, // 🔥 Agora dashboard tem sua própria rota
+            path: paths.dashboard,
             element: <Dashboard />,
           },
           {

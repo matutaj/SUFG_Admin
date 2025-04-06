@@ -37,6 +37,7 @@ import {
   getEmployees,
   getCashRegisters,
   createSale,
+  getSales,
 } from '../../api/methods';
 
 interface VendaCreateInput {
@@ -72,14 +73,6 @@ interface Fatura {
   funcionariosCaixa?: FuncionarioCaixa;
 }
 
-interface ApiError {
-  response?: {
-    data: {
-      message?: string;
-    };
-  };
-}
-
 interface CollapsedItemProps {
   subItems?: SubItem[];
   open: boolean;
@@ -108,9 +101,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   });
 
   const [openFatura, setOpenFatura] = useState(false);
-  const [faturas, setFaturas] = useState<Fatura[]>(
-    JSON.parse(localStorage.getItem('faturas') || '[]'),
-  );
+  const [faturas, setFaturas] = useState<Fatura[]>([]);
 
   const [form, setForm] = useState({
     cliente: '',
@@ -140,9 +131,58 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
 
   useEffect(() => {
     const id = localStorage.getItem('loggedInFuncionarioId') || '';
-    setLoggedInFuncionarioId(id);
-    setCaixaForm((prev) => ({ ...prev, funcionarioId: id }));
+    if (id) {
+      setLoggedInFuncionarioId(id);
+      setCaixaForm((prev) => ({ ...prev, funcionarioId: id }));
+    } else {
+      console.warn('Nenhum funcionário logado encontrado no localStorage.');
+    }
   }, []);
+
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        const [salesData, funcionariosCaixaData, funcionariosData, caixasData] = await Promise.all([
+          getSales(),
+          getEmployeeCashRegisters(),
+          getEmployees(),
+          getCashRegisters(),
+        ]);
+
+        const mappedFaturas = salesData.map((venda: Venda, index: number) => ({
+          id: index + 1,
+          cliente: venda.clientes?.nomeCliente || venda.id_cliente,
+          nif: '',
+          telefone: '',
+          localizacao: '',
+          email: '',
+          data: venda.dataEmissao.split('T')[0],
+          status: 'Pendente',
+          produtos:
+            venda.vendasProdutos?.map((vp) => ({
+              produto: {
+                id: Number(vp.produtos?.id),
+                name: vp.produtos?.nomeProduto || '',
+                shelf: '',
+                prico: vp.produtos?.precoVenda || 0,
+                validade: '',
+                quantidade: vp.produtos?.quantidadeEstoque || 0,
+              },
+              quantidade: vp.quantidadeVendida,
+            })) || [],
+          funcionariosCaixa: venda.funcionariosCaixa,
+        }));
+
+        setFaturas(mappedFaturas);
+        setFuncionariosCaixa(funcionariosCaixaData);
+        setFuncionarios(funcionariosData);
+        setCaixas(caixasData);
+      } catch (error) {
+        console.error('Erro ao carregar dados iniciais:', error);
+      }
+    };
+    fetchInitialData();
+  }, [loggedInFuncionarioId]);
 
   const handleOpen = () => setOpenFatura(true);
   const handleClose = () => {
@@ -266,52 +306,56 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         })),
       };
 
-      console.log('Dados enviados para criar venda:', JSON.stringify(vendaData, null, 2));
       const createdVenda = await createSale(vendaData as Venda);
-      console.log('Venda criada:', createdVenda);
-
-      const updatedLoja = loja
-        .map((produto) => {
-          const produtoSelecionado = form.produtosSelecionados.find(
-            (p) => p.id === produto.id.toString(),
-          );
-          if (produtoSelecionado) {
-            return { ...produto, quantidade: produto.quantidade - produtoSelecionado.quantidade };
-          }
-          return produto;
-        })
-        .filter((p) => p.quantidade > 0);
 
       const newFatura: Fatura = {
-        id: faturas.length + 1,
+        id: createdVenda.id ? Number(createdVenda.id) : faturas.length + 1,
         cliente: form.cliente,
         nif: form.nif,
         telefone: form.telefone,
         localizacao: form.localizacao,
         email: form.email,
-        data: form.data,
+        data: createdVenda.dataEmissao.split('T')[0],
         status: form.status,
-        produtos: form.produtosSelecionados.map((p) => ({
-          produto: loja.find((prod) => prod.id.toString() === p.id)!,
-          quantidade: p.quantidade,
-        })),
-        funcionariosCaixa: funcionariosCaixa.find((fc) => fc.id === form.funcionariosCaixaId),
+        produtos:
+          createdVenda.vendasProdutos?.map((vp) => ({
+            produto: {
+              id: Number(vp.produtos?.id),
+              name: vp.produtos?.nomeProduto || '',
+              shelf: '',
+              prico: vp.produtos?.precoVenda || 0,
+              validade: '',
+              quantidade: vp.produtos?.quantidadeEstoque || 0,
+            },
+            quantidade: vp.quantidadeVendida,
+          })) ||
+          form.produtosSelecionados.map((p) => ({
+            produto: loja.find((prod) => prod.id.toString() === p.id)!,
+            quantidade: p.quantidade,
+          })),
+        funcionariosCaixa: funcionariosCaixa.find(
+          (fc) => fc.id === createdVenda.id_funcionarioCaixa,
+        ),
       };
 
       setFaturas((prev) => [...prev, newFatura]);
-      setLoja(updatedLoja);
+      setLoja((prev) =>
+        prev
+          .map((produto) => {
+            const produtoSelecionado = form.produtosSelecionados.find(
+              (p) => p.id === produto.id.toString(),
+            );
+            if (produtoSelecionado) {
+              return { ...produto, quantidade: produto.quantidade - produtoSelecionado.quantidade };
+            }
+            return produto;
+          })
+          .filter((p) => p.quantidade > 0),
+      );
       handleClose();
     } catch (error: unknown) {
       console.error('Erro ao criar fatura:', error);
-      if (error instanceof Error && 'response' in error) {
-        const apiError = error as ApiError;
-        console.error('Detalhes do erro:', apiError.response?.data);
-        alert(
-          `Falha ao cadastrar fatura: ${apiError.response?.data.message || 'Erro interno no servidor'}`,
-        );
-      } else {
-        alert('Falha ao cadastrar fatura. Verifique sua conexão ou tente novamente.');
-      }
+      alert('Falha ao cadastrar fatura. Verifique sua conexão ou tente novamente.');
     }
   };
 
@@ -340,47 +384,15 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     }
   };
 
-  useEffect(() => {
-    localStorage.setItem('faturas', JSON.stringify(faturas));
-  }, [faturas]);
-
-  useEffect(() => {
-    localStorage.setItem('loja', JSON.stringify(loja));
-  }, [loja]);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const funcionariosCaixaData = await getEmployeeCashRegisters();
-        const funcionariosData = await getEmployees();
-        const caixasData = await getCashRegisters();
-        setFuncionariosCaixa(funcionariosCaixaData);
-        setFuncionarios(funcionariosData);
-        setCaixas(caixasData);
-      } catch (error) {
-        console.error('Erro ao carregar dados:', error);
-      }
-    };
-    fetchData();
-  }, []);
-
-  const handleOpenCaixa = () => {
-    setOpenCaixaForm(true);
-  };
-
+  const handleOpenCaixa = () => setOpenCaixaForm(true);
   const handleCloseCaixaForm = () => {
     setOpenCaixaForm(false);
     setCaixaForm({ funcionarioId: loggedInFuncionarioId, caixaId: '' });
     setCaixaErrors({});
   };
 
-  const handleOpenCaixaList = () => {
-    setOpenCaixaList(true);
-  };
-
-  const handleCloseCaixaList = () => {
-    setOpenCaixaList(false);
-  };
+  const handleOpenCaixaList = () => setOpenCaixaList(true);
+  const handleCloseCaixaList = () => setOpenCaixaList(false);
 
   const handleCaixaSelectChange = (e: SelectChangeEvent<string>) => {
     const { name, value } = e.target;
@@ -390,7 +402,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const validateCaixaForm = () => {
     const newErrors: { [key: string]: string } = {};
-    if (!caixaForm.funcionarioId) newErrors.funcionarioId = 'Selecione um funcionário';
+    if (!caixaForm.funcionarioId) newErrors.funcionarioId = 'Funcionário é obrigatório';
     if (!caixaForm.caixaId) newErrors.caixaId = 'Selecione um caixa';
     setCaixaErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -409,25 +421,12 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         horarioFechamento: null,
       };
 
-      console.log(
-        'Dados enviados para criar FuncionarioCaixa:',
-        JSON.stringify(newFuncionarioCaixa, null, 2),
-      );
       const createdCaixa = await createEmployeeCashRegister(newFuncionarioCaixa);
-      console.log('Resposta do servidor:', createdCaixa);
       setFuncionariosCaixa((prev) => [...prev, createdCaixa]);
       handleCloseCaixaForm();
     } catch (error: unknown) {
-      console.error('Erro ao criar caixa:', error);
-      if (error instanceof Error && 'response' in error) {
-        const apiError = error as ApiError;
-        console.error('Detalhes do erro do servidor:', apiError.response?.data);
-        alert(
-          `Falha ao abrir o caixa: ${apiError.response?.data.message || 'Erro interno no servidor'}`,
-        );
-      } else {
-        alert('Falha ao abrir o caixa. Verifique sua conexão ou tente novamente.');
-      }
+      console.error('Erro ao abrir caixa:', error);
+      alert('Falha ao abrir o caixa. Tente novamente.');
     }
   };
 
@@ -435,11 +434,18 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     try {
       const caixaAtual = funcionariosCaixa.find((c) => c.id === caixaId);
       if (caixaAtual) {
+        // Calcular o total faturado para este caixa
+        const totalFaturado = faturas
+          .filter((fatura) => fatura.funcionariosCaixa?.id === caixaId)
+          .reduce((acc, fatura) => acc + calcularTotalFatura(fatura), 0);
+
         const updatedCaixa: FuncionarioCaixa = {
           ...caixaAtual,
           estadoCaixa: false,
-          horarioFechamento: new Date().toISOString(),
+          quantidadaFaturada: totalFaturado, // Atualiza com o total faturado
+          horarioFechamento: new Date().toISOString(), // Salva a hora atual
         };
+
         const response = await updateEmployeeCashRegister(caixaId, updatedCaixa);
         setFuncionariosCaixa((prev) => prev.map((c) => (c.id === caixaId ? response : c)));
         handleCloseCaixaList();
@@ -610,7 +616,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                       .filter((fc) => fc.estadoCaixa)
                       .map((fc) => (
                         <MenuItem key={fc.id} value={fc.id}>
-                          {fc.caixas?.nomeCaixa} - {fc.funcionarios?.nomeFuncionario}
+                          {fc.caixas?.nomeCaixa} - {fc.funcionarios?.nomeFuncionario || 'N/A'}
                         </MenuItem>
                       ))}
                   </Select>
@@ -727,7 +733,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                     name="funcionarioId"
                     value={caixaForm.funcionarioId}
                     onChange={handleCaixaSelectChange}
-                    disabled
+                    disabled={!!loggedInFuncionarioId} // Desabilitado para o funcionário logado
                   >
                     {funcionarios.map((funcionario) => (
                       <MenuItem key={funcionario.id} value={funcionario.id}>
@@ -756,6 +762,27 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   </Select>
                   {caixaErrors.caixaId && <FormHelperText>{caixaErrors.caixaId}</FormHelperText>}
                 </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  variant="filled"
+                  label="Quantidade Faturada"
+                  value="0 kz" // Valor inicial fixo
+                  InputProps={{ readOnly: true }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  variant="filled"
+                  label="Hora Atual"
+                  value={new Intl.DateTimeFormat('pt-BR', {
+                    dateStyle: 'short',
+                    timeStyle: 'short',
+                  }).format(new Date())} // Mostra a hora atual
+                  InputProps={{ readOnly: true }}
+                />
               </Grid>
             </Grid>
 
@@ -794,7 +821,10 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                     Estado
                   </TableCell>
                   <TableCell sx={{ fontWeight: 'bold', fontSize: { xs: 12, sm: 14 } }}>
-                    Abertura
+                    Hora Atual
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', fontSize: { xs: 12, sm: 14 } }}>
+                    Quantidade Faturada
                   </TableCell>
                   <TableCell sx={{ fontWeight: 'bold', fontSize: { xs: 12, sm: 14 } }}>
                     Fechamento
@@ -821,7 +851,11 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                       {new Intl.DateTimeFormat('pt-BR', {
                         dateStyle: 'short',
                         timeStyle: 'short',
-                      }).format(new Date(item.horarioAbertura))}
+                      }).format(new Date())}{' '}
+                      {/* Mostra a hora atual */}
+                    </TableCell>
+                    <TableCell sx={{ fontSize: { xs: 12, sm: 14 } }}>
+                      {item.quantidadaFaturada.toFixed(2)} kz
                     </TableCell>
                     <TableCell sx={{ fontSize: { xs: 12, sm: 14 } }}>
                       {item.horarioFechamento
