@@ -32,6 +32,7 @@ import {
   ProdutoAbaixoMinimo,
   FuncionarioCaixaComNome,
   PeriodoMaisVendidoPorProduto,
+  Estoque,
 } from '../types/models';
 
 // Stock Entry
@@ -623,20 +624,21 @@ export const deleteAlert = async (id: string): Promise<void> => {
 };
 
 // Stock Management
-export const getStock = async (): Promise<EstoqueAtual[]> => {
+export const getStock = async (): Promise<Estoque[]> => {
   const response = await api.get(`/estoque`);
   return response.data;
 };
 
-export const updateStock = async (
-  idProduto: string,
-  data: Partial<EstoqueAtual>,
-): Promise<EstoqueAtual> => {
+export const createStock = async (data: Estoque): Promise<Estoque> => {
+  const response = await api.post(`/estoque`, data);
+  return response.data;
+};
+export const updateStock = async (idProduto: string, data: Partial<Estoque>): Promise<Estoque> => {
   const response = await api.put(`/estoque/${idProduto}`, data);
   return response.data;
 };
 
-export const getStockByProduct = async (idProduto: string): Promise<EstoqueAtual> => {
+export const getStockByProduct = async (idProduto: string): Promise<Estoque> => {
   const response = await api.get(`/estoque/${idProduto}`);
   return response.data;
 };

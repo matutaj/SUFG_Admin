@@ -216,6 +216,13 @@ export interface FuncionarioCaixa {
   updatedAt?: string;
 }
 
+export interface Estoque {
+  id?: string;
+  id_produto: string;
+  quantidadeAtual: string;
+  lote: string;
+  dataValidadeLote: Date;
+}
 export interface Alerta {
   id?: string;
   id_caixa: string;

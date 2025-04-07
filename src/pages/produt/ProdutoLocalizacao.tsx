@@ -33,6 +33,7 @@ import {
   Seccao,
   Prateleira,
   Corredor,
+  Estoque,
 } from '../../types/models';
 import {
   getProducts,
@@ -44,6 +45,8 @@ import {
   getSections,
   getShelves,
   getCorridors,
+  getStock,
+  updateStock,
 } from '../../api/methods';
 
 interface CollapsedItemProps {
@@ -84,6 +87,15 @@ const confirmModalStyle = {
   borderRadius: 1,
 };
 
+// Função para verificar se a localização é uma loja
+const isStoreLocation = (locationId: string, locations: Localizacao[]) => {
+  const location = locations.find((loc) => loc.id === locationId);
+  return (
+    location?.nomeLocalizacao.toLocaleLowerCase() === 'loja' ||
+    location?.nomeLocalizacao.toLowerCase().includes('loja')
+  );
+};
+
 const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const [openLocationModal, setOpenLocationModal] = React.useState(false);
   const [openConfirmModal, setOpenConfirmModal] = React.useState(false);
@@ -96,8 +108,8 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const [idCorredor, setIdCorredor] = React.useState('');
   const [quantidadeProduto, setQuantidadeProduto] = React.useState(0);
   const [quantidadeMinimaProduto, setQuantidadeMinimaProduto] = React.useState(0);
-  const [selectedLocationType, setSelectedLocationType] = React.useState<string>(''); // Filtro de localização
-  const [searchQuery, setSearchQuery] = React.useState<string>(''); // Pesquisa por nome do produto
+  const [selectedLocationType, setSelectedLocationType] = React.useState<string>('');
+  const [searchQuery, setSearchQuery] = React.useState<string>('');
   const [products, setProducts] = React.useState<Produto[]>([]);
   const [locations, setLocations] = React.useState<Localizacao[]>([]);
   const [sections, setSections] = React.useState<Seccao[]>([]);
@@ -107,6 +119,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const [filteredProductLocations, setFilteredProductLocations] = React.useState<
     ProdutoLocalizacao[]
   >([]);
+  const [stock, setStock] = React.useState<Estoque[]>([]);
   const [errors, setErrors] = React.useState<{
     idProdutoLocalizacao?: string;
     idLocalizacao?: string;
@@ -197,6 +210,16 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     }
   };
 
+  const fetchStock = async () => {
+    try {
+      const data = await getStock();
+      setStock(data);
+    } catch (error) {
+      console.error('Erro ao buscar estoque:', error);
+      setAlert({ severity: 'error', message: 'Erro ao carregar estoque!' });
+    }
+  };
+
   const fetchProductLocations = async () => {
     try {
       setLoading(true);
@@ -217,6 +240,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     fetchSections();
     fetchShelves();
     fetchCorridors();
+    fetchStock();
     fetchProductLocations();
   }, []);
 
@@ -237,6 +261,27 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     setFilteredProductLocations(filtered);
   }, [selectedLocationType, searchQuery, productLocations, products]);
 
+  const getStockForProduct = (productId: string): number => {
+    const stockItem = stock.find((s) => s.id_produto === productId);
+    return stockItem ? Number(stockItem.quantidadeAtual) : 0;
+  };
+
+  const updateStockQuantity = async (productId: string, quantityChange: number) => {
+    const stockItem = stock.find((s) => s.id_produto === productId);
+    if (!stockItem) throw new Error('Item de estoque não encontrado.');
+
+    const newQuantity = Number(stockItem.quantidadeAtual) + quantityChange;
+    if (newQuantity < 0) throw new Error('Estoque não pode ser negativo.');
+
+    const updatedStock: Estoque = {
+      ...stockItem,
+      quantidadeAtual: String(newQuantity),
+    };
+
+    await updateStock(productId, updatedStock);
+    await fetchStock();
+  };
+
   const handleAddProductLocation = async () => {
     const newErrors: {
       idProdutoLocalizacao?: string;
@@ -256,6 +301,11 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     if (quantidadeMinimaProduto < 0)
       newErrors.quantidadeMinimaProduto = 'A quantidade mínima não pode ser negativa.';
 
+    const availableStock = getStockForProduct(idProdutoLocalizacao);
+    if (quantidadeProduto > availableStock) {
+      newErrors.quantidadeProduto = 'Quantidade excedida no estoque!';
+    }
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -272,24 +322,46 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         quantidadeProduto,
         quantidadeMinimaProduto,
       };
+
       if (editLocationId) {
-        await updateProductLocation(editLocationId, locationData);
-        setAlert({
-          severity: 'success',
-          message: 'Localização do produto atualizada com sucesso!',
-        });
+        const oldLocation = productLocations.find((loc) => loc.id === editLocationId);
+        if (oldLocation) {
+          const quantityDifference = quantidadeProduto - oldLocation.quantidadeProduto;
+          await updateProductLocation(editLocationId, locationData);
+          if (isStoreLocation(idLocalizacao, locations)) {
+            await updateStockQuantity(idProdutoLocalizacao, -quantityDifference);
+          } else {
+            await updateStockQuantity(idProdutoLocalizacao, -quantityDifference);
+          }
+        }
       } else {
         await createProductLocation(locationData);
-        setAlert({
-          severity: 'success',
-          message: 'Localização do produto cadastrada com sucesso!',
-        });
+        if (isStoreLocation(idLocalizacao, locations)) {
+          const warehouseStock = getStockForProduct(idProdutoLocalizacao);
+          if (warehouseStock >= quantidadeProduto) {
+            await updateStockQuantity(idProdutoLocalizacao, -quantidadeProduto);
+          } else {
+            throw new Error('Estoque insuficiente no armazém para transferência.');
+          }
+        } else {
+          await updateStockQuantity(idProdutoLocalizacao, -quantidadeProduto);
+        }
       }
+
+      setAlert({
+        severity: 'success',
+        message: editLocationId
+          ? 'Localização atualizada com sucesso!'
+          : 'Localização cadastrada com sucesso!',
+      });
       await fetchProductLocations();
+      await fetchStock();
       handleCloseLocation();
     } catch (error) {
       console.error('Erro ao salvar localização do produto:', error);
-      setErrors({ idProdutoLocalizacao: 'Erro ao salvar. Tente novamente.' });
+      setErrors({
+        idProdutoLocalizacao: (error as Error).message || 'Erro ao salvar. Tente novamente.',
+      });
     } finally {
       setLoading(false);
     }
@@ -311,19 +383,33 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   };
 
   const handleDeleteLocation = async () => {
-    if (locationToDelete) {
-      try {
-        setLoading(true);
+    if (!locationToDelete) return;
+
+    try {
+      setLoading(true);
+      const locationToRemove = productLocations.find((loc) => loc.id === locationToDelete);
+      if (locationToRemove) {
+        if (isStoreLocation(locationToRemove.id_localizacao, locations)) {
+          await updateStockQuantity(
+            locationToRemove.id_produto,
+            locationToRemove.quantidadeProduto,
+          );
+        } else {
+          await updateStockQuantity(
+            locationToRemove.id_produto,
+            locationToRemove.quantidadeProduto,
+          );
+        }
         await deleteProductLocation(locationToDelete);
         await fetchProductLocations();
         setAlert({ severity: 'success', message: 'Localização do produto excluída com sucesso!' });
-      } catch (error) {
-        console.error('Erro ao excluir localização do produto:', error);
-        setAlert({ severity: 'error', message: 'Erro ao excluir localização!' });
-      } finally {
-        setLoading(false);
-        handleCloseConfirmModal();
       }
+    } catch (error) {
+      console.error('Erro ao excluir localização do produto:', error);
+      setAlert({ severity: 'error', message: 'Erro ao excluir localização!' });
+    } finally {
+      setLoading(false);
+      handleCloseConfirmModal();
     }
   };
 
@@ -391,7 +477,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 onChange={(e) => setIdProdutoLocalizacao(e.target.value as string)}
                 displayEmpty
                 fullWidth
-                error={Boolean(errors.idProdutoLocalizacao)}
+                error={!!errors.idProdutoLocalizacao} // Correção aqui
               >
                 <MenuItem value="" disabled>
                   Selecione um Produto
@@ -412,7 +498,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 onChange={(e) => setIdLocalizacao(e.target.value as string)}
                 displayEmpty
                 fullWidth
-                error={Boolean(errors.idLocalizacao)}
+                error={!!errors.idLocalizacao} // Correção aqui
               >
                 <MenuItem value="" disabled>
                   Selecione uma Localização
@@ -433,7 +519,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 onChange={(e) => setIdSeccao(e.target.value as string)}
                 displayEmpty
                 fullWidth
-                error={Boolean(errors.idSeccao)}
+                error={!!errors.idSeccao} // Correção aqui
               >
                 <MenuItem value="" disabled>
                   Selecione uma Seção
@@ -452,7 +538,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 onChange={(e) => setIdPrateleira(e.target.value as string)}
                 displayEmpty
                 fullWidth
-                error={Boolean(errors.idPrateleira)}
+                error={!!errors.idPrateleira} // Correção aqui
               >
                 <MenuItem value="" disabled>
                   Selecione uma Prateleira
@@ -471,7 +557,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 onChange={(e) => setIdCorredor(e.target.value as string)}
                 displayEmpty
                 fullWidth
-                error={Boolean(errors.idCorredor)}
+                error={!!errors.idCorredor} // Correção aqui
               >
                 <MenuItem value="" disabled>
                   Selecione um Corredor
@@ -490,7 +576,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 type="number"
                 value={quantidadeProduto}
                 onChange={(e) => setQuantidadeProduto(Number(e.target.value) || 0)}
-                error={Boolean(errors.quantidadeProduto)}
+                error={!!errors.quantidadeProduto} // Correção aqui
                 helperText={errors.quantidadeProduto}
                 disabled={loading}
                 fullWidth
@@ -502,7 +588,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 type="number"
                 value={quantidadeMinimaProduto}
                 onChange={(e) => setQuantidadeMinimaProduto(Number(e.target.value) || 0)}
-                error={Boolean(errors.quantidadeMinimaProduto)}
+                error={!!errors.quantidadeMinimaProduto} // Correção aqui
                 helperText={errors.quantidadeMinimaProduto}
                 disabled={loading}
                 fullWidth

@@ -9,11 +9,11 @@ import {
   Card,
   CardContent,
   Table,
-  TableBody,
-  TableCell,
   TableContainer,
   TableHead,
   TableRow,
+  TableCell,
+  TableBody,
   IconButton,
   Modal,
   Grid,
@@ -28,7 +28,7 @@ import IconifyIcon from 'components/base/IconifyIcon';
 import Delete from 'components/icons/factor/Delete';
 import Edit from 'components/icons/factor/Edit';
 import React from 'react';
-import { EntradaEstoque, Produto, Fornecedor, Funcionario } from 'types/models';
+import { EntradaEstoque, Produto, Fornecedor, Funcionario, Estoque } from 'types/models';
 import {
   getStockEntries,
   createStockEntry,
@@ -37,6 +37,8 @@ import {
   getProducts,
   getSuppliers,
   getEmployees,
+  getStock,
+  createStock,
 } from '../../api/methods';
 
 interface CollapsedItemProps {
@@ -66,6 +68,7 @@ const style = {
 
 const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
   const [openModal, setOpenModal] = React.useState(false);
+  const [manageEntryModal, setManageEntryModal] = React.useState(false); // Modal for managing all entries
   const [isEditing, setIsEditing] = React.useState(false);
   const [editId, setEditId] = React.useState<string | null>(null);
   const [form, setForm] = React.useState<Partial<EntradaEstoque>>({
@@ -79,11 +82,14 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
     dataValidadeLote: '',
   });
   const [stockEntries, setStockEntries] = React.useState<EntradaEstoque[]>([]);
+  const [currentStock, setCurrentStock] = React.useState<Estoque[]>([]);
   const [products, setProducts] = React.useState<Produto[]>([]);
   const [suppliers, setSuppliers] = React.useState<Fornecedor[]>([]);
   const [employees, setEmployees] = React.useState<Funcionario[]>([]);
   const [errors, setErrors] = React.useState<{ [key: string]: string }>({});
   const [fetchError, setFetchError] = React.useState<string | null>(null);
+  const [filterStartDate, setFilterStartDate] = React.useState<string>(''); // Data inicial do filtro
+  const [filterEndDate, setFilterEndDate] = React.useState<string>(''); // Data final do filtro
 
   React.useEffect(() => {
     fetchData();
@@ -91,41 +97,25 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const fetchData = async () => {
     try {
-      console.log('Iniciando busca de dados...');
+      const [entries, stock, productsData, suppliersData, employeesData] = await Promise.all([
+        getStockEntries(),
+        getStock(),
+        getProducts(),
+        getSuppliers(),
+        getEmployees(),
+      ]);
 
-      // Busca de entradas de estoque
-      const entries = await getStockEntries();
-      console.log('Entradas de Estoque:', entries);
+      const transformedStock: Estoque[] = stock.map((item) => ({
+        id_produto: item.id_produto,
+        quantidadeAtual: item.quantidadeAtual || '0',
+        lote: item.lote || '',
+        dataValidadeLote: new Date(item.dataValidadeLote),
+      }));
+
       setStockEntries(entries);
-
-      // Busca de produtos (já funcionando)
-      const productsData = await getProducts();
-      console.log('Produtos retornados:', productsData);
+      setCurrentStock(transformedStock);
       setProducts(productsData);
-
-      // Busca de fornecedores (foco da depuração)
-      try {
-        const suppliersData = await getSuppliers();
-        console.log('Fornecedores retornados (raw):', suppliersData);
-        console.log('Número de fornecedores:', suppliersData.length);
-        if (suppliersData.length > 0) {
-          console.log('Estrutura do primeiro fornecedor:', suppliersData[0]);
-          console.log('Campo nomeFornecedor presente?', 'nomeFornecedor' in suppliersData[0]);
-        }
-        // Verifica se os dados têm a estrutura esperada
-        const mappedSuppliers = suppliersData.map((s) => ({
-          ...s,
-          nomeFornecedor: s.nomeFornecedor || s.nomeFornecedor || 'Fornecedor sem nome', // Fallback para 'name'
-        }));
-        console.log('Fornecedores mapeados:', mappedSuppliers);
-        setSuppliers(mappedSuppliers);
-      } catch (supplierError) {
-        console.error('Erro específico ao buscar fornecedores:', supplierError);
-        setFetchError('Erro ao carregar fornecedores. Verifique o console.');
-      }
-
-      // Busca de funcionários (já funcionando)
-      const employeesData = await getEmployees();
+      setSuppliers(suppliersData);
       setEmployees(employeesData);
     } catch (error) {
       console.error('Erro geral ao buscar dados:', error);
@@ -133,11 +123,11 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
     }
   };
 
+  const isProductInStock = (entryIdProduto: string) => {
+    return currentStock.some((stockItem) => stockItem.id_produto === entryIdProduto);
+  };
+
   const handleOpen = () => {
-    console.log('Abrindo modal...');
-    console.log('Produtos no estado:', products);
-    console.log('Fornecedores no estado:', suppliers);
-    console.log('Funcionários no estado:', employees);
     setIsEditing(false);
     setEditId(null);
     setForm({
@@ -154,6 +144,11 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
   };
 
   const handleClose = () => setOpenModal(false);
+  const handleManageEntryClose = () => {
+    setManageEntryModal(false);
+    setFilterStartDate(''); // Resetar filtros ao fechar
+    setFilterEndDate(''); // Resetar filtros ao fechar
+  };
 
   const handleTextFieldChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -173,15 +168,21 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const handleSelectChange = (e: SelectChangeEvent<string>) => {
     const { name, value } = e.target;
-    if (name) {
-      setForm((prev) => ({
-        ...prev,
-        [name]: value,
-      }));
-      if (errors[name]) {
-        setErrors((prev) => ({ ...prev, [name]: '' }));
-      }
+    setForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+    if (errors[name]) {
+      setErrors((prev) => ({ ...prev, [name]: '' }));
     }
+  };
+
+  const handleFilterStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFilterStartDate(e.target.value);
+  };
+
+  const handleFilterEndDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFilterEndDate(e.target.value);
   };
 
   const validateForm = () => {
@@ -256,6 +257,38 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
     setOpenModal(true);
   };
 
+  const handleAddToStock = async (entry: EntradaEstoque) => {
+    try {
+      const stockData: Estoque = {
+        id_produto: entry.id_produto,
+        quantidadeAtual: entry.quantidadeRecebida,
+        lote: entry.lote,
+        dataValidadeLote: new Date(entry.dataValidadeLote),
+      };
+      await createStock(stockData);
+      alert('Produto adicionado ao estoque com sucesso!');
+      fetchData(); // Refresh data
+    } catch (error) {
+      console.error('Error adding to stock:', error);
+      alert('Erro ao adicionar ao estoque');
+    }
+  };
+
+  const handleManageEntries = () => {
+    setManageEntryModal(true);
+  };
+
+  // Função para filtrar entradas com base nas datas
+  const filteredEntries = stockEntries.filter((entry) => {
+    const entryDate = new Date(entry.dataEntrada);
+    const startDate = filterStartDate ? new Date(filterStartDate) : null;
+    const endDate = filterEndDate ? new Date(filterEndDate) : null;
+
+    if (startDate && entryDate < startDate) return false;
+    if (endDate && entryDate > endDate) return false;
+    return true;
+  });
+
   return (
     <>
       {fetchError && (
@@ -271,15 +304,25 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
             alignItems="center"
             sx={{ width: '100%', mb: 2 }}
           >
-            <Typography variant="h5">Entradas de Estoque</Typography>
-            <Button
-              variant="contained"
-              color="secondary"
-              onClick={handleOpen}
-              startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
-            >
-              <Typography variant="body2">Adicionar</Typography>
-            </Button>
+            <Typography variant="h5">Gestão de Estoque</Typography>
+            <Stack direction="row" spacing={2}>
+              <Button
+                variant="contained"
+                color="secondary"
+                onClick={handleOpen}
+                startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
+              >
+                <Typography variant="body2">Adicionar Entrada</Typography>
+              </Button>
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={handleManageEntries}
+                startIcon={<IconifyIcon icon="heroicons-solid:eye" />}
+              >
+                <Typography variant="body2">Gerenciar Entradas</Typography>
+              </Button>
+            </Stack>
           </Stack>
         </Collapse>
       </Paper>
@@ -312,15 +355,11 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
                   <MenuItem value="" disabled>
                     Selecione um produto
                   </MenuItem>
-                  {products.length > 0 ? (
-                    products.map((product) => (
-                      <MenuItem key={product.id} value={product.id}>
-                        {product.nomeProduto}
-                      </MenuItem>
-                    ))
-                  ) : (
-                    <MenuItem disabled>Nenhum produto disponível</MenuItem>
-                  )}
+                  {products.map((product) => (
+                    <MenuItem key={product.id} value={product.id}>
+                      {product.nomeProduto}
+                    </MenuItem>
+                  ))}
                 </Select>
                 {errors.id_produto && <Typography color="error">{errors.id_produto}</Typography>}
               </FormControl>
@@ -376,15 +415,11 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
                   <MenuItem value="" disabled>
                     Selecione um fornecedor
                   </MenuItem>
-                  {suppliers.length > 0 ? (
-                    suppliers.map((supplier) => (
-                      <MenuItem key={supplier.id} value={supplier.id}>
-                        {supplier.nomeFornecedor}
-                      </MenuItem>
-                    ))
-                  ) : (
-                    <MenuItem disabled>Nenhum fornecedor disponível</MenuItem>
-                  )}
+                  {suppliers.map((supplier) => (
+                    <MenuItem key={supplier.id} value={supplier.id}>
+                      {supplier.nomeFornecedor}
+                    </MenuItem>
+                  ))}
                 </Select>
                 {errors.id_fornecedor && (
                   <Typography color="error">{errors.id_fornecedor}</Typography>
@@ -402,15 +437,11 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
                   <MenuItem value="" disabled>
                     Selecione um funcionário
                   </MenuItem>
-                  {employees.length > 0 ? (
-                    employees.map((employee) => (
-                      <MenuItem key={employee.id} value={employee.id}>
-                        {employee.nomeFuncionario}
-                      </MenuItem>
-                    ))
-                  ) : (
-                    <MenuItem disabled>Nenhum funcionário disponível</MenuItem>
-                  )}
+                  {employees.map((employee) => (
+                    <MenuItem key={employee.id} value={employee.id}>
+                      {employee.nomeFuncionario}
+                    </MenuItem>
+                  ))}
                 </Select>
                 {errors.id_funcionario && (
                   <Typography color="error">{errors.id_funcionario}</Typography>
@@ -457,19 +488,58 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
         </Box>
       </Modal>
 
-      <Card sx={{ maxWidth: '100%', margin: 'auto', mt: 4 }}>
-        <CardContent>
-          <TableContainer component={Paper}>
+      {/* Modal for Managing All Stock Entries (Vertical Listing) with Date Filter */}
+      <Modal open={manageEntryModal} onClose={handleManageEntryClose}>
+        <Box sx={style}>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            sx={{ width: '100%', mb: 2 }}
+          >
+            <Typography variant="h5">Gerenciar Todas as Entradas</Typography>
+            <Button onClick={handleManageEntryClose} variant="outlined" color="error">
+              Fechar
+            </Button>
+          </Stack>
+
+          {/* Filtros por data */}
+          <Grid container spacing={2} sx={{ width: '100%', mb: 2 }}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Data Inicial"
+                type="date"
+                variant="filled"
+                fullWidth
+                value={filterStartDate}
+                onChange={handleFilterStartDateChange}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Data Final"
+                type="date"
+                variant="filled"
+                fullWidth
+                value={filterEndDate}
+                onChange={handleFilterEndDateChange}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+          </Grid>
+
+          <TableContainer component={Paper} sx={{ width: '100%' }}>
             <Table>
               <TableHead>
                 <TableRow>
                   {[
                     'Produto',
-                    'Quantidade',
-                    'Data de Entrada',
-                    'Custo Unitário',
-                    'Fornecedor',
-                    'Funcionário',
+                    'Quanti.',
+                    'D. Entrada',
+                    'C. Unitário',
+                    'Lote',
+                    'Validade',
                     'Ações',
                   ].map((header) => (
                     <TableCell key={header}>
@@ -479,37 +549,93 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {stockEntries.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell>
-                      {products.find((p) => p.id === item.id_produto)?.nomeProduto ||
-                        item.id_produto}
-                    </TableCell>
-                    <TableCell>{item.quantidadeRecebida}</TableCell>
-                    <TableCell>{new Date(item.dataEntrada).toLocaleDateString('pt-BR')}</TableCell>
-                    <TableCell>{item.custoUnitario}</TableCell>
-                    <TableCell>
-                      {suppliers.find((s) => s.id === item.id_fornecedor)?.nomeFornecedor ||
-                        item.id_fornecedor}
-                    </TableCell>
-                    <TableCell>
-                      {employees.find((e) => e.id === item.id_funcionario)?.nomeFuncionario ||
-                        item.id_funcionario}
-                    </TableCell>
-                    <TableCell align="right">
-                      <IconButton color="primary" onClick={() => handleEdit(item)}>
-                        <Edit />
-                      </IconButton>
-                      <IconButton color="error" onClick={() => handleDelete(item.id!)}>
-                        <Delete />
-                      </IconButton>
+                {filteredEntries.map((entry) => {
+                  const product = products.find((p) => p.id === entry.id_produto);
+                  if (!product) return null; // Skip if product not found
+
+                  return (
+                    <TableRow key={entry.id}>
+                      <TableCell>{product.nomeProduto}</TableCell>
+                      <TableCell>{entry.quantidadeRecebida}</TableCell>
+                      <TableCell>
+                        {new Date(entry.dataEntrada).toLocaleDateString('pt-BR')}
+                      </TableCell>
+                      <TableCell>{entry.custoUnitario}</TableCell>
+                      <TableCell>{entry.lote}</TableCell>
+                      <TableCell>
+                        {new Date(entry.dataValidadeLote).toLocaleDateString('pt-BR')}
+                      </TableCell>
+                      <TableCell align="right">
+                        <Button
+                          variant="contained"
+                          color="primary"
+                          onClick={() => handleAddToStock(entry)}
+                          disabled={isProductInStock(entry.id_produto)}
+                          sx={{ mr: 1 }}
+                        >
+                          Adicionar ao Estoque
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+                {filteredEntries.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={7} align="center">
+                      Nenhuma entrada de estoque encontrada para o período selecionado.
                     </TableCell>
                   </TableRow>
-                ))}
-                {stockEntries.length === 0 && (
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Box>
+      </Modal>
+
+      {/* Current Stock Table */}
+      <Card sx={{ maxWidth: '100%', margin: 'auto', mt: 4 }}>
+        <CardContent>
+          <Typography variant="h6">Estoque Atual</Typography>
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  {['Produto', 'Quantidade Atual', 'Lote', 'Validade do Lote', 'Ações'].map(
+                    (header) => (
+                      <TableCell key={header}>
+                        <strong>{header}</strong>
+                      </TableCell>
+                    ),
+                  )}
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {currentStock.map((item) => {
+                  const product = products.find((p) => p.id === item.id_produto);
+                  return (
+                    <TableRow key={item.id_produto}>
+                      <TableCell>{product?.nomeProduto || item.id_produto}</TableCell>
+                      <TableCell>{item.quantidadeAtual}</TableCell>
+                      <TableCell>{item.lote}</TableCell>
+                      <TableCell>{item.dataValidadeLote.toLocaleDateString('pt-BR')}</TableCell>
+                      <TableCell align="right">
+                        <IconButton
+                          color="primary"
+                          onClick={() => handleEdit(item as unknown as EntradaEstoque)}
+                        >
+                          <Edit />
+                        </IconButton>
+                        <IconButton color="error" onClick={() => handleDelete(item.id_produto)}>
+                          <Delete />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+                {currentStock.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
-                      Nenhuma entrada de estoque encontrada.
+                    <TableCell colSpan={5} align="center">
+                      Nenhum produto no estoque encontrado.
                     </TableCell>
                   </TableRow>
                 )}
