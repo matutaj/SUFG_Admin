@@ -33,7 +33,6 @@ import {
   Seccao,
   Prateleira,
   Corredor,
-  Estoque,
 } from '../../types/models';
 import {
   getProducts,
@@ -45,8 +44,7 @@ import {
   getSections,
   getShelves,
   getCorridors,
-  getStock,
-  updateStock,
+  getStockByProduct,
 } from '../../api/methods';
 
 interface CollapsedItemProps {
@@ -93,12 +91,6 @@ const isStoreLocation = (locationId: string | undefined, locations: Localizacao[
   return location?.nomeLocalizacao.toLowerCase().includes('loja') || false;
 };
 
-const isWarehouseLocation = (locationId: string | undefined, locations: Localizacao[]): boolean => {
-  if (!locationId) return false;
-  const location = locations.find((loc) => loc.id === locationId);
-  return location?.nomeLocalizacao.toLowerCase().includes('armazém') || false;
-};
-
 const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const [openLocationModal, setOpenLocationModal] = React.useState(false);
   const [openConfirmModal, setOpenConfirmModal] = React.useState(false);
@@ -111,6 +103,9 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const [idCorredor, setIdCorredor] = React.useState<string>('');
   const [quantidadeProduto, setQuantidadeProduto] = React.useState<number>(0);
   const [quantidadeMinimaProduto, setQuantidadeMinimaProduto] = React.useState<number>(0);
+  const [stockQuantity, setStockQuantity] = React.useState<number | null>(null);
+  const [warehouseQuantity, setWarehouseQuantity] = React.useState<number>(0);
+  const [remainingStoreQuantity, setRemainingStoreQuantity] = React.useState<number | null>(null);
   const [selectedLocationType, setSelectedLocationType] = React.useState<string>('');
   const [searchQuery, setSearchQuery] = React.useState<string>('');
   const [products, setProducts] = React.useState<Produto[]>([]);
@@ -122,7 +117,6 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const [filteredProductLocations, setFilteredProductLocations] = React.useState<
     ProdutoLocalizacao[]
   >([]);
-  const [stock, setStock] = React.useState<Estoque[]>([]);
   const [errors, setErrors] = React.useState<{
     idProdutoLocalizacao?: string;
     idLocalizacao?: string;
@@ -150,6 +144,9 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     setIdCorredor('');
     setQuantidadeProduto(0);
     setQuantidadeMinimaProduto(0);
+    setStockQuantity(null);
+    setWarehouseQuantity(0);
+    setRemainingStoreQuantity(null);
     setErrors({});
   };
 
@@ -163,71 +160,26 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     setLocationToDelete(null);
   };
 
-  const fetchProducts = async () => {
+  const fetchData = async () => {
     try {
       setLoading(true);
-      const data = await getProducts();
-      setProducts(data);
-    } catch (error) {
-      console.error('Erro ao buscar produtos:', error);
-      setAlert({ severity: 'error', message: 'Erro ao carregar produtos!' });
-    } finally {
-      setLoading(false);
-    }
-  };
+      const [
+        productsData,
+        locationsData,
+        sectionsData,
+        shelvesData,
+        corridorsData,
+        productLocationsData,
+      ] = await Promise.all([
+        getProducts(),
+        getLocations(),
+        getSections(),
+        getShelves(),
+        getCorridors(),
+        getProductLocations(),
+      ]);
 
-  const fetchLocations = async () => {
-    try {
-      const data = await getLocations();
-      setLocations(data);
-    } catch (error) {
-      console.error('Erro ao buscar localizações:', error);
-      setAlert({ severity: 'error', message: 'Erro ao carregar localizações!' });
-    }
-  };
-
-  const fetchSections = async () => {
-    try {
-      const data = await getSections();
-      setSections(data);
-    } catch (error) {
-      console.error('Erro ao buscar seções:', error);
-    }
-  };
-
-  const fetchShelves = async () => {
-    try {
-      const data = await getShelves();
-      setShelves(data);
-    } catch (error) {
-      console.error('Erro ao buscar prateleiras:', error);
-    }
-  };
-
-  const fetchCorridors = async () => {
-    try {
-      const data = await getCorridors();
-      setCorridors(data);
-    } catch (error) {
-      console.error('Erro ao buscar corredores:', error);
-    }
-  };
-
-  const fetchStock = async () => {
-    try {
-      const data = await getStock();
-      setStock(data);
-    } catch (error) {
-      console.error('Erro ao buscar estoque:', error);
-      setAlert({ severity: 'error', message: 'Erro ao carregar estoque!' });
-    }
-  };
-
-  const fetchProductLocations = async () => {
-    try {
-      setLoading(true);
-      const data = await getProductLocations();
-      const cleanedData = data.map((loc) => ({
+      const cleanedProductLocations = productLocationsData.map((loc) => ({
         ...loc,
         id_produto: loc.id_produto ?? '',
         id_localizacao: loc.id_localizacao ?? '',
@@ -237,24 +189,24 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         quantidadeProduto: loc.quantidadeProduto ?? 0,
         quantidadeMinimaProduto: loc.quantidadeMinimaProduto ?? 0,
       }));
-      setProductLocations(cleanedData);
-      setFilteredProductLocations(cleanedData);
+
+      setProducts(productsData);
+      setLocations(locationsData);
+      setSections(sectionsData);
+      setShelves(shelvesData);
+      setCorridors(corridorsData);
+      setProductLocations(cleanedProductLocations);
+      setFilteredProductLocations(cleanedProductLocations);
     } catch (error) {
-      console.error('Erro ao buscar localizações de produtos:', error);
-      setAlert({ severity: 'error', message: 'Erro ao carregar localizações de produtos!' });
+      console.error('Erro ao carregar dados:', error);
+      setAlert({ severity: 'error', message: 'Erro ao carregar dados!' });
     } finally {
       setLoading(false);
     }
   };
 
   React.useEffect(() => {
-    fetchProducts();
-    fetchLocations();
-    fetchSections();
-    fetchShelves();
-    fetchCorridors();
-    fetchStock();
-    fetchProductLocations();
+    fetchData();
   }, []);
 
   React.useEffect(() => {
@@ -274,92 +226,37 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     setFilteredProductLocations(filtered);
   }, [selectedLocationType, searchQuery, productLocations, products]);
 
-  const getStockForProduct = (productId: string): number => {
-    const stockItem = stock.find((s) => s.id_produto === productId);
-    return stockItem ? Number(stockItem.quantidadeAtual) || 0 : 0;
-  };
+  React.useEffect(() => {
+    const fetchStockAndWarehouseData = async () => {
+      if (idProdutoLocalizacao) {
+        const stock = await getStockByProduct(idProdutoLocalizacao).catch(() => null);
+        const totalStock = stock ? Number(stock.quantidadeAtual) : 0;
+        setStockQuantity(totalStock);
 
-  const getWarehouseStock = (productId: string): number => {
-    const warehouseLocation = productLocations.find(
-      (loc) => loc.id_produto === productId && isWarehouseLocation(loc.id_localizacao, locations),
-    );
-    return warehouseLocation
-      ? (warehouseLocation.quantidadeProduto ?? 0)
-      : getStockForProduct(productId);
-  };
+        const warehouseQty = productLocations
+          .filter(
+            (loc) =>
+              loc.id_produto === idProdutoLocalizacao &&
+              !isStoreLocation(loc.id_localizacao, locations),
+          )
+          .reduce((sum, loc) => sum + (loc.quantidadeProduto ?? 0), 0);
+        setWarehouseQuantity(warehouseQty);
 
-  const getStoreStock = (productId: string): number => {
-    const storeLocation = productLocations.find(
-      (loc) => loc.id_produto === productId && isStoreLocation(loc.id_localizacao, locations),
-    );
-    return storeLocation ? (storeLocation.quantidadeProduto ?? 0) : 0;
-  };
-
-  const updateStockQuantity = async (productId: string, newStock: number) => {
-    if (!productId) throw new Error('ID do produto é obrigatório.');
-    const stockItem = stock.find((s) => s.id_produto === productId);
-
-    if (!stockItem) throw new Error('Item de estoque não encontrado.');
-
-    if (newStock < 0) throw new Error('Estoque total não pode ser negativo.');
-
-    const updatedStock: Estoque = {
-      ...stockItem,
-      quantidadeAtual: String(newStock),
+        const remaining = totalStock - warehouseQty;
+        setRemainingStoreQuantity(remaining >= 0 ? remaining : 0);
+      } else {
+        setStockQuantity(null);
+        setWarehouseQuantity(0);
+        setRemainingStoreQuantity(null);
+      }
     };
-    await updateStock(productId, updatedStock);
-    await fetchStock();
-  };
+    fetchStockAndWarehouseData();
+  }, [idProdutoLocalizacao, productLocations, locations]);
 
-  const updateLocationQuantity = async (locationId: string, newQuantity: number) => {
-    const location = productLocations.find((loc) => loc.id === locationId);
-    if (!location) throw new Error('Localização não encontrada.');
-
-    if (newQuantity < 0) throw new Error('Quantidade na localização não pode ser negativa.');
-
-    const updatedLocation: ProdutoLocalizacao = {
-      ...location,
-      quantidadeProduto: newQuantity,
-    };
-    await updateProductLocation(locationId, updatedLocation);
-    await fetchProductLocations();
-  };
-
-  const transferFromWarehouseToStore = async (productId: string, quantity: number) => {
-    const warehouseLocation = productLocations.find(
-      (loc) => loc.id_produto === productId && isWarehouseLocation(loc.id_localizacao, locations),
-    );
-    const storeLocation = productLocations.find(
-      (loc) => loc.id_produto === productId && isStoreLocation(loc.id_localizacao, locations),
-    );
-
-    if (!warehouseLocation) throw new Error('Localização do armazém não encontrada.');
-    const currentWarehouse = warehouseLocation.quantidadeProduto ?? 0;
-
-    if (quantity > currentWarehouse)
-      throw new Error('Quantidade insuficiente no armazém para transferência.');
-
-    // Reduzir do armazém
-    await updateLocationQuantity(warehouseLocation.id ?? '', currentWarehouse - quantity);
-
-    // Adicionar ou atualizar na loja
-    if (storeLocation) {
-      const currentStore = storeLocation.quantidadeProduto ?? 0;
-      await updateLocationQuantity(storeLocation.id ?? '', currentStore + quantity);
-    } else {
-      const newStoreLocation: ProdutoLocalizacao = {
-        id_produto: productId,
-        id_localizacao: locations.find((loc) => isStoreLocation(loc.id, locations))?.id ?? '',
-        id_seccao: sections[0]?.id || '',
-        id_prateleira: shelves[0]?.id || '',
-        id_corredor: corridors[0]?.id || '',
-        quantidadeProduto: quantity,
-        quantidadeMinimaProduto: 0,
-      };
-      await createProductLocation(newStoreLocation);
-    }
-
-    await fetchProductLocations();
+  const getTotalStockInLocations = (productId: string): number => {
+    return productLocations
+      .filter((loc) => loc.id_produto === productId)
+      .reduce((sum, loc) => sum + (loc.quantidadeProduto ?? 0), 0);
   };
 
   const handleAddProductLocation = async () => {
@@ -381,16 +278,34 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     if (quantidadeProduto < 0) newErrors.quantidadeProduto = 'A quantidade não pode ser negativa.';
     if (quantidadeMinimaProduto < 0)
       newErrors.quantidadeMinimaProduto = 'A quantidade mínima não pode ser negativa.';
+    if (quantidadeProduto < quantidadeMinimaProduto)
+      newErrors.quantidadeProduto = `A quantidade não pode ser inferior ao limite mínimo (${quantidadeMinimaProduto})!`;
 
-    const totalStock = getStockForProduct(idProdutoLocalizacao);
-    const warehouseStock = getWarehouseStock(idProdutoLocalizacao);
-    //const storeStock = getStoreStock(idProdutoLocalizacao);
+    const stockItem = await getStockByProduct(idProdutoLocalizacao).catch(() => null);
+    const totalStock = Number(stockItem?.quantidadeAtual) || 0;
 
-    if (isStoreLocation(idLocalizacao, locations) && quantidadeProduto > totalStock) {
-      newErrors.quantidadeProduto = 'Quantidade excedida no estoque total!';
-    }
-    if (isWarehouseLocation(idLocalizacao, locations) && quantidadeProduto > totalStock) {
-      newErrors.quantidadeProduto = 'Quantidade excedida no estoque total!';
+    if (!stockItem) {
+      newErrors.idProdutoLocalizacao = 'Este produto não possui estoque registrado.';
+    } else {
+      const currentLocationQty = editLocationId
+        ? productLocations.find((loc) => loc.id === editLocationId)?.quantidadeProduto || 0
+        : 0;
+      const currentTotal = getTotalStockInLocations(idProdutoLocalizacao);
+      const newTotal = currentTotal - currentLocationQty + quantidadeProduto;
+
+      if (isStoreLocation(idLocalizacao, locations)) {
+        // Para "loja": permitir até o estoque total se houver quantidade no armazém
+        if (newTotal > totalStock) {
+          newErrors.quantidadeProduto = `Quantidade excede o estoque total disponível (${totalStock})!`;
+        } else if (remainingStoreQuantity === 0 && quantidadeProduto > currentLocationQty) {
+          newErrors.quantidadeProduto = 'Não há estoque disponível para adicionar mais na loja!';
+        }
+      } else {
+        // Para "armazém": permitir até o limite do estoque total
+        if (newTotal > totalStock) {
+          newErrors.quantidadeProduto = `Quantidade excede o estoque total disponível (${totalStock})!`;
+        }
+      }
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -411,47 +326,25 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         id: editLocationId || undefined,
       };
 
+      let updatedLocations: ProdutoLocalizacao[];
       if (editLocationId) {
-        const oldLocation = productLocations.find((loc) => loc.id === editLocationId);
-        if (oldLocation && oldLocation.id_produto) {
-          const oldQuantity = oldLocation.quantidadeProduto ?? 0;
-          const quantityDifference = quantidadeProduto - oldQuantity;
-
-          if (isStoreLocation(idLocalizacao, locations)) {
-            // Ajustar o estoque total ao editar a loja
-            await updateLocationQuantity(editLocationId, quantidadeProduto);
-            const newTotalStock = totalStock - quantityDifference;
-            await updateStockQuantity(idProdutoLocalizacao, newTotalStock);
-          } else if (isWarehouseLocation(idLocalizacao, locations)) {
-            // Apenas atualizar a localização do armazém
-            await updateLocationQuantity(editLocationId, quantidadeProduto);
-          }
-        }
+        await updateProductLocation(editLocationId, locationData);
+        updatedLocations = productLocations.map((loc) =>
+          loc.id === editLocationId ? locationData : loc,
+        );
       } else {
-        if (isStoreLocation(idLocalizacao, locations)) {
-          if (warehouseStock >= quantidadeProduto) {
-            // Transferir do armazém para a loja
-            await transferFromWarehouseToStore(idProdutoLocalizacao, quantidadeProduto);
-          } else {
-            // Criar nova localização na loja e ajustar estoque total
-            await createProductLocation(locationData);
-            const newTotalStock = totalStock - quantidadeProduto;
-            await updateStockQuantity(idProdutoLocalizacao, newTotalStock);
-          }
-        } else if (isWarehouseLocation(idLocalizacao, locations)) {
-          // Criar nova localização no armazém
-          await createProductLocation(locationData);
-        }
+        const newLocation = await createProductLocation(locationData);
+        updatedLocations = [...productLocations, newLocation];
       }
 
+      setProductLocations(updatedLocations);
+      setFilteredProductLocations(updatedLocations);
       setAlert({
         severity: 'success',
         message: editLocationId
           ? 'Localização atualizada com sucesso!'
           : 'Localização cadastrada com sucesso!',
       });
-      await fetchProductLocations();
-      await fetchStock();
       handleCloseLocation();
     } catch (error) {
       console.error('Erro ao salvar localização do produto:', error);
@@ -487,19 +380,14 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     try {
       setLoading(true);
       const locationToRemove = productLocations.find((loc) => loc.id === locationToDelete);
-      if (locationToRemove && locationToRemove.id_produto && locationToRemove.quantidadeProduto) {
-        const totalStock = getStockForProduct(locationToRemove.id_produto);
-        if (isStoreLocation(locationToRemove.id_localizacao, locations)) {
-          // Devolver a quantidade ao estoque total ao excluir da loja
-          const newTotalStock = totalStock + locationToRemove.quantidadeProduto;
-          await updateStockQuantity(locationToRemove.id_produto, newTotalStock);
-        }
-        await deleteProductLocation(locationToDelete);
-        await fetchProductLocations();
-        setAlert({ severity: 'success', message: 'Localização do produto excluída com sucesso!' });
-      } else {
-        throw new Error('Localização ou dados inválidos.');
-      }
+      if (!locationToRemove) throw new Error('Localização não encontrada.');
+
+      await deleteProductLocation(locationToDelete);
+      const updatedLocations = productLocations.filter((loc) => loc.id !== locationToDelete);
+
+      setProductLocations(updatedLocations);
+      setFilteredProductLocations(updatedLocations);
+      setAlert({ severity: 'success', message: 'Localização do produto excluída com sucesso!' });
     } catch (error) {
       console.error('Erro ao excluir localização do produto:', error);
       setAlert({ severity: 'error', message: 'Erro ao excluir localização!' });
@@ -667,27 +555,33 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               {errors.idCorredor && <FormHelperText error>{errors.idCorredor}</FormHelperText>}
             </Grid>
             <Grid item xs={12} sm={6}>
-              <Typography variant="body2">
-                Estoque Total: {getStockForProduct(idProdutoLocalizacao)} | Armazém:{' '}
-                {getWarehouseStock(idProdutoLocalizacao)} | Loja:{' '}
-                {getStoreStock(idProdutoLocalizacao)}
-              </Typography>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <TextField
+                  label="Quantidade do Produto"
+                  type="number"
+                  value={quantidadeProduto}
+                  onChange={(e) => setQuantidadeProduto(Number(e.target.value) || 0)}
+                  error={!!errors.quantidadeProduto}
+                  helperText={errors.quantidadeProduto}
+                  disabled={loading}
+                  fullWidth
+                />
+                {isStoreLocation(idLocalizacao, locations) ? (
+                  <Typography variant="body2" color="text.secondary">
+                    Estoque: {stockQuantity !== null ? stockQuantity : 'N/A'} | Armazém:{' '}
+                    {warehouseQuantity} | Restante:{' '}
+                    {remainingStoreQuantity !== null ? remainingStoreQuantity : 'N/A'}
+                  </Typography>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    Estoque: {stockQuantity !== null ? stockQuantity : 'N/A'}
+                  </Typography>
+                )}
+              </Stack>
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Quantidade do Produto"
-                type="number"
-                value={quantidadeProduto}
-                onChange={(e) => setQuantidadeProduto(Number(e.target.value) || 0)}
-                error={!!errors.quantidadeProduto}
-                helperText={errors.quantidadeProduto}
-                disabled={loading}
-                fullWidth
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                label="Quantidade Mínima"
+                label="Limite Mínimo"
                 type="number"
                 value={quantidadeMinimaProduto}
                 onChange={(e) => setQuantidadeMinimaProduto(Number(e.target.value) || 0)}
@@ -774,7 +668,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                     <strong>Quantidade</strong>
                   </TableCell>
                   <TableCell>
-                    <strong>Quantidade Mínima</strong>
+                    <strong>Limite Mínimo</strong>
                   </TableCell>
                   <TableCell align="right">
                     <strong>Ações</strong>
@@ -791,9 +685,13 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 ) : filteredProductLocations.length > 0 ? (
                   filteredProductLocations.map((location) => {
                     const product = products.find((p) => p.id === location.id_produto);
+                    const isBelowLimit =
+                      (location.quantidadeProduto ?? 0) <= (location.quantidadeMinimaProduto ?? 0);
                     return (
                       <TableRow key={location.id ?? ''}>
-                        <TableCell>{product?.nomeProduto || 'N/A'}</TableCell>
+                        <TableCell sx={{ color: isBelowLimit ? 'red' : 'inherit' }}>
+                          {product?.nomeProduto || 'N/A'}
+                        </TableCell>
                         <TableCell>{product?.referenciaProduto || 'N/A'}</TableCell>
                         <TableCell>
                           {locations.find((l) => l.id === location.id_localizacao)

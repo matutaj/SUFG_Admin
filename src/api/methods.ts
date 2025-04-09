@@ -643,6 +643,6 @@ export const updateStock = async (idProduto: string, data: Partial<Estoque>): Pr
 };
 
 export const getStockByProduct = async (idProduto: string): Promise<Estoque> => {
-  const response = await api.get(`/estoque/${idProduto}`);
+  const response = await api.get(`/estoque/produto/${idProduto}`);
   return response.data;
 };
