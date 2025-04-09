@@ -726,7 +726,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   fullWidth
                   variant="filled"
                   label="Total a Pagar"
-                  value={`${calcularTotal().toFixed(2)}kz`}
+                  value={`${calcularTotal()}kz`}
                   InputProps={{ readOnly: true }}
                 />
               </Grid>
@@ -902,7 +902,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                     <TableCell>{item.caixas?.nomeCaixa || 'N/A'}</TableCell>
                     <TableCell>{item.funcionarios?.nomeFuncionario || 'N/A'}</TableCell>
                     <TableCell>{item.estadoCaixa ? 'Aberto' : 'Fechado'}</TableCell>
-                    <TableCell>{item.quantidadaFaturada.toFixed(2)} kz</TableCell>
+                    <TableCell>{item.quantidadaFaturada} kz</TableCell>
                     <TableCell>
                       {item.estadoCaixa && (
                         <Button
@@ -946,7 +946,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                     <TableCell>
                       {new Intl.DateTimeFormat('pt-BR').format(new Date(item.data))}
                     </TableCell>
-                    <TableCell>{calcularTotalFatura(item).toFixed(2)}kzs</TableCell>
+                    <TableCell>{calcularTotalFatura(item)}kzs</TableCell>
                     <TableCell>{item.status}</TableCell>
                     <TableCell>
                       {item.produtos.map((p, idx) => (
