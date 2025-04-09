@@ -85,6 +85,7 @@ export interface EntradaEstoque {
   id_produto: string;
   id_funcionario: string;
   quantidadeRecebida: string;
+  adicionado: boolean;
   dataEntrada: string;
   custoUnitario: number;
   lote: string;

@@ -29,7 +29,15 @@ import IconifyIcon from 'components/base/IconifyIcon';
 import Delete from 'components/icons/factor/Delete';
 import Edit from 'components/icons/factor/Edit';
 import { SubItem } from 'types/types';
-import { FuncionarioCaixa, Funcionario, Caixa, Venda, TipoDocumento } from '../../types/models';
+import {
+  FuncionarioCaixa,
+  Funcionario,
+  Caixa,
+  Venda,
+  TipoDocumento,
+  ProdutoLocalizacao,
+  Localizacao,
+} from '../../types/models';
 import {
   getEmployeeCashRegisters,
   createEmployeeCashRegister,
@@ -38,6 +46,9 @@ import {
   getCashRegisters,
   createSale,
   getSales,
+  getProductLocations,
+  updateProductLocation,
+  getLocations,
 } from '../../api/methods';
 
 interface VendaCreateInput {
@@ -95,15 +106,17 @@ const modalStyle = {
 };
 
 const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
-  const [loja, setLoja] = useState<Produto[]>(() => {
-    const lojaSalva = localStorage.getItem('loja');
-    return lojaSalva ? JSON.parse(lojaSalva) : [];
-  });
-
-  const [openFatura, setOpenFatura] = useState(false);
+  // Estados principais
+  const [openFaturaModal, setOpenFaturaModal] = useState(false);
+  const [openCaixaModal, setOpenCaixaModal] = useState(false);
+  const [openCaixaListModal, setOpenCaixaListModal] = useState(false);
   const [faturas, setFaturas] = useState<Fatura[]>([]);
+  const [lojaProdutos, setLojaProdutos] = useState<Produto[]>([]);
+  const [productLocations, setProductLocations] = useState<ProdutoLocalizacao[]>([]);
+  const [locations, setLocations] = useState<Localizacao[]>([]);
 
-  const [form, setForm] = useState({
+  // Formulário de Fatura
+  const [faturaForm, setFaturaForm] = useState({
     cliente: '',
     nif: '',
     telefone: '',
@@ -114,39 +127,45 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     produtosSelecionados: [] as { id: string; quantidade: number }[],
     funcionariosCaixaId: '',
   });
+  const [faturaErrors, setFaturaErrors] = useState<{ [key: string]: string }>({});
 
-  const [errors, setErrors] = useState<{ [key: string]: string }>({});
-  const [funcionariosCaixa, setFuncionariosCaixa] = useState<FuncionarioCaixa[]>([]);
-  const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
-  const [caixas, setCaixas] = useState<Caixa[]>([]);
-  const [loggedInFuncionarioId, setLoggedInFuncionarioId] = useState<string>('');
-
-  const [openCaixaForm, setOpenCaixaForm] = useState(false);
-  const [openCaixaList, setOpenCaixaList] = useState(false);
+  // Formulário de Caixa
   const [caixaForm, setCaixaForm] = useState({
     funcionarioId: '',
     caixaId: '',
   });
   const [caixaErrors, setCaixaErrors] = useState<{ [key: string]: string }>({});
 
+  // Dados carregados
+  const [funcionariosCaixa, setFuncionariosCaixa] = useState<FuncionarioCaixa[]>([]);
+  const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
+  const [caixas, setCaixas] = useState<Caixa[]>([]);
+  const [loggedInFuncionarioId, setLoggedInFuncionarioId] = useState<string>('');
+
+  // Funções de inicialização
   useEffect(() => {
     const id = localStorage.getItem('loggedInFuncionarioId') || '';
-    if (id) {
-      setLoggedInFuncionarioId(id);
-      setCaixaForm((prev) => ({ ...prev, funcionarioId: id }));
-    } else {
-      console.warn('Nenhum funcionário logado encontrado no localStorage.');
-    }
+    setLoggedInFuncionarioId(id);
+    setCaixaForm((prev) => ({ ...prev, funcionarioId: id }));
   }, []);
 
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        const [salesData, funcionariosCaixaData, funcionariosData, caixasData] = await Promise.all([
+        const [
+          salesData,
+          funcionariosCaixaData,
+          funcionariosData,
+          caixasData,
+          locationsData,
+          productLocationsData,
+        ] = await Promise.all([
           getSales(),
           getEmployeeCashRegisters(),
           getEmployees(),
           getCashRegisters(),
+          getLocations(),
+          getProductLocations(),
         ]);
 
         const mappedFaturas = salesData.map((venda: Venda, index: number) => ({
@@ -173,10 +192,29 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           funcionariosCaixa: venda.funcionariosCaixa,
         }));
 
+        const lojaLocation = locationsData.find((loc) =>
+          loc.nomeLocalizacao.toLowerCase().includes('loja'),
+        );
+        const lojaProdutosData = lojaLocation
+          ? productLocationsData
+              .filter((loc) => loc.id_localizacao === lojaLocation.id)
+              .map((loc) => ({
+                id: Number(loc.id_produto),
+                name: loc.produtos?.nomeProduto || 'Desconhecido',
+                shelf: loc.id_prateleira || '',
+                prico: loc.produtos?.precoVenda || 0,
+                validade: '',
+                quantidade: loc.quantidadeProduto || 0,
+              }))
+          : [];
+
         setFaturas(mappedFaturas);
         setFuncionariosCaixa(funcionariosCaixaData);
         setFuncionarios(funcionariosData);
         setCaixas(caixasData);
+        setLocations(locationsData);
+        setLojaProdutos(lojaProdutosData);
+        setProductLocations(productLocationsData);
       } catch (error) {
         console.error('Erro ao carregar dados iniciais:', error);
       }
@@ -184,14 +222,51 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     fetchInitialData();
   }, [loggedInFuncionarioId]);
 
-  const handleOpen = () => setOpenFatura(true);
-  const handleClose = () => {
-    setOpenFatura(false);
-    resetForm();
+  const fetchProductLocations = async () => {
+    try {
+      const data = await getProductLocations();
+      const cleanedData = data.map((loc) => ({
+        ...loc,
+        id_produto: loc.id_produto ?? '',
+        id_localizacao: loc.id_localizacao ?? '',
+        id_seccao: loc.id_seccao ?? '',
+        id_prateleira: loc.id_prateleira ?? '',
+        id_corredor: loc.id_corredor ?? '',
+        quantidadeProduto: loc.quantidadeProduto ?? 0,
+        quantidadeMinimaProduto: loc.quantidadeMinimaProduto ?? 0,
+      }));
+      setProductLocations(cleanedData);
+
+      const lojaLocation = locations.find((loc) =>
+        loc.nomeLocalizacao.toLowerCase().includes('loja'),
+      );
+      const lojaProdutosData = lojaLocation
+        ? cleanedData
+            .filter((loc) => loc.id_localizacao === lojaLocation.id)
+            .map((loc) => ({
+              id: Number(loc.id_produto),
+              name: loc.produtos?.nomeProduto || 'Desconhecido',
+              shelf: loc.id_prateleira || '',
+              prico: loc.produtos?.precoVenda || 0,
+              validade: '',
+              quantidade: loc.quantidadeProduto || 0,
+            }))
+        : [];
+      setLojaProdutos(lojaProdutosData);
+    } catch (error) {
+      console.error('Erro ao buscar localizações de produtos:', error);
+    }
   };
 
-  const resetForm = () => {
-    setForm({
+  // Funções de manipulação de formulário de fatura
+  const handleOpenFaturaModal = () => setOpenFaturaModal(true);
+  const handleCloseFaturaModal = () => {
+    setOpenFaturaModal(false);
+    resetFaturaForm();
+  };
+
+  const resetFaturaForm = () => {
+    setFaturaForm({
       cliente: '',
       nif: '',
       telefone: '',
@@ -202,36 +277,36 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       produtosSelecionados: [],
       funcionariosCaixaId: '',
     });
-    setErrors({});
+    setFaturaErrors({});
   };
 
   const handleTextFieldChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
-    setErrors((prev) => ({ ...prev, [name]: '' }));
+    setFaturaForm((prev) => ({ ...prev, [name]: value }));
+    setFaturaErrors((prev) => ({ ...prev, [name]: '' }));
   };
 
   const handleSelectChange = (e: SelectChangeEvent<string>) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
-    setErrors((prev) => ({ ...prev, [name]: '' }));
+    setFaturaForm((prev) => ({ ...prev, [name]: value }));
+    setFaturaErrors((prev) => ({ ...prev, [name]: '' }));
   };
 
   const handleProdutoChange = (index: number, field: string, value: string | number) => {
-    const updatedProdutos = [...form.produtosSelecionados];
+    const updatedProdutos = [...faturaForm.produtosSelecionados];
     updatedProdutos[index] = { ...updatedProdutos[index], [field]: value };
-    setForm((prev) => ({ ...prev, produtosSelecionados: updatedProdutos }));
+    setFaturaForm((prev) => ({ ...prev, produtosSelecionados: updatedProdutos }));
 
     if (field === 'quantidade') {
-      const produto = loja.find((p) => p.id.toString() === updatedProdutos[index].id);
+      const produto = lojaProdutos.find((p) => p.id.toString() === updatedProdutos[index].id);
       const quantidade = Number(value);
       if (produto && quantidade > produto.quantidade) {
-        setErrors((prev) => ({
+        setFaturaErrors((prev) => ({
           ...prev,
-          [`produto_${index}`]: `Quantidade indisponível. Estoque: ${produto.quantidade}`,
+          [`produto_${index}`]: `Quantidade indisponível. Estoque na loja: ${produto.quantidade}`,
         }));
       } else {
-        setErrors((prev) => {
+        setFaturaErrors((prev) => {
           const newErrors = { ...prev };
           delete newErrors[`produto_${index}`];
           return newErrors;
@@ -241,16 +316,16 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   };
 
   const adicionarNovoProdutoInput = () => {
-    setForm((prev) => ({
+    setFaturaForm((prev) => ({
       ...prev,
       produtosSelecionados: [...prev.produtosSelecionados, { id: '', quantidade: 1 }],
     }));
   };
 
   const removerProdutoInput = (index: number) => {
-    const updatedProdutos = form.produtosSelecionados.filter((_, i) => i !== index);
-    setForm((prev) => ({ ...prev, produtosSelecionados: updatedProdutos }));
-    setErrors((prev) => {
+    const updatedProdutos = faturaForm.produtosSelecionados.filter((_, i) => i !== index);
+    setFaturaForm((prev) => ({ ...prev, produtosSelecionados: updatedProdutos }));
+    setFaturaErrors((prev) => {
       const newErrors = { ...prev };
       delete newErrors[`produto_${index}`];
       return newErrors;
@@ -258,49 +333,50 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   };
 
   const calcularTotal = () => {
-    return form.produtosSelecionados.reduce((acc, curr) => {
-      const produto = loja.find((p) => p.id.toString() === curr.id);
+    return faturaForm.produtosSelecionados.reduce((acc, curr) => {
+      const produto = lojaProdutos.find((p) => p.id.toString() === curr.id);
       return acc + (produto ? produto.prico * curr.quantidade : 0);
     }, 0);
   };
 
-  const validateForm = () => {
+  const validateFaturaForm = () => {
     const newErrors: { [key: string]: string } = {};
-    if (!form.cliente.trim()) newErrors.cliente = 'Nome do cliente é obrigatório';
-    if (!form.data.trim()) newErrors.data = 'Data é obrigatória';
-    if (form.produtosSelecionados.length === 0) {
+    if (!faturaForm.cliente.trim()) newErrors.cliente = 'Nome do cliente é obrigatório';
+    if (!faturaForm.data.trim()) newErrors.data = 'Data é obrigatória';
+    if (faturaForm.produtosSelecionados.length === 0) {
       newErrors.produtos = 'Adicione pelo menos um produto';
     }
-    if (!form.funcionariosCaixaId) newErrors.funcionariosCaixaId = 'Selecione um caixa';
-    form.produtosSelecionados.forEach((p, index) => {
+    if (!faturaForm.funcionariosCaixaId) newErrors.funcionariosCaixaId = 'Selecione um caixa';
+    faturaForm.produtosSelecionados.forEach((p, index) => {
       if (!p.id) {
         newErrors[`produto_${index}`] = 'Selecione um produto';
       } else {
-        const produto = loja.find((prod) => prod.id.toString() === p.id);
+        const produto = lojaProdutos.find((prod) => prod.id.toString() === p.id);
         if (produto && p.quantidade > produto.quantidade) {
-          newErrors[`produto_${index}`] = `Quantidade indisponível. Estoque: ${produto.quantidade}`;
+          newErrors[`produto_${index}`] =
+            `Quantidade indisponível. Estoque na loja: ${produto.quantidade}`;
         }
       }
     });
-    setErrors(newErrors);
+    setFaturaErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const onAddFaturaSubmit = async () => {
-    if (!validateForm()) return;
+    if (!validateFaturaForm()) return;
 
     try {
       const vendaData: VendaCreateInput = {
-        id_cliente: form.cliente,
-        dataEmissao: new Date(form.data).toISOString(),
+        id_cliente: faturaForm.cliente,
+        dataEmissao: new Date(faturaForm.data).toISOString(),
         dataValidade: new Date(
-          new Date(form.data).setDate(new Date(form.data).getDate() + 30),
+          new Date(faturaForm.data).setDate(new Date(faturaForm.data).getDate() + 30),
         ).toISOString(),
-        id_funcionarioCaixa: form.funcionariosCaixaId,
+        id_funcionarioCaixa: faturaForm.funcionariosCaixaId,
         numeroDocumento: `FAT-${Date.now()}`,
         tipoDocumento: TipoDocumento.FATURA,
         valorTotal: calcularTotal(),
-        vendasProdutos: form.produtosSelecionados.map((p) => ({
+        vendasProdutos: faturaForm.produtosSelecionados.map((p) => ({
           id_produto: p.id,
           quantidadeVendida: p.quantidade,
         })),
@@ -308,41 +384,55 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
 
       const createdVenda = await createSale(vendaData as Venda);
 
+      // Atualizar a localização "Loja" no backend
+      const lojaLocation = locations.find((loc) => isStoreLocation(loc.id, locations));
+      if (lojaLocation) {
+        for (const produtoSelecionado of faturaForm.produtosSelecionados) {
+          const produtoLocation = productLocations.find(
+            (loc) =>
+              loc.id_produto === produtoSelecionado.id && loc.id_localizacao === lojaLocation.id,
+          );
+          if (produtoLocation) {
+            const newQuantity =
+              (produtoLocation.quantidadeProduto ?? 0) - produtoSelecionado.quantidade;
+            if (newQuantity >= 0) {
+              const updatedLocation: ProdutoLocalizacao = {
+                ...produtoLocation,
+                quantidadeProduto: newQuantity,
+              };
+              await updateProductLocation(produtoLocation.id ?? '', updatedLocation);
+            } else {
+              throw new Error(
+                `Quantidade insuficiente na loja para o produto ${produtoSelecionado.id}`,
+              );
+            }
+          }
+        }
+      }
+
       const newFatura: Fatura = {
         id: createdVenda.id ? Number(createdVenda.id) : faturas.length + 1,
-        cliente: form.cliente,
-        nif: form.nif,
-        telefone: form.telefone,
-        localizacao: form.localizacao,
-        email: form.email,
+        cliente: faturaForm.cliente,
+        nif: faturaForm.nif,
+        telefone: faturaForm.telefone,
+        localizacao: faturaForm.localizacao,
+        email: faturaForm.email,
         data: createdVenda.dataEmissao.split('T')[0],
-        status: form.status,
-        produtos:
-          createdVenda.vendasProdutos?.map((vp) => ({
-            produto: {
-              id: Number(vp.produtos?.id),
-              name: vp.produtos?.nomeProduto || '',
-              shelf: '',
-              prico: vp.produtos?.precoVenda || 0,
-              validade: '',
-              quantidade: vp.produtos?.quantidadeEstoque || 0,
-            },
-            quantidade: vp.quantidadeVendida,
-          })) ||
-          form.produtosSelecionados.map((p) => ({
-            produto: loja.find((prod) => prod.id.toString() === p.id)!,
-            quantidade: p.quantidade,
-          })),
+        status: faturaForm.status,
+        produtos: faturaForm.produtosSelecionados.map((p) => ({
+          produto: lojaProdutos.find((prod) => prod.id.toString() === p.id)!,
+          quantidade: p.quantidade,
+        })),
         funcionariosCaixa: funcionariosCaixa.find(
           (fc) => fc.id === createdVenda.id_funcionarioCaixa,
         ),
       };
 
       setFaturas((prev) => [...prev, newFatura]);
-      setLoja((prev) =>
+      setLojaProdutos((prev) =>
         prev
           .map((produto) => {
-            const produtoSelecionado = form.produtosSelecionados.find(
+            const produtoSelecionado = faturaForm.produtosSelecionados.find(
               (p) => p.id === produto.id.toString(),
             );
             if (produtoSelecionado) {
@@ -352,8 +442,9 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           })
           .filter((p) => p.quantidade > 0),
       );
-      handleClose();
-    } catch (error: unknown) {
+      handleCloseFaturaModal();
+      await fetchProductLocations(); // Atualizar as localizações após a venda
+    } catch (error) {
       console.error('Erro ao criar fatura:', error);
       alert('Falha ao cadastrar fatura. Verifique sua conexão ou tente novamente.');
     }
@@ -366,7 +457,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   const editarFatura = (faturaId: number) => {
     const fatura = faturas.find((f) => f.id === faturaId);
     if (fatura) {
-      setForm({
+      setFaturaForm({
         cliente: fatura.cliente,
         nif: fatura.nif,
         telefone: fatura.telefone,
@@ -380,19 +471,24 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         })),
         funcionariosCaixaId: fatura.funcionariosCaixa?.id || '',
       });
-      setOpenFatura(true);
+      setOpenFaturaModal(true);
     }
   };
 
-  const handleOpenCaixa = () => setOpenCaixaForm(true);
-  const handleCloseCaixaForm = () => {
-    setOpenCaixaForm(false);
+  // Funções de manipulação de caixa
+  const handleOpenCaixaModal = () => setOpenCaixaModal(true);
+  const handleCloseCaixaModal = () => {
+    setOpenCaixaModal(false);
+    resetCaixaForm();
+  };
+
+  const handleOpenCaixaListModal = () => setOpenCaixaListModal(true);
+  const handleCloseCaixaListModal = () => setOpenCaixaListModal(false);
+
+  const resetCaixaForm = () => {
     setCaixaForm({ funcionarioId: loggedInFuncionarioId, caixaId: '' });
     setCaixaErrors({});
   };
-
-  const handleOpenCaixaList = () => setOpenCaixaList(true);
-  const handleCloseCaixaList = () => setOpenCaixaList(false);
 
   const handleCaixaSelectChange = (e: SelectChangeEvent<string>) => {
     const { name, value } = e.target;
@@ -423,8 +519,8 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
 
       const createdCaixa = await createEmployeeCashRegister(newFuncionarioCaixa);
       setFuncionariosCaixa((prev) => [...prev, createdCaixa]);
-      handleCloseCaixaForm();
-    } catch (error: unknown) {
+      handleCloseCaixaModal();
+    } catch (error) {
       console.error('Erro ao abrir caixa:', error);
       alert('Falha ao abrir o caixa. Tente novamente.');
     }
@@ -434,7 +530,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     try {
       const caixaAtual = funcionariosCaixa.find((c) => c.id === caixaId);
       if (caixaAtual) {
-        // Calcular o total faturado para este caixa
         const totalFaturado = faturas
           .filter((fatura) => fatura.funcionariosCaixa?.id === caixaId)
           .reduce((acc, fatura) => acc + calcularTotalFatura(fatura), 0);
@@ -442,13 +537,13 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         const updatedCaixa: FuncionarioCaixa = {
           ...caixaAtual,
           estadoCaixa: false,
-          quantidadaFaturada: totalFaturado, // Atualiza com o total faturado
-          horarioFechamento: new Date().toISOString(), // Salva a hora atual
+          quantidadaFaturada: totalFaturado,
+          horarioFechamento: new Date().toISOString(),
         };
 
         const response = await updateEmployeeCashRegister(caixaId, updatedCaixa);
         setFuncionariosCaixa((prev) => prev.map((c) => (c.id === caixaId ? response : c)));
-        handleCloseCaixaList();
+        handleCloseCaixaListModal();
       }
     } catch (error) {
       console.error('Erro ao fechar o caixa:', error);
@@ -460,6 +555,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     return fatura.produtos.reduce((acc, curr) => acc + curr.produto.prico * curr.quantidade, 0);
   };
 
+  // Renderização
   return (
     <>
       <Paper sx={{ p: { xs: 1, sm: 2 }, width: '100%', borderRadius: 2 }}>
@@ -471,40 +567,36 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
             spacing={1}
           >
             <Typography variant="h5" fontWeight="bold">
-              Faturação
+              Faturação (Vendas)
             </Typography>
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={1}
-              sx={{ width: { xs: '100%', sm: 'auto' } }}
-            >
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
               <Button
                 variant="contained"
                 color="secondary"
-                onClick={handleOpen}
+                onClick={handleOpenFaturaModal}
                 startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
                 size="small"
-                fullWidth={true}
+                fullWidth
               >
-                Adicionar Fatura
+                Nova Venda
               </Button>
               <Button
                 variant="contained"
                 color="primary"
-                onClick={handleOpenCaixa}
+                onClick={handleOpenCaixaModal}
                 startIcon={<IconifyIcon icon="mdi:cash-register" />}
                 size="small"
-                fullWidth={true}
+                fullWidth
               >
                 Abrir Caixa
               </Button>
               <Button
                 variant="contained"
                 color="info"
-                onClick={handleOpenCaixaList}
+                onClick={handleOpenCaixaListModal}
                 startIcon={<IconifyIcon icon="mdi:cash-register" />}
                 size="small"
-                fullWidth={true}
+                fullWidth
               >
                 Ver Caixas
               </Button>
@@ -513,17 +605,17 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         </Collapse>
       </Paper>
 
-      <Modal open={openFatura} onClose={handleClose}>
+      {/* Modal de Nova Venda */}
+      <Modal open={openFaturaModal} onClose={handleCloseFaturaModal}>
         <Box sx={modalStyle}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
             <Typography variant="h5" fontWeight="bold" fontSize={{ xs: 18, sm: 24 }}>
-              Cadastrar Fatura
+              Nova Venda (Loja)
             </Typography>
-            <Button variant="outlined" color="error" onClick={handleClose} size="small">
+            <Button variant="outlined" color="error" onClick={handleCloseFaturaModal} size="small">
               Fechar
             </Button>
           </Stack>
-
           <Stack spacing={2}>
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6} md={4}>
@@ -532,10 +624,10 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   variant="filled"
                   name="cliente"
                   label="Nome do Cliente"
-                  value={form.cliente}
+                  value={faturaForm.cliente}
                   onChange={handleTextFieldChange}
-                  error={Boolean(errors.cliente)}
-                  helperText={errors.cliente}
+                  error={Boolean(faturaErrors.cliente)}
+                  helperText={faturaErrors.cliente}
                 />
               </Grid>
               <Grid item xs={12} sm={6} md={4}>
@@ -544,7 +636,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   variant="filled"
                   name="nif"
                   label="NIF/BI"
-                  value={form.nif}
+                  value={faturaForm.nif}
                   onChange={handleTextFieldChange}
                 />
               </Grid>
@@ -555,7 +647,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   name="telefone"
                   label="Telefone"
                   type="tel"
-                  value={form.telefone}
+                  value={faturaForm.telefone}
                   onChange={handleTextFieldChange}
                 />
               </Grid>
@@ -565,7 +657,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   variant="filled"
                   name="localizacao"
                   label="Localização"
-                  value={form.localizacao}
+                  value={faturaForm.localizacao}
                   onChange={handleTextFieldChange}
                 />
               </Grid>
@@ -576,7 +668,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   name="email"
                   label="Email"
                   type="email"
-                  value={form.email}
+                  value={faturaForm.email}
                   onChange={handleTextFieldChange}
                 />
               </Grid>
@@ -587,11 +679,11 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   name="data"
                   type="date"
                   label="Data"
-                  value={form.data}
+                  value={faturaForm.data}
                   onChange={handleTextFieldChange}
                   InputLabelProps={{ shrink: true }}
-                  error={Boolean(errors.data)}
-                  helperText={errors.data}
+                  error={Boolean(faturaErrors.data)}
+                  helperText={faturaErrors.data}
                 />
               </Grid>
               <Grid item xs={12} sm={6} md={4}>
@@ -600,16 +692,20 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   variant="filled"
                   name="status"
                   label="Status"
-                  value={form.status}
+                  value={faturaForm.status}
                   onChange={handleTextFieldChange}
                 />
               </Grid>
               <Grid item xs={12} sm={6} md={4}>
-                <FormControl fullWidth variant="filled" error={Boolean(errors.funcionariosCaixaId)}>
+                <FormControl
+                  fullWidth
+                  variant="filled"
+                  error={Boolean(faturaErrors.funcionariosCaixaId)}
+                >
                   <InputLabel>Caixa</InputLabel>
                   <Select
                     name="funcionariosCaixaId"
-                    value={form.funcionariosCaixaId}
+                    value={faturaForm.funcionariosCaixaId}
                     onChange={handleSelectChange}
                   >
                     {funcionariosCaixa
@@ -620,8 +716,8 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                         </MenuItem>
                       ))}
                   </Select>
-                  {errors.funcionariosCaixaId && (
-                    <FormHelperText>{errors.funcionariosCaixaId}</FormHelperText>
+                  {faturaErrors.funcionariosCaixaId && (
+                    <FormHelperText>{faturaErrors.funcionariosCaixaId}</FormHelperText>
                   )}
                 </FormControl>
               </Grid>
@@ -636,27 +732,27 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
               </Grid>
             </Grid>
 
-            {form.produtosSelecionados.map((produto, index) => (
+            {faturaForm.produtosSelecionados.map((produto, index) => (
               <Grid container spacing={1} key={index} alignItems="center">
                 <Grid item xs={12} sm={6} md={5}>
                   <FormControl
                     fullWidth
                     variant="filled"
-                    error={Boolean(errors[`produto_${index}`])}
+                    error={Boolean(faturaErrors[`produto_${index}`])}
                   >
                     <InputLabel>Produto</InputLabel>
                     <Select
                       value={produto.id}
                       onChange={(e) => handleProdutoChange(index, 'id', e.target.value)}
                     >
-                      {loja.map((p) => (
+                      {lojaProdutos.map((p) => (
                         <MenuItem key={p.id} value={p.id.toString()}>
                           {p.name} - {p.prico}kzs (Estoque: {p.quantidade})
                         </MenuItem>
                       ))}
                     </Select>
-                    {errors[`produto_${index}`] && (
-                      <FormHelperText>{errors[`produto_${index}`]}</FormHelperText>
+                    {faturaErrors[`produto_${index}`] && (
+                      <FormHelperText>{faturaErrors[`produto_${index}`]}</FormHelperText>
                     )}
                   </FormControl>
                 </Grid>
@@ -671,8 +767,8 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                       handleProdutoChange(index, 'quantidade', parseInt(e.target.value) || 1)
                     }
                     inputProps={{ min: 1 }}
-                    error={Boolean(errors[`produto_${index}`])}
-                    helperText={errors[`produto_${index}`]}
+                    error={Boolean(faturaErrors[`produto_${index}`])}
+                    helperText={faturaErrors[`produto_${index}`]}
                   />
                 </Grid>
                 <Grid item xs={4} sm={2} md={2}>
@@ -683,9 +779,9 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
               </Grid>
             ))}
 
-            {errors.produtos && (
+            {faturaErrors.produtos && (
               <Typography color="error" variant="body2">
-                {errors.produtos}
+                {faturaErrors.produtos}
               </Typography>
             )}
 
@@ -694,7 +790,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                 variant="outlined"
                 color="primary"
                 onClick={adicionarNovoProdutoInput}
-                fullWidth={true}
+                fullWidth
                 size="small"
               >
                 Adicionar Produto
@@ -703,27 +799,27 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                 variant="contained"
                 color="secondary"
                 onClick={onAddFaturaSubmit}
-                fullWidth={true}
+                fullWidth
                 size="small"
               >
-                Cadastrar Fatura
+                Finalizar Venda
               </Button>
             </Stack>
           </Stack>
         </Box>
       </Modal>
 
-      <Modal open={openCaixaForm} onClose={handleCloseCaixaForm}>
+      {/* Modal de Abrir Caixa */}
+      <Modal open={openCaixaModal} onClose={handleCloseCaixaModal}>
         <Box sx={modalStyle}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
             <Typography variant="h5" fontWeight="bold" fontSize={{ xs: 18, sm: 24 }}>
               Abrir Novo Caixa
             </Typography>
-            <Button variant="outlined" color="error" onClick={handleCloseCaixaForm} size="small">
+            <Button variant="outlined" color="error" onClick={handleCloseCaixaModal} size="small">
               Fechar
             </Button>
           </Stack>
-
           <Stack spacing={2}>
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
@@ -733,7 +829,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                     name="funcionarioId"
                     value={caixaForm.funcionarioId}
                     onChange={handleCaixaSelectChange}
-                    disabled={!!loggedInFuncionarioId} // Desabilitado para o funcionário logado
+                    disabled={!!loggedInFuncionarioId}
                   >
                     {funcionarios.map((funcionario) => (
                       <MenuItem key={funcionario.id} value={funcionario.id}>
@@ -763,29 +859,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   {caixaErrors.caixaId && <FormHelperText>{caixaErrors.caixaId}</FormHelperText>}
                 </FormControl>
               </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  variant="filled"
-                  label="Quantidade Faturada"
-                  value="0 kz" // Valor inicial fixo
-                  InputProps={{ readOnly: true }}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  variant="filled"
-                  label="Hora Atual"
-                  value={new Intl.DateTimeFormat('pt-BR', {
-                    dateStyle: 'short',
-                    timeStyle: 'short',
-                  }).format(new Date())} // Mostra a hora atual
-                  InputProps={{ readOnly: true }}
-                />
-              </Grid>
             </Grid>
-
             <Button variant="contained" color="primary" onClick={onAddCaixaSubmit} size="small">
               Abrir Caixa
             </Button>
@@ -793,78 +867,42 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         </Box>
       </Modal>
 
-      <Modal open={openCaixaList} onClose={handleCloseCaixaList}>
+      {/* Modal de Lista de Caixas */}
+      <Modal open={openCaixaListModal} onClose={handleCloseCaixaListModal}>
         <Box sx={modalStyle}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
             <Typography variant="h5" fontWeight="bold" fontSize={{ xs: 18, sm: 24 }}>
               Caixas Abertos
             </Typography>
-            <Button variant="outlined" color="error" onClick={handleCloseCaixaList} size="small">
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={handleCloseCaixaListModal}
+              size="small"
+            >
               Fechar
             </Button>
           </Stack>
-
           <TableContainer component={Paper}>
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 'bold', fontSize: { xs: 12, sm: 14 } }}>
-                    ID
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', fontSize: { xs: 12, sm: 14 } }}>
-                    Caixa
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', fontSize: { xs: 12, sm: 14 } }}>
-                    Funcionário
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', fontSize: { xs: 12, sm: 14 } }}>
-                    Estado
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', fontSize: { xs: 12, sm: 14 } }}>
-                    Hora Atual
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', fontSize: { xs: 12, sm: 14 } }}>
-                    Quantidade Faturada
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', fontSize: { xs: 12, sm: 14 } }}>
-                    Fechamento
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', fontSize: { xs: 12, sm: 14 } }}>
-                    Ações
-                  </TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>ID</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Caixa</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Funcionário</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Estado</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Quantidade Faturada</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Ações</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {funcionariosCaixa.map((item) => (
                   <TableRow key={item.id}>
-                    <TableCell sx={{ fontSize: { xs: 12, sm: 14 } }}>{item.id}</TableCell>
-                    <TableCell sx={{ fontSize: { xs: 12, sm: 14 } }}>
-                      {item.caixas?.nomeCaixa || 'N/A'}
-                    </TableCell>
-                    <TableCell sx={{ fontSize: { xs: 12, sm: 14 } }}>
-                      {item.funcionarios?.nomeFuncionario || 'N/A'}
-                    </TableCell>
-                    <TableCell sx={{ fontSize: { xs: 12, sm: 14 } }}>
-                      {item.estadoCaixa ? 'Aberto' : 'Fechado'}
-                    </TableCell>
-                    <TableCell sx={{ fontSize: { xs: 12, sm: 14 } }}>
-                      {new Intl.DateTimeFormat('pt-BR', {
-                        dateStyle: 'short',
-                        timeStyle: 'short',
-                      }).format(new Date())}{' '}
-                      {/* Mostra a hora atual */}
-                    </TableCell>
-                    <TableCell sx={{ fontSize: { xs: 12, sm: 14 } }}>
-                      {item.quantidadaFaturada.toFixed(2)} kz
-                    </TableCell>
-                    <TableCell sx={{ fontSize: { xs: 12, sm: 14 } }}>
-                      {item.horarioFechamento
-                        ? new Intl.DateTimeFormat('pt-BR', {
-                            dateStyle: 'short',
-                            timeStyle: 'short',
-                          }).format(new Date(item.horarioFechamento))
-                        : 'N/A'}
-                    </TableCell>
+                    <TableCell>{item.id}</TableCell>
+                    <TableCell>{item.caixas?.nomeCaixa || 'N/A'}</TableCell>
+                    <TableCell>{item.funcionarios?.nomeFuncionario || 'N/A'}</TableCell>
+                    <TableCell>{item.estadoCaixa ? 'Aberto' : 'Fechado'}</TableCell>
+                    <TableCell>{item.quantidadaFaturada.toFixed(2)} kz</TableCell>
                     <TableCell>
                       {item.estadoCaixa && (
                         <Button
@@ -885,117 +923,37 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         </Box>
       </Modal>
 
+      {/* Tabela de Faturas */}
       <Card sx={{ mt: 2, borderRadius: 2 }}>
         <CardContent sx={{ p: { xs: 1, sm: 2 } }}>
           <TableContainer component={Paper}>
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  {[
-                    'Cliente',
-                    'NIF',
-                    'Telefone',
-                    'Localização',
-                    'Email',
-                    'Data',
-                    'Total',
-                    'Status',
-                    'Produtos',
-                    'Caixa',
-                    'Ações',
-                  ].map((header) => (
-                    <TableCell
-                      key={header}
-                      sx={{
-                        fontWeight: 'bold',
-                        fontSize: { xs: 12, sm: 14 },
-                        display: {
-                          xs:
-                            header === 'Cliente' || header === 'Total' || header === 'Ações'
-                              ? 'table-cell'
-                              : 'none',
-                          sm: 'table-cell',
-                        },
-                      }}
-                    >
-                      {header}
-                    </TableCell>
-                  ))}
+                  <TableCell sx={{ fontWeight: 'bold' }}>Cliente</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Data</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Total</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Produtos</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Caixa</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Ações</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {faturas.map((item) => (
                   <TableRow key={item.id}>
-                    <TableCell sx={{ fontSize: { xs: 12, sm: 14 } }}>{item.cliente}</TableCell>
-                    <TableCell
-                      sx={{
-                        fontSize: { xs: 12, sm: 14 },
-                        display: { xs: 'none', sm: 'table-cell' },
-                      }}
-                    >
-                      {item.nif}
-                    </TableCell>
-                    <TableCell
-                      sx={{
-                        fontSize: { xs: 12, sm: 14 },
-                        display: { xs: 'none', sm: 'table-cell' },
-                      }}
-                    >
-                      {item.telefone}
-                    </TableCell>
-                    <TableCell
-                      sx={{
-                        fontSize: { xs: 12, sm: 14 },
-                        display: { xs: 'none', sm: 'table-cell' },
-                      }}
-                    >
-                      {item.localizacao}
-                    </TableCell>
-                    <TableCell
-                      sx={{
-                        fontSize: { xs: 12, sm: 14 },
-                        display: { xs: 'none', sm: 'table-cell' },
-                      }}
-                    >
-                      {item.email}
-                    </TableCell>
-                    <TableCell
-                      sx={{
-                        fontSize: { xs: 12, sm: 14 },
-                        display: { xs: 'none', sm: 'table-cell' },
-                      }}
-                    >
+                    <TableCell>{item.cliente}</TableCell>
+                    <TableCell>
                       {new Intl.DateTimeFormat('pt-BR').format(new Date(item.data))}
                     </TableCell>
-                    <TableCell sx={{ fontSize: { xs: 12, sm: 14 } }}>
-                      {calcularTotalFatura(item).toFixed(2)}kzs
-                    </TableCell>
-                    <TableCell
-                      sx={{
-                        fontSize: { xs: 12, sm: 14 },
-                        display: { xs: 'none', sm: 'table-cell' },
-                      }}
-                    >
-                      {item.status}
-                    </TableCell>
-                    <TableCell
-                      sx={{
-                        fontSize: { xs: 12, sm: 14 },
-                        display: { xs: 'none', sm: 'table-cell' },
-                      }}
-                    >
+                    <TableCell>{calcularTotalFatura(item).toFixed(2)}kzs</TableCell>
+                    <TableCell>{item.status}</TableCell>
+                    <TableCell>
                       {item.produtos.map((p, idx) => (
                         <div key={idx}>{`${p.produto.name} - ${p.quantidade}x`}</div>
                       ))}
                     </TableCell>
-                    <TableCell
-                      sx={{
-                        fontSize: { xs: 12, sm: 14 },
-                        display: { xs: 'none', sm: 'table-cell' },
-                      }}
-                    >
-                      {item.funcionariosCaixa?.caixas?.nomeCaixa || 'N/A'}
-                    </TableCell>
+                    <TableCell>{item.funcionariosCaixa?.caixas?.nomeCaixa || 'N/A'}</TableCell>
                     <TableCell align="right">
                       <Stack direction="row" spacing={0.5}>
                         <IconButton
@@ -1026,3 +984,10 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
 };
 
 export default Faturacao;
+
+function isStoreLocation(id_localizacao: string | undefined, locations: Localizacao[]): boolean {
+  if (!id_localizacao) return false;
+  return locations.some(
+    (loc) => loc.id === id_localizacao && loc.nomeLocalizacao.toLowerCase().includes('loja'),
+  );
+}

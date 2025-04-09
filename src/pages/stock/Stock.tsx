@@ -33,12 +33,13 @@ import {
   getStockEntries,
   createStockEntry,
   updateStockEntry,
-  deleteStockEntry,
   getProducts,
   getSuppliers,
   getEmployees,
   getStock,
   createStock,
+  updateStock,
+  deleteStock,
 } from '../../api/methods';
 
 interface CollapsedItemProps {
@@ -68,18 +69,27 @@ const style = {
 
 const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
   const [openModal, setOpenModal] = React.useState(false);
-  const [manageEntryModal, setManageEntryModal] = React.useState(false); // Modal for managing all entries
+  const [manageEntryModal, setManageEntryModal] = React.useState(false);
+  const [editStockModal, setEditStockModal] = React.useState(false);
   const [isEditing, setIsEditing] = React.useState(false);
   const [editId, setEditId] = React.useState<string | null>(null);
+  const [editStockId, setEditStockId] = React.useState<string | null>(null);
   const [form, setForm] = React.useState<Partial<EntradaEstoque>>({
     id_fornecedor: '',
     id_produto: '',
     id_funcionario: '',
     quantidadeRecebida: '0',
+    adicionado: false,
     dataEntrada: new Date().toISOString().split('T')[0],
     custoUnitario: 0,
     lote: '',
     dataValidadeLote: '',
+  });
+  const [stockForm, setStockForm] = React.useState<Partial<Estoque>>({
+    id_produto: '',
+    quantidadeAtual: '0',
+    lote: '',
+    dataValidadeLote: new Date(),
   });
   const [stockEntries, setStockEntries] = React.useState<EntradaEstoque[]>([]);
   const [currentStock, setCurrentStock] = React.useState<Estoque[]>([]);
@@ -88,8 +98,8 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
   const [employees, setEmployees] = React.useState<Funcionario[]>([]);
   const [errors, setErrors] = React.useState<{ [key: string]: string }>({});
   const [fetchError, setFetchError] = React.useState<string | null>(null);
-  const [filterStartDate, setFilterStartDate] = React.useState<string>(''); // Data inicial do filtro
-  const [filterEndDate, setFilterEndDate] = React.useState<string>(''); // Data final do filtro
+  const [filterStartDate, setFilterStartDate] = React.useState<string>('');
+  const [filterEndDate, setFilterEndDate] = React.useState<string>('');
 
   React.useEffect(() => {
     fetchData();
@@ -105,14 +115,21 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
         getEmployees(),
       ]);
 
+      const normalizedEntries = entries.map((entry) => ({
+        ...entry,
+        adicionado:
+          entry.adicionado === undefined || entry.adicionado === null ? false : entry.adicionado,
+      }));
+
       const transformedStock: Estoque[] = stock.map((item) => ({
+        id: item.id,
         id_produto: item.id_produto,
         quantidadeAtual: item.quantidadeAtual || '0',
         lote: item.lote || '',
         dataValidadeLote: new Date(item.dataValidadeLote),
       }));
 
-      setStockEntries(entries);
+      setStockEntries(normalizedEntries);
       setCurrentStock(transformedStock);
       setProducts(productsData);
       setSuppliers(suppliersData);
@@ -123,10 +140,6 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
     }
   };
 
-  const isProductInStock = (entryIdProduto: string) => {
-    return currentStock.some((stockItem) => stockItem.id_produto === entryIdProduto);
-  };
-
   const handleOpen = () => {
     setIsEditing(false);
     setEditId(null);
@@ -135,6 +148,7 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
       id_produto: '',
       id_funcionario: '',
       quantidadeRecebida: '0',
+      adicionado: false,
       dataEntrada: new Date().toISOString().split('T')[0],
       custoUnitario: 0,
       lote: '',
@@ -146,8 +160,19 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
   const handleClose = () => setOpenModal(false);
   const handleManageEntryClose = () => {
     setManageEntryModal(false);
-    setFilterStartDate(''); // Resetar filtros ao fechar
-    setFilterEndDate(''); // Resetar filtros ao fechar
+    setFilterStartDate('');
+    setFilterEndDate('');
+  };
+
+  const handleEditStockClose = () => {
+    setEditStockModal(false);
+    setEditStockId(null);
+    setStockForm({
+      id_produto: '',
+      quantidadeAtual: '0',
+      lote: '',
+      dataValidadeLote: new Date(),
+    });
   };
 
   const handleTextFieldChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -160,6 +185,24 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
             ? '0'
             : value
           : value,
+    }));
+    if (errors[name]) {
+      setErrors((prev) => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  const handleStockTextFieldChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setStockForm((prev) => ({
+      ...prev,
+      [name]:
+        name === 'quantidadeAtual'
+          ? value === ''
+            ? '0'
+            : value
+          : name === 'dataValidadeLote'
+            ? value
+            : value,
     }));
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: '' }));
@@ -196,6 +239,19 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
       newErrors.dataEntrada = 'Data de entrada é inválida';
     if (form.custoUnitario === undefined || form.custoUnitario < 0)
       newErrors.custoUnitario = 'Custo unitário não pode ser negativo';
+    if (!form.dataValidadeLote || new Date(form.dataValidadeLote) <= new Date())
+      newErrors.dataValidadeLote = 'A data de validade do lote deve ser futura';
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const validateStockForm = () => {
+    const newErrors: { [key: string]: string } = {};
+    if (!stockForm.id_produto?.trim()) newErrors.id_produto = 'Produto é obrigatório';
+    if (!stockForm.quantidadeAtual || Number(stockForm.quantidadeAtual) < 0)
+      newErrors.quantidadeAtual = 'Quantidade não pode ser negativa';
+    if (!stockForm.dataValidadeLote || new Date(stockForm.dataValidadeLote) <= new Date())
+      newErrors.dataValidadeLote = 'A data de validade do lote deve ser futura';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -216,6 +272,7 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
         id_produto: '',
         id_funcionario: '',
         quantidadeRecebida: '0',
+        adicionado: false,
         dataEntrada: new Date().toISOString().split('T')[0],
         custoUnitario: 0,
         lote: '',
@@ -230,55 +287,133 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('Tem certeza que deseja excluir esta entrada de estoque?')) {
+  const onStockSubmit = async () => {
+    if (!validateStockForm()) return;
+
+    try {
+      if (editStockId) {
+        const updatedStockData: Estoque = {
+          ...stockForm,
+          dataValidadeLote: new Date(stockForm.dataValidadeLote!), // Converte para Date
+        } as Estoque;
+        const updatedStock = await updateStock(editStockId, updatedStockData);
+        setCurrentStock((prev) =>
+          prev.map((item) => (item.id === editStockId ? updatedStock : item)),
+        );
+      }
+      handleEditStockClose();
+    } catch (error) {
+      console.error('Error updating stock:', error);
+      alert('Erro ao atualizar o estoque');
+    }
+  };
+  const handleEditStock = (stock: Estoque) => {
+    setEditStockId(stock.id || null);
+    setStockForm({
+      id_produto: stock.id_produto,
+      quantidadeAtual: stock.quantidadeAtual,
+      lote: stock.lote,
+      dataValidadeLote: stock.dataValidadeLote,
+    });
+    setEditStockModal(true);
+  };
+
+  const handleDeleteStock = async (id_produto: string) => {
+    if (window.confirm('Tem certeza que deseja excluir este item do estoque?')) {
       try {
-        await deleteStockEntry(id);
-        setStockEntries((prev) => prev.filter((item) => item.id !== id));
+        const stockToDelete = currentStock.find((item) => item.id_produto === id_produto);
+        if (stockToDelete?.id) {
+          await deleteStock(stockToDelete.id);
+          setCurrentStock((prev) => prev.filter((item) => item.id !== stockToDelete.id));
+        } else {
+          throw new Error('ID do estoque não encontrado');
+        }
       } catch (error) {
-        console.error('Error deleting stock entry:', error);
+        console.error('Error deleting stock:', error);
+        alert('Erro ao excluir o item do estoque');
       }
     }
   };
 
-  const handleEdit = (entry: EntradaEstoque) => {
-    setIsEditing(true);
-    setEditId(entry.id || null);
-    setForm({
-      id_fornecedor: entry.id_fornecedor,
-      id_produto: entry.id_produto,
-      id_funcionario: entry.id_funcionario,
-      quantidadeRecebida: entry.quantidadeRecebida,
-      dataEntrada: entry.dataEntrada,
-      custoUnitario: entry.custoUnitario,
-      lote: entry.lote,
-      dataValidadeLote: entry.dataValidadeLote,
-    });
-    setOpenModal(true);
-  };
-
   const handleAddToStock = async (entry: EntradaEstoque) => {
+    // Validação local antes de enviar ao backend
+    const dataValidade = new Date(entry.dataValidadeLote);
+    if (dataValidade <= new Date()) {
+      setErrors((prev) => ({
+        ...prev,
+        dataValidadeLote: 'A data de validade do lote deve ser futura',
+      }));
+      return;
+    }
+
     try {
-      const stockData: Estoque = {
-        id_produto: entry.id_produto,
-        quantidadeAtual: entry.quantidadeRecebida,
-        lote: entry.lote,
-        dataValidadeLote: new Date(entry.dataValidadeLote),
-      };
-      await createStock(stockData);
+      // Marcar a entrada como adicionada
+      setStockEntries((prev) =>
+        prev.map((item) => (item.id === entry.id ? { ...item, adicionado: true } : item)),
+      );
+
+      // Verificar se já existe um estoque para este produto, lote e data de validade
+      const existingStock = currentStock.find(
+        (item) =>
+          item.id_produto === entry.id_produto &&
+          item.lote === entry.lote &&
+          item.dataValidadeLote.toISOString().split('T')[0] ===
+            new Date(entry.dataValidadeLote).toISOString().split('T')[0],
+      );
+
+      if (existingStock) {
+        // Se o produto com o mesmo lote e data de validade já existe, somar as quantidades
+        const updatedQuantity = (
+          Number(existingStock.quantidadeAtual) + Number(entry.quantidadeRecebida)
+        ).toString();
+        const stockData: Estoque = {
+          ...existingStock,
+          quantidadeAtual: updatedQuantity,
+          dataValidadeLote: new Date(existingStock.dataValidadeLote),
+        };
+
+        if (existingStock.id) {
+          await updateStock(existingStock.id, stockData);
+          setCurrentStock((prev) =>
+            prev.map((item) =>
+              item.id === existingStock.id ? { ...item, quantidadeAtual: updatedQuantity } : item,
+            ),
+          );
+        } else {
+          throw new Error('ID do estoque existente não encontrado');
+        }
+      } else {
+        // Se não existe, criar um novo registro no estoque
+        const stockData: Estoque = {
+          id_produto: entry.id_produto,
+          quantidadeAtual: entry.quantidadeRecebida,
+          lote: entry.lote,
+          dataValidadeLote: new Date(entry.dataValidadeLote),
+        };
+        const newStock = await createStock(stockData);
+        setCurrentStock((prev) => [...prev, newStock]);
+      }
+
+      // Atualizar a entrada de estoque para marcar como adicionada
+      if (entry.id) {
+        await updateStockEntry(entry.id, { ...entry, adicionado: true });
+      } else {
+        throw new Error('ID da entrada de estoque não encontrado');
+      }
+
       alert('Produto adicionado ao estoque com sucesso!');
-      fetchData(); // Refresh data
     } catch (error) {
-      console.error('Error adding to stock:', error);
-      alert('Erro ao adicionar ao estoque');
+      console.error('Error adding to stock or updating entry:', error);
+      alert('Erro ao adicionar ao estoque ou atualizar a entrada');
+      setStockEntries((prev) =>
+        prev.map((item) => (item.id === entry.id ? { ...item, adicionado: false } : item)),
+      );
     }
   };
-
   const handleManageEntries = () => {
     setManageEntryModal(true);
   };
 
-  // Função para filtrar entradas com base nas datas
   const filteredEntries = stockEntries.filter((entry) => {
     const entryDate = new Date(entry.dataEntrada);
     const startDate = filterStartDate ? new Date(filterStartDate) : null;
@@ -488,7 +623,100 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
         </Box>
       </Modal>
 
-      {/* Modal for Managing All Stock Entries (Vertical Listing) with Date Filter */}
+      {/* Modal for Editing Stock */}
+      <Modal open={editStockModal} onClose={handleEditStockClose}>
+        <Box sx={style} component="form" noValidate autoComplete="off">
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            sx={{ width: '100%', mb: 2 }}
+          >
+            <Typography variant="h5">Editar Estoque</Typography>
+            <Button onClick={handleEditStockClose} variant="outlined" color="error">
+              Fechar
+            </Button>
+          </Stack>
+
+          <Grid container spacing={2} sx={{ width: '100%' }}>
+            <Grid item xs={12} sm={6}>
+              <FormControl variant="filled" fullWidth error={!!errors.id_produto} disabled>
+                <InputLabel>Produto</InputLabel>
+                <Select
+                  name="id_produto"
+                  value={stockForm.id_produto || ''}
+                  onChange={handleSelectChange}
+                >
+                  <MenuItem value="" disabled>
+                    Selecione um produto
+                  </MenuItem>
+                  {products.map((product) => (
+                    <MenuItem key={product.id} value={product.id}>
+                      {product.nomeProduto}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {errors.id_produto && <Typography color="error">{errors.id_produto}</Typography>}
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                name="quantidadeAtual"
+                label="Quantidade Atual"
+                variant="filled"
+                type="number"
+                fullWidth
+                value={stockForm.quantidadeAtual}
+                onChange={handleStockTextFieldChange}
+                error={!!errors.quantidadeAtual}
+                helperText={errors.quantidadeAtual}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                name="lote"
+                label="Lote"
+                variant="filled"
+                fullWidth
+                value={stockForm.lote}
+                onChange={handleStockTextFieldChange}
+                error={!!errors.lote}
+                helperText={errors.lote}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                name="dataValidadeLote"
+                label="Validade do Lote"
+                variant="filled"
+                type="date"
+                fullWidth
+                value={
+                  stockForm.dataValidadeLote instanceof Date
+                    ? stockForm.dataValidadeLote.toISOString().split('T')[0]
+                    : stockForm.dataValidadeLote
+                }
+                onChange={handleStockTextFieldChange}
+                InputLabelProps={{ shrink: true }}
+                error={!!errors.dataValidadeLote}
+                helperText={errors.dataValidadeLote}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <Button
+                variant="contained"
+                color="secondary"
+                sx={{ height: 40, width: '100%' }}
+                onClick={onStockSubmit}
+              >
+                <Typography variant="body2">Salvar</Typography>
+              </Button>
+            </Grid>
+          </Grid>
+        </Box>
+      </Modal>
+
+      {/* Modal for Managing All Stock Entries */}
       <Modal open={manageEntryModal} onClose={handleManageEntryClose}>
         <Box sx={style}>
           <Stack
@@ -503,7 +731,6 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
             </Button>
           </Stack>
 
-          {/* Filtros por data */}
           <Grid container spacing={2} sx={{ width: '100%', mb: 2 }}>
             <Grid item xs={12} sm={6}>
               <TextField
@@ -551,7 +778,7 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
               <TableBody>
                 {filteredEntries.map((entry) => {
                   const product = products.find((p) => p.id === entry.id_produto);
-                  if (!product) return null; // Skip if product not found
+                  if (!product) return null;
 
                   return (
                     <TableRow key={entry.id}>
@@ -570,7 +797,7 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
                           variant="contained"
                           color="primary"
                           onClick={() => handleAddToStock(entry)}
-                          disabled={isProductInStock(entry.id_produto)}
+                          disabled={entry.adicionado}
                           sx={{ mr: 1 }}
                         >
                           Adicionar ao Estoque
@@ -619,13 +846,13 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
                       <TableCell>{item.lote}</TableCell>
                       <TableCell>{item.dataValidadeLote.toLocaleDateString('pt-BR')}</TableCell>
                       <TableCell align="right">
-                        <IconButton
-                          color="primary"
-                          onClick={() => handleEdit(item as unknown as EntradaEstoque)}
-                        >
+                        <IconButton color="primary" onClick={() => handleEditStock(item)}>
                           <Edit />
                         </IconButton>
-                        <IconButton color="error" onClick={() => handleDelete(item.id_produto)}>
+                        <IconButton
+                          color="error"
+                          onClick={() => handleDeleteStock(item.id_produto)}
+                        >
                           <Delete />
                         </IconButton>
                       </TableCell>

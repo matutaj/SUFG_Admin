@@ -633,6 +633,10 @@ export const createStock = async (data: Estoque): Promise<Estoque> => {
   const response = await api.post(`/estoque`, data);
   return response.data;
 };
+export const deleteStock = async (id: string): Promise<Estoque> => {
+  const response = await api.post(`/estoque/${id}`);
+  return response.data;
+};
 export const updateStock = async (idProduto: string, data: Partial<Estoque>): Promise<Estoque> => {
   const response = await api.put(`/estoque/${idProduto}`, data);
   return response.data;
