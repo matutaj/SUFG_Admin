@@ -33,6 +33,7 @@ import {
   FuncionarioCaixaComNome,
   PeriodoMaisVendidoPorProduto,
   Estoque,
+  DadosWrapper,
 } from '../types/models';
 
 // Stock Entry
@@ -204,7 +205,7 @@ export const getSales = async (): Promise<Venda[]> => {
   return response.data;
 };
 
-export const createSale = async (data: Venda): Promise<Venda> => {
+export const createSale = async (data: DadosWrapper): Promise<Venda> => {
   const response = await api.post(`/venda`, data);
   return response.data;
 };

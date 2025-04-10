@@ -9,11 +9,11 @@ import {
   Card,
   CardContent,
   Table,
-  TableBody,
-  TableCell,
   TableContainer,
   TableHead,
   TableRow,
+  TableCell,
+  TableBody,
   IconButton,
   Collapse,
   Modal,
@@ -37,6 +37,8 @@ import {
   TipoDocumento,
   ProdutoLocalizacao,
   Localizacao,
+  Produto,
+  DadosWrapper,
 } from '../../types/models';
 import {
   getEmployeeCashRegisters,
@@ -46,30 +48,12 @@ import {
   getCashRegisters,
   createSale,
   getSales,
+  getProducts,
   getProductLocations,
   updateProductLocation,
   getLocations,
+  updateProduct,
 } from '../../api/methods';
-
-interface VendaCreateInput {
-  id_cliente: string;
-  dataEmissao: string;
-  dataValidade: string;
-  id_funcionarioCaixa: string;
-  numeroDocumento: string;
-  tipoDocumento: TipoDocumento;
-  valorTotal: number;
-  vendasProdutos: { id_produto: string; quantidadeVendida: number }[];
-}
-
-interface Produto {
-  id: number;
-  name: string;
-  shelf: string;
-  preco: number;
-  validade: string;
-  quantidade: number;
-}
 
 interface Fatura {
   id: number;
@@ -110,7 +94,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   const [openCaixaModal, setOpenCaixaModal] = useState(false);
   const [openCaixaListModal, setOpenCaixaListModal] = useState(false);
   const [faturas, setFaturas] = useState<Fatura[]>([]);
-  const [lojaProdutos, setLojaProdutos] = useState<Produto[]>([]);
+  const [produtos, setProdutos] = useState<Produto[]>([]);
   const [productLocations, setProductLocations] = useState<ProdutoLocalizacao[]>([]);
   const [locations, setLocations] = useState<Localizacao[]>([]);
 
@@ -153,6 +137,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           funcionariosData,
           caixasData,
           locationsData,
+          productsData,
           productLocationsData,
         ] = await Promise.all([
           getSales(),
@@ -160,6 +145,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           getEmployees(),
           getCashRegisters(),
           getLocations(),
+          getProducts(),
           getProductLocations(),
         ]);
 
@@ -173,42 +159,33 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           data: venda.dataEmissao.split('T')[0],
           status: 'Pendente',
           produtos:
-            venda.vendasProdutos?.map((vp) => ({
-              produto: {
-                id: Number(vp.produtos?.id),
-                name: vp.produtos?.nomeProduto || '',
-                shelf: '',
-                preco: vp.produtos?.precoVenda || 0, // Corrigido de "prico" para "preco"
-                validade: '',
-                quantidade: vp.produtos?.quantidadeEstoque || 0,
-              },
-              quantidade: vp.quantidadeVendida,
-            })) || [],
+            venda.vendasProdutos?.map((vp) => {
+              const produto = productsData.find((p) => p.id === vp.id_produto);
+              return {
+                produto: {
+                  id: vp.id_produto,
+                  id_categoriaProduto: produto?.id_categoriaProduto || '',
+                  referenciaProduto: produto?.referenciaProduto || '',
+                  nomeProduto: produto?.nomeProduto || '',
+                  custoAquisicao: produto?.custoAquisicao || '0',
+                  precoVenda: produto?.precoVenda || 0,
+                  quantidadeEstoque: produto?.quantidadeEstoque || 0,
+                  unidadeMedida: produto?.unidadeMedida || '',
+                  unidadeConteudo: produto?.unidadeConteudo || '',
+                  codigoBarras: produto?.codigoBarras || '',
+                },
+                quantidade: vp.quantidadeVendida,
+              };
+            }) || [],
           funcionariosCaixa: venda.funcionariosCaixa,
         }));
-
-        const lojaLocation = locationsData.find((loc) =>
-          loc.nomeLocalizacao.toLowerCase().includes('loja'),
-        );
-        const lojaProdutosData = lojaLocation
-          ? productLocationsData
-              .filter((loc) => loc.id_localizacao === lojaLocation.id)
-              .map((loc) => ({
-                id: Number(loc.id_produto),
-                name: loc.produtos?.nomeProduto || 'Desconhecido',
-                shelf: loc.id_prateleira || '',
-                preco: loc.produtos?.precoVenda || 0, // Corrigido de "prico" para "preco"
-                validade: '',
-                quantidade: loc.quantidadeProduto || 0,
-              }))
-          : [];
 
         setFaturas(mappedFaturas);
         setFuncionariosCaixa(funcionariosCaixaData);
         setFuncionarios(funcionariosData);
         setCaixas(caixasData);
         setLocations(locationsData);
-        setLojaProdutos(lojaProdutosData);
+        setProdutos(productsData);
         setProductLocations(productLocationsData);
       } catch (error) {
         console.error('Erro ao carregar dados iniciais:', error);
@@ -217,39 +194,16 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     fetchInitialData();
   }, [loggedInFuncionarioId]);
 
-  const fetchProductLocations = async () => {
+  const fetchProductsAndLocations = async () => {
     try {
-      const data = await getProductLocations();
-      const cleanedData = data.map((loc) => ({
-        ...loc,
-        id_produto: loc.id_produto ?? '',
-        id_localizacao: loc.id_localizacao ?? '',
-        id_seccao: loc.id_seccao ?? '',
-        id_prateleira: loc.id_prateleira ?? '',
-        id_corredor: loc.id_corredor ?? '',
-        quantidadeProduto: loc.quantidadeProduto ?? 0,
-        quantidadeMinimaProduto: loc.quantidadeMinimaProduto ?? 0,
-      }));
-      setProductLocations(cleanedData);
-
-      const lojaLocation = locations.find((loc) =>
-        loc.nomeLocalizacao.toLowerCase().includes('loja'),
-      );
-      const lojaProdutosData = lojaLocation
-        ? cleanedData
-            .filter((loc) => loc.id_localizacao === lojaLocation.id)
-            .map((loc) => ({
-              id: Number(loc.id_produto),
-              name: loc.produtos?.nomeProduto || 'Desconhecido',
-              shelf: loc.id_prateleira || '',
-              preco: loc.produtos?.precoVenda || 0, // Corrigido de "prico" para "preco"
-              validade: '',
-              quantidade: loc.quantidadeProduto || 0,
-            }))
-        : [];
-      setLojaProdutos(lojaProdutosData);
+      const [productsData, productLocationsData] = await Promise.all([
+        getProducts(),
+        getProductLocations(),
+      ]);
+      setProdutos(productsData);
+      setProductLocations(productLocationsData);
     } catch (error) {
-      console.error('Erro ao buscar localizações de produtos:', error);
+      console.error('Erro ao buscar produtos e localizações:', error);
     }
   };
 
@@ -285,18 +239,19 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     setFaturaForm((prev) => ({ ...prev, [name!]: value }));
     setFaturaErrors((prev) => ({ ...prev, [name!]: '' }));
   };
+
   const handleProdutoChange = (index: number, field: string, value: string | number) => {
     const updatedProdutos = [...faturaForm.produtosSelecionados];
     updatedProdutos[index] = { ...updatedProdutos[index], [field]: value };
     setFaturaForm((prev) => ({ ...prev, produtosSelecionados: updatedProdutos }));
 
     if (field === 'quantidade') {
-      const produto = lojaProdutos.find((p) => p.id.toString() === updatedProdutos[index].id);
+      const produto = produtos.find((p) => p.id === updatedProdutos[index].id);
       const quantidade = Number(value);
-      if (produto && quantidade > produto.quantidade) {
+      if (produto && quantidade > produto.quantidadeEstoque) {
         setFaturaErrors((prev) => ({
           ...prev,
-          [`produto_${index}`]: `Quantidade indisponível. Estoque na loja: ${produto.quantidade}`,
+          [`produto_${index}`]: `Quantidade indisponível. Estoque total: ${produto.quantidadeEstoque}`,
         }));
       } else {
         setFaturaErrors((prev) => {
@@ -327,8 +282,8 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const calcularTotal = () => {
     return faturaForm.produtosSelecionados.reduce((acc, curr) => {
-      const produto = lojaProdutos.find((p) => p.id.toString() === curr.id);
-      return acc + (produto ? produto.preco * curr.quantidade : 0); // Corrigido de "prico" para "preco"
+      const produto = produtos.find((p) => p.id === curr.id);
+      return acc + (produto ? produto.precoVenda * curr.quantidade : 0);
     }, 0);
   };
 
@@ -350,10 +305,10 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       if (!p.id) {
         newErrors[`produto_${index}`] = 'Selecione um produto';
       } else {
-        const produto = lojaProdutos.find((prod) => prod.id.toString() === p.id);
-        if (produto && p.quantidade > produto.quantidade) {
+        const produto = produtos.find((prod) => prod.id === p.id);
+        if (produto && p.quantidade > produto.quantidadeEstoque) {
           newErrors[`produto_${index}`] =
-            `Quantidade indisponível. Estoque na loja: ${produto.quantidade}`;
+            `Quantidade indisponível. Estoque total: ${produto.quantidadeEstoque}`;
         }
       }
     });
@@ -365,23 +320,35 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     if (!validateFaturaForm()) return;
 
     try {
-      const vendaData: VendaCreateInput = {
-        id_cliente: faturaForm.cliente,
-        dataEmissao: new Date(faturaForm.data).toISOString(),
-        dataValidade: new Date(
-          new Date(faturaForm.data).setDate(new Date(faturaForm.data).getDate() + 30),
-        ).toISOString(),
-        id_funcionarioCaixa: faturaForm.funcionariosCaixaId,
-        numeroDocumento: `FAT-${Date.now()}`,
-        tipoDocumento: TipoDocumento.FATURA,
-        valorTotal: calcularTotal(),
-        vendasProdutos: faturaForm.produtosSelecionados.map((p) => ({
-          id_produto: p.id,
-          quantidadeVendida: p.quantidade,
-        })),
+      const dadosWrapper: DadosWrapper = {
+        Dados: {
+          dadosVenda: {
+            dataEmissao: new Date(faturaForm.data),
+            dataValidade: new Date(
+              new Date(faturaForm.data).setDate(new Date(faturaForm.data).getDate() + 30),
+            ),
+            id_funcionarioCaixa: faturaForm.funcionariosCaixaId,
+            numeroDocumento: `FAT-${Date.now()}`,
+            tipoDocumento: TipoDocumento.FATURA,
+            valorTotal: calcularTotal(),
+            vendasProdutos: faturaForm.produtosSelecionados.map((p) => ({
+              id_produto: p.id,
+              quantidade: p.quantidade,
+            })),
+          },
+          cliente: [
+            {
+              nomeCliente: faturaForm.cliente,
+              numeroContribuinte: faturaForm.nif || '',
+              telefoneCliente: faturaForm.telefone || '',
+              moradaCliente: faturaForm.localizacao || '',
+              emailCliente: faturaForm.email || '',
+            },
+          ],
+        },
       };
 
-      const createdVenda = await createSale(vendaData as Venda);
+      const createdVenda = await createSale(dadosWrapper);
 
       const lojaLocation = locations.find((loc) => isStoreLocation(loc.id, locations));
       if (lojaLocation) {
@@ -390,23 +357,67 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
             (loc) =>
               loc.id_produto === produtoSelecionado.id && loc.id_localizacao === lojaLocation.id,
           );
-          if (produtoLocation) {
+          if (produtoLocation && produtoLocation.id_produto) {
+            // Verifica se existe e tem id_produto
             const newQuantity =
               (produtoLocation.quantidadeProduto ?? 0) - produtoSelecionado.quantidade;
             if (newQuantity >= 0) {
               const updatedLocation: ProdutoLocalizacao = {
                 ...produtoLocation,
                 quantidadeProduto: newQuantity,
+                id_produto: produtoLocation.id_produto, // Garante que id_produto seja incluído
               };
+              console.log('Atualizando localização do produto:', updatedLocation); // Para depuração
               await updateProductLocation(produtoLocation.id ?? '', updatedLocation);
             } else {
               throw new Error(
                 `Quantidade insuficiente na loja para o produto ${produtoSelecionado.id}`,
               );
             }
+          } else {
+            console.warn(
+              `Localização do produto ${produtoSelecionado.id} não encontrada ou sem id_produto`,
+            );
           }
         }
       }
+
+      for (const produtoSelecionado of faturaForm.produtosSelecionados) {
+        const produto = produtos.find((p) => p.id === produtoSelecionado.id);
+        if (produto) {
+          const newStock = produto.quantidadeEstoque - produtoSelecionado.quantidade;
+          if (newStock >= 0) {
+            const updatedProduto: Produto = {
+              ...produto,
+              quantidadeEstoque: newStock,
+            };
+            await updateProduct(produto.id!, updatedProduto);
+          } else {
+            throw new Error(
+              `Quantidade insuficiente no estoque total para o produto ${produtoSelecionado.id}`,
+            );
+          }
+        }
+      }
+
+      const novosProdutosFatura = faturaForm.produtosSelecionados.map((p) => {
+        const produto = produtos.find((prod) => prod.id === p.id);
+        return {
+          produto: {
+            id: produto!.id!,
+            id_categoriaProduto: produto!.id_categoriaProduto,
+            referenciaProduto: produto!.referenciaProduto,
+            nomeProduto: produto!.nomeProduto,
+            custoAquisicao: produto!.custoAquisicao,
+            precoVenda: produto!.precoVenda,
+            quantidadeEstoque: produto!.quantidadeEstoque - p.quantidade,
+            unidadeMedida: produto!.unidadeMedida,
+            unidadeConteudo: produto!.unidadeConteudo,
+            codigoBarras: produto!.codigoBarras,
+          },
+          quantidade: p.quantidade,
+        };
+      });
 
       const newFatura: Fatura = {
         id: createdVenda.id ? Number(createdVenda.id) : faturas.length + 1,
@@ -417,31 +428,29 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         email: faturaForm.email,
         data: createdVenda.dataEmissao.split('T')[0],
         status: faturaForm.status,
-        produtos: faturaForm.produtosSelecionados.map((p) => ({
-          produto: lojaProdutos.find((prod) => prod.id.toString() === p.id)!,
-          quantidade: p.quantidade,
-        })),
+        produtos: novosProdutosFatura,
         funcionariosCaixa: funcionariosCaixa.find(
           (fc) => fc.id === createdVenda.id_funcionarioCaixa,
         ),
       };
 
       setFaturas((prev) => [...prev, newFatura]);
-      setLojaProdutos((prev) =>
-        prev
-          .map((produto) => {
-            const produtoSelecionado = faturaForm.produtosSelecionados.find(
-              (p) => p.id === produto.id.toString(),
-            );
-            if (produtoSelecionado) {
-              return { ...produto, quantidade: produto.quantidade - produtoSelecionado.quantidade };
-            }
-            return produto;
-          })
-          .filter((p) => p.quantidade > 0),
+      setProdutos((prev) =>
+        prev.map((produto) => {
+          const produtoSelecionado = faturaForm.produtosSelecionados.find(
+            (p) => p.id === produto.id,
+          );
+          if (produtoSelecionado) {
+            return {
+              ...produto,
+              quantidadeEstoque: produto.quantidadeEstoque - produtoSelecionado.quantidade,
+            };
+          }
+          return produto;
+        }),
       );
       handleCloseFaturaModal();
-      await fetchProductLocations();
+      await fetchProductsAndLocations();
     } catch (error) {
       console.error('Erro ao criar fatura:', error);
       alert('Falha ao cadastrar fatura. Verifique sua conexão ou tente novamente.');
@@ -464,7 +473,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         data: fatura.data,
         status: fatura.status,
         produtosSelecionados: fatura.produtos.map((p) => ({
-          id: p.produto.id.toString(),
+          id: p.produto.id!,
           quantidade: p.quantidade,
         })),
         funcionariosCaixaId: fatura.funcionariosCaixa?.id || '',
@@ -515,10 +524,10 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
 
     try {
       const newFuncionarioCaixa: FuncionarioCaixa = {
-        id_funcionario: caixaForm.funcionarioId,
         id_caixa: caixaForm.caixaId,
+        id_funcionario: caixaForm.funcionarioId,
         estadoCaixa: true,
-        quantidadaFaturada: 0, // Corrigido de "quantidadaFaturada" para "quantidadeFaturada"
+        quantidadaFaturada: 0,
         horarioAbertura: new Date(),
         horarioFechamento: null,
       };
@@ -567,7 +576,10 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   };
 
   const calcularTotalFatura = (fatura: Fatura) => {
-    return fatura.produtos.reduce((acc, curr) => acc + curr.produto.preco * curr.quantidade, 0); // Corrigido de "prico" para "preco"
+    return fatura.produtos.reduce(
+      (acc, curr) => acc + curr.produto.precoVenda * curr.quantidade,
+      0,
+    );
   };
 
   return (
@@ -759,10 +771,9 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                       value={produto.id}
                       onChange={(e) => handleProdutoChange(index, 'id', e.target.value)}
                     >
-                      {lojaProdutos.map((p) => (
-                        <MenuItem key={p.id} value={p.id.toString()}>
-                          {p.name} - {p.preco}kzs (Estoque: {p.quantidade}) // Corrigido de "prico"
-                          para "preco"
+                      {produtos.map((p) => (
+                        <MenuItem key={p.id} value={p.id}>
+                          {p.nomeProduto} - {p.precoVenda}kzs (Estoque: {p.quantidadeEstoque})
                         </MenuItem>
                       ))}
                     </Select>
@@ -857,7 +868,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   )}
                 </FormControl>
               </Grid>
-              <Grid xs={12} sm={6}>
+              <Grid item xs={12} sm={6}>
                 <FormControl fullWidth variant="filled" error={Boolean(caixaErrors.caixaId)}>
                   <InputLabel>Caixa</InputLabel>
                   <Select
@@ -917,8 +928,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                     <TableCell>{item.caixas?.nomeCaixa || 'N/A'}</TableCell>
                     <TableCell>{item.funcionarios?.nomeFuncionario || 'N/A'}</TableCell>
                     <TableCell>{item.estadoCaixa ? 'Aberto' : 'Fechado'}</TableCell>
-                    <TableCell>{item.quantidadaFaturada} kz</TableCell>{' '}
-                    {/* Corrigido de "quantidadaFaturada" */}
+                    <TableCell>{item.quantidadaFaturada} kz</TableCell>
                     <TableCell>
                       {item.estadoCaixa && (
                         <Button
@@ -966,7 +976,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                     <TableCell>{item.status}</TableCell>
                     <TableCell>
                       {item.produtos.map((p, idx) => (
-                        <div key={idx}>{`${p.produto.name} - ${p.quantidade}x`}</div>
+                        <div key={idx}>{`${p.produto.nomeProduto} - ${p.quantidade}x`}</div>
                       ))}
                     </TableCell>
                     <TableCell>{item.funcionariosCaixa?.caixas?.nomeCaixa || 'N/A'}</TableCell>
