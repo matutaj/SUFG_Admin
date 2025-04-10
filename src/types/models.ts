@@ -7,16 +7,31 @@ export enum TipoDocumento {
   FATURA_RECIBO = 'FATURA_RECIBO',
 }
 
+export interface DadosVenda {
+  id_cliente?: string;
+  dataEmissao: Date;
+  dataValidade: Date;
+  id_funcionarioCaixa: string;
+  numeroDocumento: string;
+  tipoDocumento: TipoDocumento;
+  valorTotal: number;
+  vendasProdutos: { id_produto: string; quantidade: number; valorTotal?: number }[];
+}
+
 export interface Cliente {
   id?: string;
-  numeroContribuinte?: string | null;
-  nomeCliente?: string | null;
-  moradaCliente?: string | null;
-  telefoneCliente?: string | null;
-  emailCliente?: string | null;
-  vendas?: Venda[];
-  createdAt?: string;
-  updatedAt?: string;
+  emailCliente: string;
+  moradaCliente: string;
+  nomeCliente: string;
+  telefoneCliente: string;
+  numeroContribuinte: string;
+}
+
+export interface DadosWrapper {
+  Dados: {
+    dadosVenda: DadosVenda;
+    cliente?: Cliente[];
+  };
 }
 
 export interface Funcionario {
@@ -207,7 +222,7 @@ export interface FuncionarioCaixa {
   id_funcionario: string;
   estadoCaixa: boolean;
   quantidadaFaturada: number;
-  horarioAbertura: Date | null;
+  horarioAbertura: Date;
   horarioFechamento: Date | null;
   caixas?: Caixa;
   funcionarios?: Funcionario;
@@ -286,9 +301,6 @@ export interface FuncaoPermissao {
   updatedAt?: string;
 }
 
-// src/types/models.ts
-
-// Interface para vendas com nome do funcionário
 export interface VendaComFuncionario {
   id: string;
   idCliente?: string;
