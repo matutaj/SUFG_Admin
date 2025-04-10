@@ -24,6 +24,8 @@ import {
   FormControl,
   FormHelperText,
   SelectChangeEvent,
+  Divider,
+  Autocomplete,
 } from '@mui/material';
 import IconifyIcon from 'components/base/IconifyIcon';
 import Delete from 'components/icons/factor/Delete';
@@ -39,6 +41,7 @@ import {
   Localizacao,
   Produto,
   DadosWrapper,
+  Cliente,
 } from '../../types/models';
 import {
   getEmployeeCashRegisters,
@@ -53,7 +56,13 @@ import {
   updateProductLocation,
   getLocations,
   updateProduct,
+  updateStock,
+  createStock,
+  getStockByProduct,
+  getClients,
 } from '../../api/methods';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface Fatura {
   id: number;
@@ -78,15 +87,14 @@ const modalStyle = {
   top: '50%',
   left: '50%',
   transform: 'translate(-50%, -50%)',
-  width: { xs: '90vw', sm: '80vw', md: 900 },
+  width: { xs: '95vw', sm: '85vw', md: 900 },
   maxWidth: '100%',
-  height: { xs: '90vh', sm: '80vh', md: 700 },
   maxHeight: '90vh',
   bgcolor: 'background.paper',
   boxShadow: 24,
-  p: { xs: 2, sm: 3, md: 4 },
-  overflowY: 'auto' as const,
+  p: 4,
   borderRadius: 2,
+  overflowY: 'auto' as const,
 };
 
 const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
@@ -97,6 +105,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [productLocations, setProductLocations] = useState<ProdutoLocalizacao[]>([]);
   const [locations, setLocations] = useState<Localizacao[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
 
   const [faturaForm, setFaturaForm] = useState({
     cliente: '',
@@ -139,6 +148,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           locationsData,
           productsData,
           productLocationsData,
+          clientsData,
         ] = await Promise.all([
           getSales(),
           getEmployeeCashRegisters(),
@@ -147,38 +157,44 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           getLocations(),
           getProducts(),
           getProductLocations(),
+          getClients(),
         ]);
 
-        const mappedFaturas = salesData.map((venda: Venda, index: number) => ({
-          id: index + 1,
-          cliente: venda.clientes?.nomeCliente || venda.id_cliente,
-          nif: '',
-          telefone: '',
-          localizacao: '',
-          email: '',
-          data: venda.dataEmissao.split('T')[0],
-          status: 'Pendente',
-          produtos:
-            venda.vendasProdutos?.map((vp) => {
-              const produto = productsData.find((p) => p.id === vp.id_produto);
-              return {
-                produto: {
-                  id: vp.id_produto,
-                  id_categoriaProduto: produto?.id_categoriaProduto || '',
-                  referenciaProduto: produto?.referenciaProduto || '',
-                  nomeProduto: produto?.nomeProduto || '',
-                  custoAquisicao: produto?.custoAquisicao || '0',
-                  precoVenda: produto?.precoVenda || 0,
-                  quantidadeEstoque: produto?.quantidadeEstoque || 0,
-                  unidadeMedida: produto?.unidadeMedida || '',
-                  unidadeConteudo: produto?.unidadeConteudo || '',
-                  codigoBarras: produto?.codigoBarras || '',
-                },
-                quantidade: vp.quantidadeVendida,
-              };
-            }) || [],
-          funcionariosCaixa: venda.funcionariosCaixa,
-        }));
+        setClientes(clientsData as Cliente[]);
+
+        const mappedFaturas = salesData.map((venda: Venda, index: number) => {
+          const cliente = clientsData.find((c: Cliente) => c.id === venda.id_cliente);
+          return {
+            id: index + 1,
+            cliente: cliente ? cliente.nomeCliente : venda.id_cliente || 'Desconhecido',
+            nif: cliente?.numeroContribuinte || venda.clientes?.numeroContribuinte || '',
+            telefone: cliente?.telefoneCliente || venda.clientes?.telefoneCliente || '',
+            localizacao: cliente?.moradaCliente || venda.clientes?.moradaCliente || '',
+            email: cliente?.emailCliente || venda.clientes?.emailCliente || '',
+            data: venda.dataEmissao.split('T')[0],
+            status: 'Pendente',
+            produtos:
+              venda.vendasProdutos?.map((vp) => {
+                const produto = productsData.find((p) => p.id === vp.id_produto);
+                return {
+                  produto: {
+                    id: vp.id_produto,
+                    id_categoriaProduto: produto?.id_categoriaProduto || '',
+                    referenciaProduto: produto?.referenciaProduto || '',
+                    nomeProduto: produto?.nomeProduto || '',
+                    custoAquisicao: produto?.custoAquisicao || '0',
+                    precoVenda: produto?.precoVenda || 0,
+                    quantidadeEstoque: produto?.quantidadeEstoque || 0,
+                    unidadeMedida: produto?.unidadeMedida || '',
+                    unidadeConteudo: produto?.unidadeConteudo || '',
+                    codigoBarras: produto?.codigoBarras || '',
+                  },
+                  quantidade: vp.quantidadeVendida,
+                };
+              }) || [],
+            funcionariosCaixa: venda.funcionariosCaixa,
+          };
+        });
 
         setFaturas(mappedFaturas);
         setFuncionariosCaixa(funcionariosCaixaData);
@@ -316,6 +332,132 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     return Object.keys(newErrors).length === 0;
   };
 
+  const generatePDF = (fatura: Fatura) => {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
+    });
+
+    // Configurações de fonte e cores
+    doc.setFont('helvetica');
+    const blueColor = '#1E90FF'; // Cor azul da imagem
+    const blackColor = '#000000';
+
+    // Cabeçalho
+    doc.setFillColor(blueColor);
+    doc.rect(0, 0, 210, 20, 'F'); // Retângulo azul no topo
+    doc.setTextColor(blackColor);
+    doc.setFontSize(18);
+    doc.text('SISTEMA UNIFICADO DE FATURAÇÃO E GESTÃO', 105, 10, { align: 'center' }); // Nome centralizado
+    doc.setFontSize(10);
+    doc.text('Contato: lorem@empresa.com', 150, 15); // Contato
+    doc.text('CNPJ: 00.000.000/0000-00', 150, 18);
+
+    // Título e número da fatura
+    doc.setFontSize(40);
+    doc.text('Fatura.', 20, 30);
+    doc.setFontSize(12);
+    doc.text(`Fatura: 00-0000-0000`, 160, 30); // Substitua por fatura.id se disponível
+    doc.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`, 160, 35);
+
+    // Emitido Para e Valor Total
+    doc.setFontSize(14);
+    doc.text('CLIENTE', 20, 50);
+    doc.setFontSize(12);
+    doc.text(fatura.cliente, 20, 55);
+    doc.text(`Tel: ${fatura.telefone || 'N/A'}`, 20, 60);
+    doc.setFontSize(20);
+    doc.text(`${calcularTotalFatura(fatura).toFixed(2)}`, 160, 55);
+    doc.setFontSize(12);
+
+    // Tabela de itens
+    doc.setFontSize(12);
+    doc.setFillColor(blueColor);
+    doc.rect(10, 70, 190, 10, 'F'); // Cabeçalho da tabela
+    doc.setTextColor(blackColor);
+    doc.text('Descrição do Produto', 15, 76);
+    doc.text('Qtd', 90, 76, { align: 'center' });
+    doc.text('Preço', 130, 76, { align: 'center' });
+    doc.text('Total', 170, 76, { align: 'center' });
+
+    const produtosTable = fatura.produtos.map((p) => {
+      const precoVenda = Number(p.produto.precoVenda) || 0; // Converte para número, usa 0 se inválido
+      return [
+        p.produto.nomeProduto || 'Produto sem nome',
+        p.quantidade.toString(),
+        `Kzs ${precoVenda.toFixed(2)}`,
+        `Kzs ${(precoVenda * p.quantidade).toFixed(2)}`,
+      ];
+    });
+
+    autoTable(doc, {
+      startY: 80,
+      head: [['', '', '', '']],
+      body: produtosTable,
+      theme: 'plain',
+      styles: {
+        fontSize: 10,
+        cellPadding: 2,
+        textColor: blackColor,
+      },
+      columnStyles: {
+        0: { cellWidth: 75 },
+        1: { cellWidth: 40, halign: 'center' },
+        2: { cellWidth: 40, halign: 'center' },
+        3: { cellWidth: 35, halign: 'right' },
+      },
+      didDrawCell: (data) => {
+        if (
+          data.section === 'body' &&
+          data.column.index === 0 &&
+          data.cell.raw === fatura.produtos[0]?.produto.nomeProduto
+        ) {
+          doc.setFillColor(blueColor);
+          doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, 'F');
+          doc.setTextColor(blackColor);
+        }
+      },
+    });
+
+    const finalY = doc.lastAutoTable.finalY;
+
+    doc.setFontSize(12);
+    doc.text('Subtotal', 130, finalY + 10);
+    doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 170, finalY + 10, { align: 'right' });
+    doc.text('Imposto', 130, finalY + 15);
+    doc.text('Kzs 0.00', 170, finalY + 15, { align: 'right' }); // Ajuste conforme lógica de imposto
+    doc.setFillColor(blueColor);
+    doc.rect(10, finalY + 20, 190, 10, 'F');
+    doc.setTextColor(blackColor);
+    doc.text('Total', 130, finalY + 26);
+    doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 170, finalY + 26, { align: 'right' });
+
+    // Informações de pagamento
+    doc.setFontSize(10);
+    doc.text('Informação de pagamento', 20, finalY + 40);
+    doc.text(
+      'Se você tiver alguma dúvida sobre esta fatura, favor entrar em contato:',
+      20,
+      finalY + 45,
+    );
+    doc.setFillColor(blueColor);
+    doc.rect(10, finalY + 50, 190, 10, 'F');
+    doc.setTextColor(blackColor);
+    doc.text('Tel: +00 0123 345', 20, finalY + 56);
+    doc.text('sufggeral@gmail.com', 70, finalY + 56);
+    doc.text('www.sufggeral.com', 120, finalY + 56);
+
+    // Forçar download do PDF
+    const pdfBlob = doc.output('blob');
+    const link = document.createElement('a');
+    link.href = window.URL.createObjectURL(pdfBlob);
+    link.download = `Fatura_${fatura.id}_${new Date().toISOString().split('T')[0]}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const onAddFaturaSubmit = async () => {
     if (!validateFaturaForm()) return;
 
@@ -358,17 +500,50 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
               loc.id_produto === produtoSelecionado.id && loc.id_localizacao === lojaLocation.id,
           );
           if (produtoLocation && produtoLocation.id_produto) {
-            // Verifica se existe e tem id_produto
             const newQuantity =
               (produtoLocation.quantidadeProduto ?? 0) - produtoSelecionado.quantidade;
             if (newQuantity >= 0) {
               const updatedLocation: ProdutoLocalizacao = {
                 ...produtoLocation,
                 quantidadeProduto: newQuantity,
-                id_produto: produtoLocation.id_produto, // Garante que id_produto seja incluído
+                id_produto: produtoLocation.id_produto,
               };
-              console.log('Atualizando localização do produto:', updatedLocation); // Para depuração
               await updateProductLocation(produtoLocation.id ?? '', updatedLocation);
+
+              const armazemLocation = locations.find((loc) =>
+                loc.nomeLocalizacao.toLowerCase().includes('armazém'),
+              );
+              const armazemProdutoLocation = armazemLocation
+                ? productLocations.find(
+                    (loc) =>
+                      loc.id_produto === produtoSelecionado.id &&
+                      loc.id_localizacao === armazemLocation.id,
+                  )
+                : null;
+              const estoqueGeral = newQuantity + (armazemProdutoLocation?.quantidadeProduto ?? 0);
+
+              const existingStock = await getStockByProduct(produtoSelecionado.id);
+              if (existingStock) {
+                await updateStock(produtoSelecionado.id, {
+                  quantidadeAtual: String(estoqueGeral),
+                });
+              } else {
+                await createStock({
+                  id_produto: produtoSelecionado.id,
+                  quantidadeAtual: String(estoqueGeral),
+                  lote: 'DEFAULT_LOTE',
+                  dataValidadeLote: new Date(),
+                });
+              }
+
+              const produto = produtos.find((p) => p.id === produtoSelecionado.id);
+              if (produto) {
+                const updatedProduto: Produto = {
+                  ...produto,
+                  quantidadeEstoque: estoqueGeral,
+                };
+                await updateProduct(produto.id!, updatedProduto);
+              }
             } else {
               throw new Error(
                 `Quantidade insuficiente na loja para o produto ${produtoSelecionado.id}`,
@@ -377,24 +552,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           } else {
             console.warn(
               `Localização do produto ${produtoSelecionado.id} não encontrada ou sem id_produto`,
-            );
-          }
-        }
-      }
-
-      for (const produtoSelecionado of faturaForm.produtosSelecionados) {
-        const produto = produtos.find((p) => p.id === produtoSelecionado.id);
-        if (produto) {
-          const newStock = produto.quantidadeEstoque - produtoSelecionado.quantidade;
-          if (newStock >= 0) {
-            const updatedProduto: Produto = {
-              ...produto,
-              quantidadeEstoque: newStock,
-            };
-            await updateProduct(produto.id!, updatedProduto);
-          } else {
-            throw new Error(
-              `Quantidade insuficiente no estoque total para o produto ${produtoSelecionado.id}`,
             );
           }
         }
@@ -441,16 +598,39 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
             (p) => p.id === produto.id,
           );
           if (produtoSelecionado) {
-            return {
-              ...produto,
-              quantidadeEstoque: produto.quantidadeEstoque - produtoSelecionado.quantidade,
-            };
+            const lojaLoc = productLocations.find(
+              (loc) => loc.id_produto === produto.id && loc.id_localizacao === lojaLocation?.id,
+            );
+            const armazemLoc = productLocations.find(
+              (loc) =>
+                loc.id_produto === produto.id &&
+                loc.id_localizacao ===
+                  locations.find((l) => l.nomeLocalizacao.toLowerCase().includes('armazém'))?.id,
+            );
+            const newStock =
+              (lojaLoc?.quantidadeProduto ?? 0) + (armazemLoc?.quantidadeProduto ?? 0);
+            return { ...produto, quantidadeEstoque: newStock };
           }
           return produto;
         }),
       );
+      generatePDF(newFatura);
       handleCloseFaturaModal();
       await fetchProductsAndLocations();
+
+      // Atualiza a lista de clientes se um novo cliente foi criado
+      const clienteExistente = clientes.find((c) => c.id === createdVenda.id_cliente);
+      if (!clienteExistente && createdVenda.id_cliente) {
+        const novoCliente: Cliente = {
+          id: createdVenda.id_cliente,
+          nomeCliente: faturaForm.cliente,
+          numeroContribuinte: faturaForm.nif || '',
+          telefoneCliente: faturaForm.telefone || '',
+          moradaCliente: faturaForm.localizacao || '',
+          emailCliente: faturaForm.email || '',
+        };
+        setClientes((prev) => [...prev, novoCliente]);
+      }
     } catch (error) {
       console.error('Erro ao criar fatura:', error);
       alert('Falha ao cadastrar fatura. Verifique sua conexão ou tente novamente.');
@@ -544,13 +724,29 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   const handleFecharCaixa = async (caixaId: string) => {
     try {
       const caixaAtual = funcionariosCaixa.find((c) => c.id === caixaId);
-      if (!caixaAtual) throw new Error('Caixa não encontrado');
+      if (!caixaAtual) {
+        console.error('Caixa não encontrado para o ID:', caixaId);
+        alert('Caixa não encontrado.');
+        return;
+      }
+
+      // Verifica se horarioAbertura é válido
+      if (!caixaAtual.horarioAbertura) {
+        console.error('horarioAbertura inválido para o caixa:', caixaId);
+        alert('Erro: Horário de abertura não definido.');
+        return;
+      }
 
       const faturasDoCaixa = faturas.filter((f) => {
+        const dataFatura = new Date(f.data);
+        const abertura = caixaAtual.horarioAbertura;
+        const fechamento = caixaAtual.horarioFechamento
+          ? new Date(caixaAtual.horarioFechamento)
+          : new Date();
         return (
           f.funcionariosCaixa?.id === caixaId &&
-          new Date(f.data) >= new Date(caixaAtual.horarioAbertura!) &&
-          (!caixaAtual.horarioFechamento || new Date(f.data) <= new Date())
+          dataFatura >= abertura &&
+          (!caixaAtual.horarioFechamento || dataFatura <= fechamento)
         );
       });
 
@@ -566,20 +762,56 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         horarioFechamento: new Date(),
       };
 
+      console.log('Enviando para updateEmployeeCashRegister:', updatedCaixa);
       const response = await updateEmployeeCashRegister(caixaId, updatedCaixa);
+      console.log('Resposta da API:', response);
       setFuncionariosCaixa((prev) => prev.map((c) => (c.id === caixaId ? response : c)));
       handleCloseCaixaListModal();
     } catch (error) {
       console.error('Erro ao fechar o caixa:', error);
-      alert('Falha ao fechar o caixa. Tente novamente.');
+      alert('Falha ao fechar o caixa. Verifique o console para mais detalhes.');
     }
   };
 
   const calcularTotalFatura = (fatura: Fatura) => {
     return fatura.produtos.reduce(
-      (acc, curr) => acc + curr.produto.precoVenda * curr.quantidade,
+      (acc, curr) => acc + (Number(curr.produto.precoVenda) || 0) * curr.quantidade,
       0,
     );
+  };
+
+  const handleClientSelect = (_event: React.SyntheticEvent, newValue: string | Cliente | null) => {
+    if (newValue) {
+      if (typeof newValue === 'string') {
+        setFaturaForm((prev) => ({
+          ...prev,
+          cliente: newValue,
+          nif: '',
+          telefone: '',
+          localizacao: '',
+          email: '',
+        }));
+      } else {
+        setFaturaForm((prev) => ({
+          ...prev,
+          cliente: newValue.nomeCliente,
+          nif: newValue.numeroContribuinte || '',
+          telefone: newValue.telefoneCliente || '',
+          localizacao: newValue.moradaCliente || '',
+          email: newValue.emailCliente || '',
+        }));
+      }
+      setFaturaErrors((prev) => ({ ...prev, cliente: '' }));
+    } else {
+      setFaturaForm((prev) => ({
+        ...prev,
+        cliente: '',
+        nif: '',
+        telefone: '',
+        localizacao: '',
+        email: '',
+      }));
+    }
   };
 
   return (
@@ -634,74 +866,104 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       {/* Modal de Nova Venda */}
       <Modal open={openFaturaModal} onClose={handleCloseFaturaModal}>
         <Box sx={modalStyle}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-            <Typography variant="h5" fontWeight="bold" fontSize={{ xs: 18, sm: 24 }}>
-              Nova Venda (Loja)
+          <Typography variant="h5" fontWeight="bold" color="primary" sx={{ mb: 3 }}>
+            Nova Venda (Loja)
+          </Typography>
+          <Stack spacing={3}>
+            <Divider sx={{ borderColor: 'primary.main' }} />
+            <Typography variant="h6" color="text.secondary">
+              Dados do Cliente
             </Typography>
-            <Button variant="outlined" color="error" onClick={handleCloseFaturaModal} size="small">
-              Fechar
-            </Button>
-          </Stack>
-          <Stack spacing={2}>
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6} md={4}>
-                <TextField
-                  fullWidth
-                  variant="filled"
-                  name="cliente"
-                  label="Nome do Cliente"
-                  value={faturaForm.cliente}
-                  onChange={handleTextFieldChange}
-                  error={Boolean(faturaErrors.cliente)}
-                  helperText={faturaErrors.cliente}
+                <Autocomplete
+                  options={clientes}
+                  getOptionLabel={(option) =>
+                    typeof option === 'string' ? option : option.nomeCliente
+                  }
+                  onChange={handleClientSelect}
+                  value={
+                    clientes.find((c) => c.nomeCliente === faturaForm.cliente) ||
+                    (faturaForm.cliente ? faturaForm.cliente : null)
+                  }
+                  freeSolo
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      fullWidth
+                      variant="outlined"
+                      label="Selecione ou Digite Cliente"
+                      error={Boolean(faturaErrors.cliente)}
+                      helperText={faturaErrors.cliente}
+                      sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
+                      onChange={(e) => {
+                        setFaturaForm((prev) => ({
+                          ...prev,
+                          cliente: e.target.value,
+                        }));
+                        setFaturaErrors((prev) => ({ ...prev, cliente: '' }));
+                      }}
+                    />
+                  )}
                 />
               </Grid>
               <Grid item xs={12} sm={6} md={4}>
                 <TextField
                   fullWidth
-                  variant="filled"
+                  variant="outlined"
                   name="nif"
                   label="NIF/BI"
                   value={faturaForm.nif}
                   onChange={handleTextFieldChange}
+                  sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
                 />
               </Grid>
               <Grid item xs={12} sm={6} md={4}>
                 <TextField
                   fullWidth
-                  variant="filled"
+                  variant="outlined"
                   name="telefone"
                   label="Telefone"
                   type="tel"
                   value={faturaForm.telefone}
                   onChange={handleTextFieldChange}
+                  sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
                 />
               </Grid>
               <Grid item xs={12} sm={6} md={4}>
                 <TextField
                   fullWidth
-                  variant="filled"
+                  variant="outlined"
                   name="localizacao"
                   label="Localização"
                   value={faturaForm.localizacao}
                   onChange={handleTextFieldChange}
+                  sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
                 />
               </Grid>
               <Grid item xs={12} sm={6} md={4}>
                 <TextField
                   fullWidth
-                  variant="filled"
+                  variant="outlined"
                   name="email"
                   label="Email"
                   type="email"
                   value={faturaForm.email}
                   onChange={handleTextFieldChange}
+                  sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
                 />
               </Grid>
+            </Grid>
+
+            <Divider sx={{ borderColor: 'primary.main' }} />
+            <Typography variant="h6" color="text.secondary">
+              Dados da Venda
+            </Typography>
+            <Grid container spacing={2}>
               <Grid item xs={12} sm={6} md={4}>
                 <TextField
                   fullWidth
-                  variant="filled"
+                  variant="outlined"
                   name="data"
                   type="date"
                   label="Data"
@@ -710,23 +972,26 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   InputLabelProps={{ shrink: true }}
                   error={Boolean(faturaErrors.data)}
                   helperText={faturaErrors.data}
+                  sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
                 />
               </Grid>
               <Grid item xs={12} sm={6} md={4}>
                 <TextField
                   fullWidth
-                  variant="filled"
+                  variant="outlined"
                   name="status"
                   label="Status"
                   value={faturaForm.status}
                   onChange={handleTextFieldChange}
+                  sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
                 />
               </Grid>
               <Grid item xs={12} sm={6} md={4}>
                 <FormControl
                   fullWidth
-                  variant="filled"
+                  variant="outlined"
                   error={Boolean(faturaErrors.funcionariosCaixaId)}
+                  sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
                 >
                   <InputLabel>Caixa</InputLabel>
                   <Select
@@ -747,24 +1012,20 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   )}
                 </FormControl>
               </Grid>
-              <Grid item xs={12} sm={6} md={4}>
-                <TextField
-                  fullWidth
-                  variant="filled"
-                  label="Total a Pagar"
-                  value={`${calcularTotal()}kz`}
-                  InputProps={{ readOnly: true }}
-                />
-              </Grid>
             </Grid>
 
+            <Divider sx={{ borderColor: 'primary.main' }} />
+            <Typography variant="h6" color="text.secondary">
+              Produtos
+            </Typography>
             {faturaForm.produtosSelecionados.map((produto, index) => (
-              <Grid container spacing={1} key={index} alignItems="center">
+              <Grid container spacing={2} key={index} alignItems="center" sx={{ mb: 2 }}>
                 <Grid item xs={12} sm={6} md={5}>
                   <FormControl
                     fullWidth
-                    variant="filled"
+                    variant="outlined"
                     error={Boolean(faturaErrors[`produto_${index}`])}
+                    sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
                   >
                     <InputLabel>Produto</InputLabel>
                     <Select
@@ -785,7 +1046,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                 <Grid item xs={8} sm={4} md={5}>
                   <TextField
                     fullWidth
-                    variant="filled"
+                    variant="outlined"
                     type="number"
                     label="Quantidade"
                     value={produto.quantidade}
@@ -795,6 +1056,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                     inputProps={{ min: 1 }}
                     error={Boolean(faturaErrors[`produto_${index}`])}
                     helperText={faturaErrors[`produto_${index}`]}
+                    sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
                   />
                 </Grid>
                 <Grid item xs={4} sm={2} md={2}>
@@ -811,22 +1073,25 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
               </Typography>
             )}
 
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+            <Divider sx={{ borderColor: 'primary.main' }} />
+            <Stack direction="row" spacing={2} justifyContent="space-between" alignItems="center">
               <Button
                 variant="outlined"
                 color="primary"
                 onClick={adicionarNovoProdutoInput}
-                fullWidth
-                size="small"
+                startIcon={<IconifyIcon icon="mdi:plus" />}
+                sx={{ borderRadius: 1 }}
               >
                 Adicionar Produto
               </Button>
+              <Typography variant="h6" color="text.primary">
+                Total a Pagar: {calcularTotal()} Kz
+              </Typography>
               <Button
                 variant="contained"
                 color="secondary"
                 onClick={onAddFaturaSubmit}
-                fullWidth
-                size="small"
+                sx={{ borderRadius: 1, px: 4 }}
               >
                 Finalizar Venda
               </Button>
@@ -838,24 +1103,24 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       {/* Modal de Abrir Caixa */}
       <Modal open={openCaixaModal} onClose={handleCloseCaixaModal}>
         <Box sx={modalStyle}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-            <Typography variant="h5" fontWeight="bold" fontSize={{ xs: 18, sm: 24 }}>
-              Abrir Novo Caixa
-            </Typography>
-            <Button variant="outlined" color="error" onClick={handleCloseCaixaModal} size="small">
-              Fechar
-            </Button>
-          </Stack>
-          <Stack spacing={2}>
+          <Typography variant="h5" fontWeight="bold" color="primary" sx={{ mb: 3 }}>
+            Abrir Novo Caixa
+          </Typography>
+          <Stack spacing={3}>
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
-                <FormControl fullWidth variant="filled" error={Boolean(caixaErrors.funcionarioId)}>
+                <FormControl
+                  fullWidth
+                  variant="outlined"
+                  error={Boolean(caixaErrors.funcionarioId)}
+                >
                   <InputLabel>Funcionário</InputLabel>
                   <Select
                     name="funcionarioId"
                     value={caixaForm.funcionarioId}
                     onChange={handleCaixaSelectChange}
                     disabled={!!loggedInFuncionarioId}
+                    sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
                   >
                     {funcionarios.map((funcionario) => (
                       <MenuItem key={funcionario.id} value={funcionario.id}>
@@ -869,12 +1134,13 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                 </FormControl>
               </Grid>
               <Grid item xs={12} sm={6}>
-                <FormControl fullWidth variant="filled" error={Boolean(caixaErrors.caixaId)}>
+                <FormControl fullWidth variant="outlined" error={Boolean(caixaErrors.caixaId)}>
                   <InputLabel>Caixa</InputLabel>
                   <Select
                     name="caixaId"
                     value={caixaForm.caixaId}
                     onChange={handleCaixaSelectChange}
+                    sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
                   >
                     {caixas.map((caixa) => (
                       <MenuItem key={caixa.id} value={caixa.id}>
@@ -886,7 +1152,12 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                 </FormControl>
               </Grid>
             </Grid>
-            <Button variant="contained" color="primary" onClick={onAddCaixaSubmit} size="small">
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={onAddCaixaSubmit}
+              sx={{ alignSelf: 'flex-end', borderRadius: 1 }}
+            >
               Abrir Caixa
             </Button>
           </Stack>
@@ -896,19 +1167,9 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       {/* Modal de Lista de Caixas */}
       <Modal open={openCaixaListModal} onClose={handleCloseCaixaListModal}>
         <Box sx={modalStyle}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-            <Typography variant="h5" fontWeight="bold" fontSize={{ xs: 18, sm: 24 }}>
-              Caixas Abertos
-            </Typography>
-            <Button
-              variant="outlined"
-              color="error"
-              onClick={handleCloseCaixaListModal}
-              size="small"
-            >
-              Fechar
-            </Button>
-          </Stack>
+          <Typography variant="h5" fontWeight="bold" color="primary" sx={{ mb: 3 }}>
+            Caixas Abertos
+          </Typography>
           <TableContainer component={Paper}>
             <Table size="small">
               <TableHead>
@@ -949,7 +1210,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         </Box>
       </Modal>
 
-      {/* Tabela de Faturas */}
       <Card sx={{ mt: 2, borderRadius: 2 }}>
         <CardContent sx={{ p: { xs: 1, sm: 2 } }}>
           <TableContainer component={Paper}>
@@ -959,8 +1219,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   <TableCell sx={{ fontWeight: 'bold' }}>Cliente</TableCell>
                   <TableCell sx={{ fontWeight: 'bold' }}>Data</TableCell>
                   <TableCell sx={{ fontWeight: 'bold' }}>Total</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Produtos</TableCell>
                   <TableCell sx={{ fontWeight: 'bold' }}>Caixa</TableCell>
                   <TableCell sx={{ fontWeight: 'bold' }}>Ações</TableCell>
                 </TableRow>
@@ -973,12 +1231,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                       {new Intl.DateTimeFormat('pt-BR').format(new Date(item.data))}
                     </TableCell>
                     <TableCell>{calcularTotalFatura(item)}kzs</TableCell>
-                    <TableCell>{item.status}</TableCell>
-                    <TableCell>
-                      {item.produtos.map((p, idx) => (
-                        <div key={idx}>{`${p.produto.nomeProduto} - ${p.quantidade}x`}</div>
-                      ))}
-                    </TableCell>
                     <TableCell>{item.funcionariosCaixa?.caixas?.nomeCaixa || 'N/A'}</TableCell>
                     <TableCell align="right">
                       <Stack direction="row" spacing={0.5}>
@@ -995,6 +1247,13 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                           size="small"
                         >
                           <Delete />
+                        </IconButton>
+                        <IconButton
+                          color="secondary"
+                          onClick={() => generatePDF(item)}
+                          size="small"
+                        >
+                          <IconifyIcon icon="mdi:file-pdf" />
                         </IconButton>
                       </Stack>
                     </TableCell>

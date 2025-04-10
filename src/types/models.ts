@@ -222,7 +222,7 @@ export interface FuncionarioCaixa {
   id_funcionario: string;
   estadoCaixa: boolean;
   quantidadaFaturada: number;
-  horarioAbertura: Date | null;
+  horarioAbertura: Date;
   horarioFechamento: Date | null;
   caixas?: Caixa;
   funcionarios?: Funcionario;
