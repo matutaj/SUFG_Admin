@@ -22,12 +22,14 @@ import IconifyIcon from 'components/base/IconifyIcon';
 import Delete from 'components/icons/factor/Delete';
 import Edit from 'components/icons/factor/Edit';
 import React from 'react';
-import { Funcionario } from 'types/models';
-import { getEmployees, createEmployee, updateEmployee, deleteEmployee } from '../../api/methods';
+import { Fornecedor } from 'types/models';
+import { getSuppliers, createSupplier, updateSupplier, deleteSupplier } from '../../api/methods';
 
 interface CollapsedItemProps {
   open: boolean;
 }
+
+type FornecedorForm = Partial<Fornecedor>;
 
 const style = {
   position: 'absolute' as const,
@@ -36,7 +38,7 @@ const style = {
   transform: 'translate(-50%, -50%)',
   width: { xs: '90%', sm: '80%', md: 900 },
   maxWidth: '100%',
-  height: { xs: '100%', sm: '50%', md: 650 },
+  height: { xs: '100%', sm: '50%', md: 550 },
   maxHeight: '60%',
   bgcolor: 'background.paper',
   boxShadow: 24,
@@ -50,31 +52,30 @@ const style = {
   scrollbarColor: '#6c63ff #f1f1f1',
 };
 
-const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
+const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
   const [openModal, setOpenModal] = React.useState(false);
   const [isEditing, setIsEditing] = React.useState(false);
   const [editId, setEditId] = React.useState<string | null>(null);
-  const [form, setForm] = React.useState<Partial<Funcionario>>({
-    numeroBI: '',
-    nomeFuncionario: '',
-    senha: '',
-    moradaFuncionario: '',
-    telefoneFuncionario: '',
-    emailFuncionario: '',
+  const [form, setForm] = React.useState<FornecedorForm>({
+    nif: '',
+    nomeFornecedor: '',
+    moradaFornecedor: '',
+    telefoneFornecedor: undefined,
+    emailFornecedor: '',
   });
-  const [funcionarios, setFuncionarios] = React.useState<Funcionario[]>([]);
+  const [fornecedores, setFornecedores] = React.useState<Fornecedor[]>([]);
   const [errors, setErrors] = React.useState<{ [key: string]: string }>({});
 
   React.useEffect(() => {
-    fetchEmployees();
+    fetchFornecedores();
   }, []);
 
-  const fetchEmployees = async () => {
+  const fetchFornecedores = async () => {
     try {
-      const data = await getEmployees();
-      setFuncionarios(data);
+      const data = await getSuppliers();
+      setFornecedores(data);
     } catch (error) {
-      console.error('Error fetching employees:', error);
+      console.error('Error fetching suppliers:', error);
     }
   };
 
@@ -82,12 +83,11 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     setIsEditing(false);
     setEditId(null);
     setForm({
-      numeroBI: '',
-      nomeFuncionario: '',
-      senha: '',
-      moradaFuncionario: '',
-      telefoneFuncionario: '',
-      emailFuncionario: '',
+      nif: '',
+      nomeFornecedor: '',
+      moradaFornecedor: '',
+      telefoneFornecedor: undefined,
+      emailFornecedor: '',
     });
     setOpenModal(true);
   };
@@ -98,7 +98,7 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     const { name, value } = e.target;
     setForm((prev) => ({
       ...prev,
-      [name]: value,
+      [name]: name === 'telefoneFornecedor' ? (value ? Number(value) : undefined) : value,
     }));
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: '' }));
@@ -107,9 +107,8 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {};
-    if (!form.nomeFuncionario?.trim()) newErrors.nomeFuncionario = 'Nome é obrigatório';
-    if (!form.telefoneFuncionario?.trim()) newErrors.telefoneFuncionario = 'Telefone é obrigatório';
-    if (!form.numeroBI?.trim()) newErrors.numeroBI = 'NIF/BI é obrigatório';
+    if (!form.nomeFornecedor?.trim()) newErrors.nomeFornecedor = 'Nome é obrigatório';
+    if (!form.telefoneFornecedor) newErrors.telefoneFornecedor = 'Telefone é obrigatório';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -118,53 +117,51 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     if (!validateForm()) return;
 
     try {
-      if (isEditing && editId) {
-        const updatedEmployee = await updateEmployee(editId, form as Funcionario);
-        setFuncionarios((prev) =>
-          prev.map((item) => (item.id === editId ? updatedEmployee : item)),
+      if (isEditing && editId !== null) {
+        const updatedFornecedor = await updateSupplier(editId, form as Fornecedor);
+        setFornecedores((prev) =>
+          prev.map((item) => (item.id === editId ? updatedFornecedor : item)),
         );
       } else {
-        const newEmployee = await createEmployee(form as Funcionario);
-        setFuncionarios((prev) => [...prev, newEmployee]);
+        const newFornecedor = await createSupplier(form as Fornecedor);
+        setFornecedores((prev) => [...prev, newFornecedor]);
       }
       setForm({
-        numeroBI: '',
-        nomeFuncionario: '',
-        senha: '',
-        moradaFuncionario: '',
-        telefoneFuncionario: '',
-        emailFuncionario: '',
+        nif: '',
+        nomeFornecedor: '',
+        moradaFornecedor: '',
+        telefoneFornecedor: undefined,
+        emailFornecedor: '',
       });
       setOpenModal(false);
       setIsEditing(false);
       setEditId(null);
     } catch (error) {
-      console.error('Error submitting employee:', error);
-      alert('Erro ao salvar funcionário');
+      console.error('Error submitting supplier:', error);
+      alert('Erro ao salvar fornecedor');
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Tem certeza que deseja excluir este funcionário?')) {
+    if (window.confirm('Tem certeza que deseja excluir este fornecedor?')) {
       try {
-        await deleteEmployee(id);
-        setFuncionarios((prev) => prev.filter((item) => item.id !== id));
+        await deleteSupplier(id);
+        setFornecedores((prev) => prev.filter((item) => item.id !== id));
       } catch (error) {
-        console.error('Error deleting employee:', error);
+        console.error('Error deleting supplier:', error);
       }
     }
   };
 
-  const handleEdit = (funcionario: Funcionario) => {
+  const handleEdit = (fornecedor: Fornecedor) => {
     setIsEditing(true);
-    setEditId(funcionario.id || null); // Fix applied here
+    setEditId(fornecedor.id || null);
     setForm({
-      numeroBI: funcionario.numeroBI,
-      nomeFuncionario: funcionario.nomeFuncionario,
-      senha: funcionario.senha,
-      moradaFuncionario: funcionario.moradaFuncionario,
-      telefoneFuncionario: funcionario.telefoneFuncionario,
-      emailFuncionario: funcionario.emailFuncionario,
+      nif: fornecedor.nif || '',
+      nomeFornecedor: fornecedor.nomeFornecedor || '',
+      moradaFornecedor: fornecedor.moradaFornecedor || '',
+      telefoneFornecedor: fornecedor.telefoneFornecedor,
+      emailFornecedor: fornecedor.emailFornecedor || '',
     });
     setOpenModal(true);
   };
@@ -179,7 +176,7 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             alignItems="center"
             sx={{ width: '100%', mb: 2 }}
           >
-            <Typography variant="h5">Funcionários</Typography>
+            <Typography variant="h5">Cadastrar Fornecedor</Typography>
             <Button
               variant="contained"
               color="secondary"
@@ -201,7 +198,7 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             sx={{ width: '100%', mb: 2 }}
           >
             <Typography variant="h5">
-              {isEditing ? 'Editar Funcionário' : 'Cadastrar Funcionário'}
+              {isEditing ? 'Editar Fornecedor' : 'Cadastrar Fornecedor'}
             </Typography>
             <Button onClick={handleClose} variant="outlined" color="error">
               Fechar
@@ -211,75 +208,59 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
           <Grid container spacing={2} sx={{ width: '100%' }}>
             <Grid item xs={12} sm={6}>
               <TextField
-                name="numeroBI"
-                label="NIF/BI"
+                name="nif"
+                label="NIF"
                 variant="filled"
                 fullWidth
-                value={form.numeroBI}
+                value={form.nif || ''}
                 onChange={handleChange}
-                error={!!errors.numeroBI}
-                helperText={errors.numeroBI}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
-                name="nomeFuncionario"
+                name="nomeFornecedor"
                 label="Nome"
                 variant="filled"
                 fullWidth
-                value={form.nomeFuncionario}
+                value={form.nomeFornecedor || ''}
                 onChange={handleChange}
-                error={!!errors.nomeFuncionario}
-                helperText={errors.nomeFuncionario}
+                error={!!errors.nomeFornecedor}
+                helperText={errors.nomeFornecedor}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
-                name="telefoneFuncionario"
+                name="telefoneFornecedor"
                 label="Telefone"
                 variant="filled"
-                type="tel"
+                type="number"
                 fullWidth
-                value={form.telefoneFuncionario}
+                value={form.telefoneFornecedor ?? ''}
                 onChange={handleChange}
-                error={!!errors.telefoneFuncionario}
-                helperText={errors.telefoneFuncionario}
+                error={!!errors.telefoneFornecedor}
+                helperText={errors.telefoneFornecedor}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
-                name="emailFuncionario"
+                name="emailFornecedor"
                 label="Email"
-                type="email"
                 variant="filled"
                 fullWidth
-                value={form.emailFuncionario}
+                value={form.emailFornecedor || ''}
                 onChange={handleChange}
               />
             </Grid>
             <Grid item xs={12}>
               <TextField
-                name="moradaFuncionario"
+                name="moradaFornecedor"
                 label="Endereço"
                 variant="filled"
                 fullWidth
-                value={form.moradaFuncionario}
+                value={form.moradaFornecedor || ''}
                 onChange={handleChange}
               />
             </Grid>
-            {!isEditing && (
-              <Grid item xs={12}>
-                <TextField
-                  name="senha"
-                  label="Senha"
-                  type="password"
-                  variant="filled"
-                  fullWidth
-                  value={form.senha}
-                  onChange={handleChange}
-                />
-              </Grid>
-            )}
             <Grid item xs={12}>
               <Button
                 variant="contained"
@@ -300,7 +281,7 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             <Table>
               <TableHead>
                 <TableRow>
-                  {['NIF/BI', 'Nome', 'Telefone', 'Email', 'Endereço', 'Ações'].map((header) => (
+                  {['NIF', 'Nome', 'Telefone', 'Email', 'Endereço', 'Ações'].map((header) => (
                     <TableCell key={header}>
                       <strong>{header}</strong>
                     </TableCell>
@@ -308,13 +289,13 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {funcionarios.map((item) => (
+                {fornecedores.map((item) => (
                   <TableRow key={item.id}>
-                    <TableCell>{item.numeroBI}</TableCell>
-                    <TableCell>{item.nomeFuncionario}</TableCell>
-                    <TableCell>{item.telefoneFuncionario}</TableCell>
-                    <TableCell>{item.emailFuncionario}</TableCell>
-                    <TableCell>{item.moradaFuncionario}</TableCell>
+                    <TableCell>{item.nif}</TableCell>
+                    <TableCell>{item.nomeFornecedor}</TableCell>
+                    <TableCell>{item.telefoneFornecedor}</TableCell>
+                    <TableCell>{item.emailFornecedor}</TableCell>
+                    <TableCell>{item.moradaFornecedor}</TableCell>
                     <TableCell align="right">
                       <IconButton color="primary" onClick={() => handleEdit(item)}>
                         <Edit />
@@ -334,4 +315,4 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   );
 };
 
-export default FuncionarioComponent;
+export default Fornecedores;

@@ -22,8 +22,32 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { SelectChangeEvent } from '@mui/material';
+import {
+  getSalesByPeriod,
+  getSalesByClient,
+  getTopSellingProducts,
+  getRevenueByPeriod,
+  getRevenueByCashRegister,
+  getCurrentStock,
+  getStockEntriesByPeriod,
+  getTransfersByPeriod,
+  getProductsBelowMinimum,
+  getCashierActivity,
+  getTopSellingPeriodByProduct,
+} from '../../api/methods';
+import {
+  VendaComFuncionario,
+  ProdutoMaisVendido,
+  FaturamentoPorPeriodo,
+  QuantidadeFaturadaPorCaixa,
+  EstoqueAtual,
+  EntradaEstoqueComFuncionario,
+  FuncionarioCaixaComNome,
+  ProdutoAbaixoMinimo,
+  TransferenciaComFuncionario,
+  PeriodoMaisVendidoPorProduto,
+} from '../../types/models';
 
-// Tipagem para jsPDF com autoTable
 type JsPDFWithAutoTable = jsPDF & {
   autoTable: (options: {
     head: string[][];
@@ -34,36 +58,8 @@ type JsPDFWithAutoTable = jsPDF & {
   }) => void;
 };
 
-// Interfaces ajustadas para os dados reais
-interface StoreProduct {
-  id: number;
-  name: string;
-  shelf: string;
-  prico: number;
-  validade: string;
-  quantidade: number;
-}
-
-interface FaturaProduct {
-  produto: StoreProduct;
-  quantidade: number;
-}
-
-interface Fatura {
-  id: number;
-  cliente: string;
-  nif: string;
-  telefone: string;
-  localizacao: string;
-  email: string;
-  data: string;
-  total: number;
-  status: string;
-  produtos: FaturaProduct[];
-}
-
 interface ReportData {
-  id: string;
+  id: string; // Mantido para chave única, mas não exibido
   name: string;
   quantidadeVendida?: number;
   valorTotal?: number;
@@ -76,84 +72,197 @@ interface ReportData {
   dataTransacao?: string;
   status?: string;
   cliente?: string;
+  extra?: string;
 }
 
 const ReportPage = () => {
-  const [reportType, setReportType] = useState<string>('vendas_por_periodo');
+  const [reportType, setReportType] = useState<string>('ListarVendasPorPeriodo');
   const [reportData, setReportData] = useState<ReportData[]>([]);
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [dateError, setDateError] = useState<string>('');
+  const [clientId, setClientId] = useState<string>(''); // Para ListarVendasPorCliente
+  const [productId, setProductId] = useState<string>(''); // Para ListarPeriodoMaisVendidoPorProduto
 
   useEffect(() => {
-    const faturas: Fatura[] = JSON.parse(localStorage.getItem('faturas') || '[]');
-    const loja: StoreProduct[] = JSON.parse(localStorage.getItem('loja') || '[]');
-    generateReportData(faturas, loja);
-  }, [reportType]);
+    fetchReportData();
+  }, [reportType, startDate, endDate, clientId, productId]);
 
-  const generateReportData = (faturas: Fatura[], loja: StoreProduct[]) => {
-    let data: ReportData[] = [];
-    switch (reportType) {
-      case 'vendas_por_periodo':
-        data = faturas.flatMap((fatura) =>
-          fatura.produtos.map((p) => ({
-            id: `${fatura.id}-${p.produto.id}`,
-            name: p.produto.name,
-            quantidadeVendida: p.quantidade,
-            valorTotal: p.produto.prico * p.quantidade,
-            dataVenda: fatura.data,
-            cliente: fatura.cliente,
-            status: fatura.status,
-          })),
-        );
-        break;
-      case 'produtos_mais_vendidos': {
-        const productSales: { [key: string]: { name: string; quantidadeVendida: number } } = {};
-        faturas.forEach((fatura) => {
-          fatura.produtos.forEach((p) => {
-            if (productSales[p.produto.id]) {
-              productSales[p.produto.id].quantidadeVendida += p.quantidade;
-            } else {
-              productSales[p.produto.id] = {
-                name: p.produto.name,
-                quantidadeVendida: p.quantidade,
-              };
-            }
-          });
-        });
-        data = Object.entries(productSales).map(([id, info]) => ({
-          id,
-          name: info.name,
-          quantidadeVendida: info.quantidadeVendida,
-        }));
-        data.sort((a, b) => (b.quantidadeVendida || 0) - (a.quantidadeVendida || 0));
-        break;
+  const fetchReportData = async () => {
+    try {
+      let data: ReportData[] = [];
+      const hasDateRange = startDate && endDate && !dateError;
+
+      switch (reportType) {
+        case 'ListarVendasPorPeriodo':
+          if (hasDateRange) {
+            const sales: VendaComFuncionario[] = await getSalesByPeriod(startDate, endDate);
+            data = sales.map((sale: VendaComFuncionario) => ({
+              id: sale.id,
+              name: sale.produto?.nomeProduto || 'Produto Desconhecido',
+              quantidadeVendida: sale.quantidade || 0,
+              valorTotal: sale.valorTotal,
+              dataVenda: sale.data,
+              cliente: sale.cliente?.nome || '-',
+              status: sale.status || 'Concluída',
+            }));
+          }
+          break;
+
+        case 'ListarVendasPorCliente':
+          if (hasDateRange && clientId) {
+            const sales: VendaComFuncionario[] = await getSalesByClient(
+              clientId,
+              startDate,
+              endDate,
+            );
+            data = sales.map((sale: VendaComFuncionario) => ({
+              id: sale.id,
+              name: sale.produto?.nomeProduto || 'Produto Desconhecido',
+              quantidadeVendida: sale.quantidade || 0,
+              valorTotal: sale.valorTotal,
+              dataVenda: sale.data,
+              cliente: sale.cliente?.nome || '-',
+              status: sale.status || 'Concluída',
+            }));
+          }
+          break;
+
+        case 'ListarProdutosMaisVendidos':
+          if (hasDateRange) {
+            const products: ProdutoMaisVendido[] = await getTopSellingProducts(startDate, endDate);
+            data = products.map((product: ProdutoMaisVendido) => ({
+              id: product.id_produto,
+              name: product.nomeProduto,
+              quantidadeVendida: product.quantidadeVendida,
+              valorTotal: product.valorTotal,
+            }));
+          }
+          break;
+
+        case 'ListarFaturamentoPorPeriodo':
+          if (hasDateRange) {
+            const revenue: FaturamentoPorPeriodo = await getRevenueByPeriod(startDate, endDate);
+            data = revenue.vendas.map((sale: VendaComFuncionario) => ({
+              id: sale.id,
+              name: sale.cliente?.nome || '-',
+              valorTransacao: sale.valorTotal,
+              dataTransacao: sale.data,
+              extra: `Total Faturado: ${revenue.totalFaturado}`,
+            }));
+          }
+          break;
+
+        case 'ListarQuantidadeFaturadaPorCaixa':
+          if (hasDateRange) {
+            const cashiers: QuantidadeFaturadaPorCaixa[] = await getRevenueByCashRegister(
+              startDate,
+              endDate,
+            );
+            data = cashiers.map((cashier: QuantidadeFaturadaPorCaixa) => ({
+              id: cashier.idCaixa,
+              name: cashier.nomeCaixa,
+              quantidadeVendida: cashier.quantidadeFaturada,
+              extra: cashier.funcionarios.join(', '),
+            }));
+          }
+          break;
+
+        case 'ListarEstoqueAtual': {
+          const stock: EstoqueAtual[] = await getCurrentStock();
+          data = stock.map((item: EstoqueAtual) => ({
+            id: item.id_produto,
+            name: item.nomeProduto,
+            quantidade: item.quantidadeEstoque,
+            extra: item.localizacoes
+              .map((loc: { id: string; nome: string }) => loc.nome)
+              .join(', '),
+          }));
+          break;
+        }
+
+        case 'ListarEntradasEstoquePorPeriodo':
+          if (hasDateRange) {
+            const entries: EntradaEstoqueComFuncionario[] = await getStockEntriesByPeriod(
+              startDate,
+              endDate,
+            );
+            data = entries.map((entry: EntradaEstoqueComFuncionario) => ({
+              id: entry.id,
+              name: entry.produto?.nomeProduto || 'Produto Desconhecido',
+              quantidade: entry.quantidade,
+              dataTransacao: entry.data,
+              extra: entry.funcionarioNome,
+            }));
+          }
+          break;
+
+        case 'ListarTransferenciasPorPeriodo':
+          if (hasDateRange) {
+            const transfers: TransferenciaComFuncionario[] = await getTransfersByPeriod(
+              startDate,
+              endDate,
+            );
+            data = transfers.map((transfer: TransferenciaComFuncionario) => ({
+              id: transfer.id,
+              name: transfer.produto?.nomeProduto || 'Produto Desconhecido',
+              quantidade: transfer.quantidade,
+              dataTransacao: transfer.data,
+              extra: transfer.funcionarioNome,
+            }));
+          }
+          break;
+
+        case 'ListarProdutosAbaixoMinimo': {
+          const belowMin: ProdutoAbaixoMinimo[] = await getProductsBelowMinimum();
+          data = belowMin.map((item: ProdutoAbaixoMinimo) => ({
+            id: item.id_produto,
+            name: item.nomeProduto,
+            quantidade: item.quantidadeAtual,
+            extra: `Mínimo: ${item.quantidadeMinima}, Localização: ${item.localizacao}`,
+          }));
+          break;
+        }
+
+        case 'ListarAtividadeFuncionariosCaixa':
+          if (hasDateRange) {
+            const activity: FuncionarioCaixaComNome[] = await getCashierActivity(
+              startDate,
+              endDate,
+            );
+            data = activity.map((act: FuncionarioCaixaComNome) => ({
+              id: act.id,
+              name: act.funcionarioNome,
+              extra: `Caixa: ${act.caixa?.nome || '-'}`,
+              dataTransacao: act.data,
+            }));
+          }
+          break;
+
+        case 'ListarPeriodoMaisVendidoPorProduto':
+          if (productId) {
+            const period: PeriodoMaisVendidoPorProduto =
+              await getTopSellingPeriodByProduct(productId);
+            data = [
+              {
+                id: period.id_produto,
+                name: period.nomeProduto,
+                quantidadeVendida: period.quantidadeVendida,
+                valorTotal: period.valorTotal,
+                extra: period.periodo,
+              },
+            ];
+          }
+          break;
+
+        default:
+          data = [];
       }
-      case 'movimentacao_stock':
-        data = loja.map((product) => ({
-          id: product.id.toString(),
-          name: product.name,
-          prico: product.prico,
-          validade: product.validade,
-          quantidade: product.quantidade,
-          status: product.quantidade > 0 ? 'Em Estoque' : 'Fora de Estoque',
-        }));
-        break;
-      case 'transacao_clientes_fornecedores':
-        data = faturas.map((fatura) => ({
-          id: fatura.id.toString(),
-          name: fatura.cliente,
-          tipo: 'Cliente',
-          valorTransacao: fatura.total,
-          dataTransacao: fatura.data,
-          cliente: fatura.cliente,
-          status: fatura.status,
-        }));
-        break;
-      default:
-        data = [];
+      setReportData(data);
+    } catch (error) {
+      console.error('Erro ao buscar dados do relatório:', error);
+      setReportData([]);
     }
-    setReportData(data);
   };
 
   const handleReportTypeChange = (event: SelectChangeEvent<string>) => {
@@ -161,6 +270,8 @@ const ReportPage = () => {
     setStartDate('');
     setEndDate('');
     setDateError('');
+    setClientId('');
+    setProductId('');
   };
 
   const handleStartDateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -183,28 +294,28 @@ const ReportPage = () => {
     }
   };
 
-  const filterReportData = () => {
-    if (!startDate || !endDate || dateError) return reportData;
-
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-
-    return reportData.filter((item) => {
-      const date = new Date(item.dataVenda || item.dataTransacao || item.validade || '');
-      return date >= start && date <= end;
-    });
-  };
-
   const getTableHeaders = () => {
     switch (reportType) {
-      case 'vendas_por_periodo':
-        return ['ID', 'Produto', 'Quantidade Vendida', 'Valor Total', 'Data', 'Cliente', 'Status'];
-      case 'produtos_mais_vendidos':
-        return ['ID', 'Produto', 'Quantidade Vendida'];
-      case 'movimentacao_stock':
-        return ['ID', 'Produto', 'Preço', 'Validade', 'Quantidade', 'Status'];
-      case 'transacao_clientes_fornecedores':
-        return ['ID', 'Cliente', 'Tipo', 'Valor', 'Data', 'Status'];
+      case 'ListarVendasPorPeriodo':
+      case 'ListarVendasPorCliente':
+        return ['Produto', 'Quantidade Vendida', 'Valor Total', 'Data', 'Cliente', 'Status'];
+      case 'ListarProdutosMaisVendidos':
+        return ['Produto', 'Quantidade Vendida', 'Valor Total'];
+      case 'ListarFaturamentoPorPeriodo':
+        return ['Cliente', 'Valor', 'Data', 'Extra'];
+      case 'ListarQuantidadeFaturadaPorCaixa':
+        return ['Caixa', 'Quantidade Faturada', 'Funcionários'];
+      case 'ListarEstoqueAtual':
+        return ['Produto', 'Quantidade', 'Localizações'];
+      case 'ListarEntradasEstoquePorPeriodo':
+      case 'ListarTransferenciasPorPeriodo':
+        return ['Produto', 'Quantidade', 'Data', 'Funcionário'];
+      case 'ListarProdutosAbaixoMinimo':
+        return ['Produto', 'Quantidade Atual', 'Detalhes'];
+      case 'ListarAtividadeFuncionariosCaixa':
+        return ['Funcionário', 'Caixa', 'Data'];
+      case 'ListarPeriodoMaisVendidoPorProduto':
+        return ['Produto', 'Quantidade Vendida', 'Valor Total', 'Período'];
       default:
         return [];
     }
@@ -212,9 +323,9 @@ const ReportPage = () => {
 
   const getRowData = (item: ReportData) => {
     switch (reportType) {
-      case 'vendas_por_periodo':
+      case 'ListarVendasPorPeriodo':
+      case 'ListarVendasPorCliente':
         return [
-          item.id,
           item.name,
           item.quantidadeVendida || 0,
           `Kz${item.valorTotal?.toFixed(2) || '0.00'}`,
@@ -222,25 +333,45 @@ const ReportPage = () => {
           item.cliente || '-',
           item.status || '-',
         ];
-      case 'produtos_mais_vendidos':
-        return [item.id, item.name, item.quantidadeVendida || 0];
-      case 'movimentacao_stock':
+      case 'ListarProdutosMaisVendidos':
         return [
-          item.id,
           item.name,
-          `Kz${item.prico?.toFixed(2) || '0.00'}`,
-          new Date(item.validade || '').toLocaleDateString('pt-BR'),
-          item.quantidade || 0,
-          item.status || '-',
+          item.quantidadeVendida || 0,
+          `Kz${item.valorTotal?.toFixed(2) || '0.00'}`,
         ];
-      case 'transacao_clientes_fornecedores':
+      case 'ListarFaturamentoPorPeriodo':
         return [
-          item.id,
           item.name,
-          item.tipo || '-',
           `Kz${item.valorTransacao?.toFixed(2) || '0.00'}`,
           new Date(item.dataTransacao || '').toLocaleDateString('pt-BR'),
-          item.status || '-',
+          item.extra || '-',
+        ];
+      case 'ListarQuantidadeFaturadaPorCaixa':
+        return [item.name, item.quantidadeVendida || 0, item.extra || '-'];
+      case 'ListarEstoqueAtual':
+        return [item.name, item.quantidade || 0, item.extra || '-'];
+      case 'ListarEntradasEstoquePorPeriodo':
+      case 'ListarTransferenciasPorPeriodo':
+        return [
+          item.name,
+          item.quantidade || 0,
+          new Date(item.dataTransacao || '').toLocaleDateString('pt-BR'),
+          item.extra || '-',
+        ];
+      case 'ListarProdutosAbaixoMinimo':
+        return [item.name, item.quantidade || 0, item.extra || '-'];
+      case 'ListarAtividadeFuncionariosCaixa':
+        return [
+          item.name,
+          item.extra || '-',
+          new Date(item.dataTransacao || '').toLocaleDateString('pt-BR'),
+        ];
+      case 'ListarPeriodoMaisVendidoPorProduto':
+        return [
+          item.name,
+          item.quantidadeVendida || 0,
+          `Kz${item.valorTotal?.toFixed(2) || '0.00'}`,
+          item.extra || '-',
         ];
       default:
         return [];
@@ -250,16 +381,21 @@ const ReportPage = () => {
   const exportPDF = () => {
     const doc = new jsPDF() as JsPDFWithAutoTable;
     const headers = getTableHeaders();
-    const rows = filterReportData().map((item) => getRowData(item));
+    const rows = reportData.map((item) => getRowData(item));
 
-    // Título e informações
     doc.setFontSize(18);
     doc.text('Relatório de Gestão', 14, 20);
     doc.setFontSize(12);
-    doc.text(`Tipo: ${reportType.replace(/_/g, ' ').toUpperCase()}`, 14, 30);
+    doc.text(
+      `Tipo: ${reportType
+        .replace(/Listar/g, '')
+        .replace(/([A-Z])/g, ' $1')
+        .trim()}`,
+      14,
+      30,
+    );
     doc.text(`Período: ${startDate || 'N/A'} a ${endDate || 'N/A'}`, 14, 40);
 
-    // Tabela
     doc.autoTable({
       head: [headers],
       body: rows,
@@ -273,8 +409,7 @@ const ReportPage = () => {
 
   const exportExcel = () => {
     const headers = getTableHeaders();
-    const filteredData = filterReportData();
-    const data = filteredData.map((item) => {
+    const data = reportData.map((item) => {
       const row = getRowData(item);
       return headers.reduce((obj: { [key: string]: string | number }, header, index) => {
         obj[header] = row[index];
@@ -296,34 +431,73 @@ const ReportPage = () => {
 
       <Box sx={{ mb: 3 }}>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
-          <FormControl sx={{ minWidth: 200 }}>
+          <FormControl sx={{ minWidth: 300 }}>
             <InputLabel>Tipo de Relatório</InputLabel>
             <Select value={reportType} onChange={handleReportTypeChange}>
-              <MenuItem value="vendas_por_periodo">Vendas por Período</MenuItem>
-              <MenuItem value="produtos_mais_vendidos">Produtos Mais Vendidos</MenuItem>
-              <MenuItem value="movimentacao_stock">Movimentação do Estoque</MenuItem>
-              <MenuItem value="transacao_clientes_fornecedores">Transações por Clientes</MenuItem>
+              <MenuItem value="ListarVendasPorPeriodo">Vendas por Período</MenuItem>
+              <MenuItem value="ListarVendasPorCliente">Vendas por Cliente</MenuItem>
+              <MenuItem value="ListarProdutosMaisVendidos">Produtos Mais Vendidos</MenuItem>
+              <MenuItem value="ListarFaturamentoPorPeriodo">Faturamento por Período</MenuItem>
+              <MenuItem value="ListarQuantidadeFaturadaPorCaixa">
+                Quantidade Faturada por Caixa
+              </MenuItem>
+              <MenuItem value="ListarEstoqueAtual">Estoque Atual</MenuItem>
+              <MenuItem value="ListarEntradasEstoquePorPeriodo">
+                Entradas de Estoque por Período
+              </MenuItem>
+              <MenuItem value="ListarTransferenciasPorPeriodo">Transferências por Período</MenuItem>
+              <MenuItem value="ListarProdutosAbaixoMinimo">Produtos Abaixo do Mínimo</MenuItem>
+              <MenuItem value="ListarAtividadeFuncionariosCaixa">
+                Atividade de Funcionários no Caixa
+              </MenuItem>
+              <MenuItem value="ListarPeriodoMaisVendidoPorProduto">
+                Período Mais Vendido por Produto
+              </MenuItem>
             </Select>
           </FormControl>
 
-          <TextField
-            type="date"
-            label="Data de Início"
-            value={startDate}
-            onChange={handleStartDateChange}
-            InputLabelProps={{ shrink: true }}
-            sx={{ width: { xs: '100%', sm: 180 } }}
-            error={!!dateError}
-          />
-          <TextField
-            type="date"
-            label="Data de Fim"
-            value={endDate}
-            onChange={handleEndDateChange}
-            InputLabelProps={{ shrink: true }}
-            sx={{ width: { xs: '100%', sm: 180 } }}
-            error={!!dateError}
-          />
+          {reportType !== 'ListarEstoqueAtual' &&
+            reportType !== 'ListarProdutosAbaixoMinimo' &&
+            reportType !== 'ListarPeriodoMaisVendidoPorProduto' && (
+              <>
+                <TextField
+                  type="date"
+                  label="Data de Início"
+                  value={startDate}
+                  onChange={handleStartDateChange}
+                  InputLabelProps={{ shrink: true }}
+                  sx={{ width: { xs: '100%', sm: 180 } }}
+                  error={!!dateError}
+                />
+                <TextField
+                  type="date"
+                  label="Data de Fim"
+                  value={endDate}
+                  onChange={handleEndDateChange}
+                  InputLabelProps={{ shrink: true }}
+                  sx={{ width: { xs: '100%', sm: 180 } }}
+                  error={!!dateError}
+                />
+              </>
+            )}
+
+          {reportType === 'ListarVendasPorCliente' && (
+            <TextField
+              label="ID do Cliente"
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+              sx={{ width: { xs: '100%', sm: 180 } }}
+            />
+          )}
+
+          {reportType === 'ListarPeriodoMaisVendidoPorProduto' && (
+            <TextField
+              label="ID do Produto"
+              value={productId}
+              onChange={(e) => setProductId(e.target.value)}
+              sx={{ width: { xs: '100%', sm: 180 } }}
+            />
+          )}
         </Stack>
         {dateError && (
           <Alert severity="error" sx={{ mt: 2 }}>
@@ -344,8 +518,8 @@ const ReportPage = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {filterReportData().length > 0 ? (
-              filterReportData().map((item) => (
+            {reportData.length > 0 ? (
+              reportData.map((item) => (
                 <TableRow key={item.id}>
                   {getRowData(item).map((cell, index) => (
                     <TableCell key={index}>{cell}</TableCell>
