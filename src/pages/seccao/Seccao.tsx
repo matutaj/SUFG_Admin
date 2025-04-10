@@ -18,17 +18,12 @@ import {
   Modal,
   Alert,
 } from '@mui/material';
-import React from 'react';
 import IconifyIcon from 'components/base/IconifyIcon';
-import Edit from 'components/icons/factor/Edit';
+import React from 'react';
 import Delete from 'components/icons/factor/Delete';
-import { CategoriaProduto } from '../../types/models';
-import {
-  getProductCategories,
-  createProductCategory,
-  updateProductCategory,
-  deleteProductCategory,
-} from '../../api/methods';
+import Edit from 'components/icons/factor/Edit';
+import { getSections, createSection, updateSection, deleteSection } from '../../api/methods';
+import { Seccao } from '../../types/models';
 
 interface CollapsedItemProps {
   open: boolean;
@@ -56,43 +51,47 @@ const style = {
   scrollbarColor: '#6c63ff #f1f1f1',
 };
 
-const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
-  const [openCategoria, setOpenCategoria] = React.useState(false);
-  const [editCategoriaId, setEditCategoriaId] = React.useState<string | null>(null);
-  const [nomeCategoria, setNomeCategoria] = React.useState('');
+const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
+  const [openSeccao, setOpenSeccao] = React.useState(false);
+  const [editSeccaoId, setEditSeccaoId] = React.useState<string | null>(null);
+  const [nomeSeccao, setNomeSeccao] = React.useState('');
   const [descricao, setDescricao] = React.useState('');
-  const [categorias, setCategorias] = React.useState<CategoriaProduto[]>([]);
-  const [errors, setErrors] = React.useState<{ nomeCategoria?: string; descricao?: string }>({});
+  const [secoes, setSecoes] = React.useState<Seccao[]>([]);
+  const [errors, setErrors] = React.useState<{ nomeSeccao?: string; descricao?: string }>({});
   const [loading, setLoading] = React.useState(false);
   const [alert, setAlert] = React.useState<{
     severity: 'success' | 'error' | 'info' | 'warning';
     message: string;
   } | null>(null);
 
-  const handleOpen = () => setOpenCategoria(true);
+  const handleOpen = () => setOpenSeccao(true);
   const handleClose = () => {
-    setOpenCategoria(false);
-    setEditCategoriaId(null);
-    setNomeCategoria('');
+    setOpenSeccao(false);
+    setEditSeccaoId(null);
+    setNomeSeccao('');
     setDescricao('');
     setErrors({});
   };
 
-  const fetchCategories = async () => {
+  const fetchSections = async () => {
     try {
       setLoading(true);
-      const data = await getProductCategories();
-      console.log('Dados retornados por getProductCategories:', JSON.stringify(data, null, 2));
+      const data = await getSections();
+      console.log('Dados retornados por getSections:', JSON.stringify(data, null, 2));
 
-      const idSet = new Set(data.map((cat: CategoriaProduto) => cat.id));
-      if (idSet.size !== data.length) {
-        console.warn('IDs duplicados encontrados nos dados de categorias:', data);
+      if (!Array.isArray(data)) {
+        throw new Error('A resposta de getSections não é um array');
       }
 
-      setCategorias(data);
+      const idSet = new Set(data.map((sec: Seccao) => sec.id));
+      if (idSet.size !== data.length) {
+        console.warn('IDs duplicados encontrados nos dados de seções:', data);
+      }
+
+      setSecoes(data);
     } catch (error) {
-      console.error('Erro ao buscar categorias:', error);
-      setAlert({ severity: 'error', message: 'Erro ao carregar categorias!' });
+      console.error('Erro ao buscar seções:', error);
+      setAlert({ severity: 'error', message: 'Erro ao carregar seções!' });
       setTimeout(() => setAlert(null), 3000);
     } finally {
       setLoading(false);
@@ -100,12 +99,16 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
   };
 
   React.useEffect(() => {
-    fetchCategories();
+    fetchSections();
   }, []);
 
-  const handleAddCategoria = async () => {
-    const newErrors: { nomeCategoria?: string; descricao?: string } = {};
-    if (!nomeCategoria.trim()) newErrors.nomeCategoria = 'O nome da categoria é obrigatório.';
+  React.useEffect(() => {
+    console.log('Estado secoes atualizado:', JSON.stringify(secoes, null, 2));
+  }, [secoes]);
+
+  const onAddSeccaoSubmit = async () => {
+    const newErrors: { nomeSeccao?: string; descricao?: string } = {};
+    if (!nomeSeccao.trim()) newErrors.nomeSeccao = 'O nome da seção é obrigatório.';
     if (!descricao.trim()) newErrors.descricao = 'A descrição é obrigatória.';
 
     if (Object.keys(newErrors).length > 0) {
@@ -115,26 +118,27 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
 
     try {
       setLoading(true);
-      const categoriaData = {
-        nomeCategoria: nomeCategoria.trim(), // Garantindo que não haja espaços extras
-        descricao: descricao.trim(), // Garantindo que a descrição seja enviada corretamente
+      const sectionData = {
+        nomeSeccao: nomeSeccao.trim(),
+        descricao: descricao.trim(),
       };
-      console.log('Dados enviados para a API:', categoriaData); // Log para depuração
+      console.log('Dados enviados para a API:', sectionData);
 
-      if (editCategoriaId) {
-        await updateProductCategory(editCategoriaId, categoriaData);
-        setAlert({ severity: 'success', message: 'Categoria atualizada com sucesso!' });
+      if (editSeccaoId) {
+        await updateSection(editSeccaoId, sectionData);
+        setAlert({ severity: 'success', message: 'Seção atualizada com sucesso!' });
       } else {
-        await createProductCategory(categoriaData);
-        setAlert({ severity: 'success', message: 'Categoria cadastrada com sucesso!' });
+        const response = await createSection(sectionData);
+        console.log('Resposta de createSection:', JSON.stringify(response, null, 2));
+        setAlert({ severity: 'success', message: 'Seção cadastrada com sucesso!' });
       }
-      await fetchCategories();
+      await fetchSections();
       handleClose();
       setTimeout(() => setAlert(null), 3000);
     } catch (error) {
-      console.error('Erro ao salvar categoria:', error);
-      setAlert({ severity: 'error', message: 'Erro ao salvar categoria!' });
-      setErrors({ nomeCategoria: 'Erro ao salvar. Tente novamente.' });
+      console.error('Erro ao salvar seção:', error);
+      setAlert({ severity: 'error', message: 'Erro ao salvar seção!' });
+      setErrors({ nomeSeccao: 'Erro ao salvar. Tente novamente.' });
       setTimeout(() => setAlert(null), 3000);
     } finally {
       setLoading(false);
@@ -142,26 +146,26 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
   };
 
   const handleEdit = (id: string) => {
-    const categoriaToEdit = categorias.find((cat) => cat.id === id);
-    if (categoriaToEdit) {
-      setNomeCategoria(categoriaToEdit.nomeCategoria || '');
-      setDescricao(categoriaToEdit.descricao || ''); // Garantindo que a descrição seja carregada
-      setEditCategoriaId(id);
+    const seccaoToEdit = secoes.find((sec) => sec.id === id);
+    if (seccaoToEdit) {
+      setNomeSeccao(seccaoToEdit.nomeSeccao || '');
+      setDescricao(seccaoToEdit.descricao || '');
+      setEditSeccaoId(id);
       handleOpen();
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Tem certeza que deseja excluir esta categoria?')) {
+    if (window.confirm('Tem certeza que deseja excluir esta seção?')) {
       try {
         setLoading(true);
-        await deleteProductCategory(id);
-        await fetchCategories();
-        setAlert({ severity: 'success', message: 'Categoria excluída com sucesso!' });
+        await deleteSection(id);
+        setAlert({ severity: 'success', message: 'Seção excluída com sucesso!' });
+        await fetchSections();
         setTimeout(() => setAlert(null), 3000);
       } catch (error) {
-        console.error('Erro ao excluir categoria:', error);
-        setAlert({ severity: 'error', message: 'Erro ao excluir categoria!' });
+        console.error('Erro ao excluir seção:', error);
+        setAlert({ severity: 'error', message: 'Erro ao excluir seção!' });
         setTimeout(() => setAlert(null), 3000);
       } finally {
         setLoading(false);
@@ -185,7 +189,7 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
             alignItems="center"
             sx={{ width: '100%', mb: 2 }}
           >
-            <Typography variant="h5">Cadastrar Categoria</Typography>
+            <Typography variant="h5">Cadastrar Seção</Typography>
             <Button
               variant="contained"
               color="secondary"
@@ -200,7 +204,7 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
         </Collapse>
       </Paper>
 
-      <Modal open={openCategoria} onClose={handleClose}>
+      <Modal open={openSeccao} onClose={handleClose}>
         <Box sx={style} component="form" noValidate autoComplete="off">
           <Stack
             direction="row"
@@ -209,7 +213,7 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
             sx={{ width: '100%', mb: 2 }}
           >
             <Typography variant="h5">
-              {editCategoriaId ? 'Editar Categoria' : 'Cadastrar Categoria de Produtos'}
+              {editSeccaoId ? 'Editar Seção' : 'Cadastrar Seção'}
             </Typography>
             <Button onClick={handleClose} variant="outlined" color="error" disabled={loading}>
               Fechar
@@ -218,19 +222,21 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
 
           <Stack spacing={2} sx={{ width: '100%' }}>
             <TextField
-              label="Nome da Categoria"
-              value={nomeCategoria}
-              onChange={(e) => setNomeCategoria(e.target.value)}
+              id="section-name"
+              onChange={(e) => setNomeSeccao(e.target.value)}
+              value={nomeSeccao}
+              label="Nome da Seção"
               variant="filled"
-              error={Boolean(errors.nomeCategoria)}
-              helperText={errors.nomeCategoria}
+              error={Boolean(errors.nomeSeccao)}
+              helperText={errors.nomeSeccao}
               disabled={loading}
               fullWidth
             />
             <TextField
-              label="Descrição"
-              value={descricao}
+              id="section-description"
               onChange={(e) => setDescricao(e.target.value)}
+              value={descricao}
+              label="Descrição"
               variant="filled"
               error={Boolean(errors.descricao)}
               helperText={errors.descricao}
@@ -240,12 +246,12 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
             <Button
               variant="contained"
               color="secondary"
-              onClick={handleAddCategoria}
+              onClick={onAddSeccaoSubmit}
               disabled={loading}
               fullWidth
             >
               <Typography variant="body2">
-                {loading ? 'Salvando...' : editCategoriaId ? 'Atualizar' : 'Cadastrar'}
+                {loading ? 'Salvando...' : editSeccaoId ? 'Atualizar' : 'Cadastrar'}
               </Typography>
             </Button>
           </Stack>
@@ -259,10 +265,10 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
               <TableHead>
                 <TableRow>
                   <TableCell>
-                    <strong>Nome da Categoria</strong>
+                    <strong>Nome da Seção</strong>
                   </TableCell>
                   <TableCell>
-                    <strong>Descrição da Categoria</strong>
+                    <strong>Descrição</strong>
                   </TableCell>
                   <TableCell align="right">
                     <strong>Ações</strong>
@@ -272,26 +278,26 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={3} align="center">
+                    <TableCell colSpan={4} align="center">
                       Carregando...
                     </TableCell>
                   </TableRow>
-                ) : categorias.length > 0 ? (
-                  categorias.map((categoria) => (
-                    <TableRow key={categoria.id}>
-                      <TableCell>{categoria.nomeCategoria || 'Sem nome'}</TableCell>
-                      <TableCell>{categoria.descricao || 'Sem descrição'}</TableCell>
+                ) : secoes.length > 0 ? (
+                  secoes.map((seccao, index) => (
+                    <TableRow key={seccao.id || `temp-${index}`}>
+                      <TableCell>{seccao.nomeSeccao || 'Sem nome'}</TableCell>
+                      <TableCell>{seccao.descricao || 'Sem descrição'}</TableCell>
                       <TableCell align="right">
                         <IconButton
                           color="primary"
-                          onClick={() => handleEdit(categoria.id!)}
+                          onClick={() => handleEdit(seccao.id!)}
                           disabled={loading}
                         >
                           <Edit />
                         </IconButton>
                         <IconButton
                           color="error"
-                          onClick={() => handleDelete(categoria.id!)}
+                          onClick={() => handleDelete(seccao.id!)}
                           disabled={loading}
                         >
                           <Delete />
@@ -301,8 +307,8 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={3} align="center">
-                      Nenhuma categoria cadastrada.
+                    <TableCell colSpan={4} align="center">
+                      Nenhuma seção cadastrada.
                     </TableCell>
                   </TableRow>
                 )}
@@ -315,4 +321,4 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
   );
 };
 
-export default Categoria;
+export default SeccaoComponent;

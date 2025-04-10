@@ -1,8 +1,6 @@
 import Doughnut from 'components/icons/drawer/Doughnut';
 import Fencing from 'components/icons/drawer/Fencing';
 import Grid from 'components/icons/drawer/Grid';
-import Cliente from 'components/icons/drawer/Cliente';
-import Categoria from 'components/icons/drawer/Categoria';
 import Settings from 'components/icons/drawer/Settings';
 import ShoppingBag from 'components/icons/drawer/ShoppingBag';
 import ShoppingCart from 'components/icons/drawer/ShoppingCart';
@@ -30,33 +28,86 @@ export const drawerItems: DrawerItem[] = [
     subList: [
       {
         id: 31,
-        title: 'Lojas',
+        title: 'Produtos',
         path: `/${rootPaths.pagesRoot}/produt/loja`,
+        active: true,
+      },
+
+      {
+        id: 33,
+        title: 'Estoque',
+        path: `/${rootPaths.pagesRoot}/stock`, // '/pages/estoque'
+        active: true,
+      },
+      {
+        id: 39,
+        title: 'Local Produto',
+        path: `/${rootPaths.pagesRoot}/produt/produtoLocalizacao`, // '/pages/estoque'
+        active: true,
+      },
+      {
+        id: 4,
+        title: 'Categoria',
+        path: `/${rootPaths.pagesRoot}/categorias`, // '/pages/categorias'
+        active: true,
+      },
+    ],
+  },
+
+  {
+    id: 5,
+    icon: ShoppingBag,
+    title: 'Zona SCRL',
+    collapsible: true,
+    active: true,
+    subList: [
+      {
+        id: 31,
+        title: 'Secção',
+        path: `/${rootPaths.pagesRoot}/seccao`,
         active: true,
       },
       {
         id: 32,
-        title: 'Armazéns',
-        path: `/${rootPaths.pagesRoot}/produt/armanzem`,
+        title: 'Corredor',
+        path: `/${rootPaths.pagesRoot}/corredor`,
+        active: true,
+      },
+      {
+        id: 32,
+        title: 'Prateleira',
+        path: `/${rootPaths.pagesRoot}/prateleira`,
+        active: true,
+      },
+      {
+        id: 34,
+        title: 'Localização',
+        path: `/${rootPaths.pagesRoot}/produt/localizacao`,
         active: true,
       },
     ],
   },
   {
-    id: 4,
-    icon: Categoria,
-    title: 'Categoria',
-    path: `/${rootPaths.pagesRoot}/categorias`, // '/pages/categorias'
-    collapsible: false,
+    id: 3,
+    icon: Fencing,
+    title: 'Faturação',
+    collapsible: true,
     active: true,
-  },
-  {
-    id: 5,
-    icon: ShoppingBag,
-    title: 'Estoque',
-    path: `/${rootPaths.pagesRoot}/stock`, // '/pages/estoque'
-    collapsible: false,
-    active: true,
+    subList: [
+      {
+        id: 7,
+        title: 'Faturação',
+        path: `/${rootPaths.pagesRoot}/faturacao`,
+        active: true,
+      },
+
+      {
+        id: 4,
+        title: 'caixa',
+        path: `/${rootPaths.pagesRoot}/caixa`, // '/pages/categorias'
+        active: true,
+      },
+    ],
   },
   {
     id: 6,
@@ -66,37 +117,34 @@ export const drawerItems: DrawerItem[] = [
     collapsible: false,
     active: true,
   },
+
   {
-    id: 7,
-    icon: Cliente,
-    title: 'Cliente',
-    path: `/${rootPaths.pagesRoot}/cliente`, // '/pages/funcionarios'
-    collapsible: false,
-    active: true,
-  },
-  {
-    id: 7,
-    icon: Fencing,
-    title: 'Faturação',
-    path: `/${rootPaths.pagesRoot}/faturacao`, // '/pages/funcionarios'
-    collapsible: false,
-    active: true,
-  },
-  {
-    id: 6,
-    icon: ShoppingCart,
-    title: 'Vendas',
-    path: `/${rootPaths.pagesRoot}/venda`, // '/pages/vendas'
-    collapsible: false,
-    active: true,
-  },
-  {
-    id: 7,
+    id: 5,
     icon: Car,
-    title: 'Funcionários',
-    path: `/${rootPaths.pagesRoot}/funcionario`, // '/pages/funcionarios'
-    collapsible: false,
+    title: 'Usuários',
+    collapsible: true,
     active: true,
+    subList: [
+      {
+        id: 7,
+
+        title: 'Funcionários',
+        path: `/${rootPaths.pagesRoot}/funcionario`,
+        active: true,
+      },
+      {
+        id: 6,
+        title: 'Fornecedor',
+        path: `/${rootPaths.pagesRoot}/venda`,
+        active: true,
+      },
+      {
+        id: 7,
+        title: 'Cliente',
+        path: `/${rootPaths.pagesRoot}/cliente`,
+        active: true,
+      },
+    ],
   },
   {
     id: 10,
