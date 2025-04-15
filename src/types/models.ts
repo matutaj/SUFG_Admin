@@ -99,7 +99,7 @@ export interface EntradaEstoque {
   id_fornecedor: string;
   id_produto: string;
   id_funcionario: string;
-  quantidadeRecebida: string;
+  quantidadeRecebida: number;
   adicionado: boolean;
   dataEntrada: string;
   custoUnitario: number;
@@ -235,9 +235,31 @@ export interface FuncionarioCaixa {
 export interface Estoque {
   id?: string;
   id_produto: string;
-  quantidadeAtual: string;
+  quantidadeAtual: number;
   lote: string;
   dataValidadeLote: Date;
+}
+// ... (mantenha todas as interfaces existentes acima)
+
+export interface Tarefa {
+  id?: string;
+  nomeTarefa: string;
+  descricao: string;
+  createdAt?: string;
+  updatedAt?: string;
+  funcionarios?: Funcionario[]; // Referência opcional para funcionários associados
+  funcoes?: Funcao[]; // Referência opcional para funções associadas
+}
+export interface TarefaFuncionarioFuncao {
+  id?: string;
+  id_tarefa: string;
+  id_funcionario?: string;
+  id_funcao?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  tarefas?: Tarefa;
+  funcionarios?: Funcionario;
+  funcoes?: Funcao;
 }
 export interface Alerta {
   id?: string;

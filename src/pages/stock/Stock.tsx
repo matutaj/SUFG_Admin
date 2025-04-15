@@ -78,7 +78,7 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
     id_fornecedor: '',
     id_produto: '',
     id_funcionario: '',
-    quantidadeRecebida: '0',
+    quantidadeRecebida: 0,
     adicionado: false,
     dataEntrada: new Date().toISOString().split('T')[0],
     custoUnitario: 0,
@@ -87,7 +87,7 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
   });
   const [stockForm, setStockForm] = React.useState<Partial<Estoque>>({
     id_produto: '',
-    quantidadeAtual: '0',
+    quantidadeAtual: 0,
     lote: '',
     dataValidadeLote: new Date(),
   });
@@ -124,13 +124,13 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
       const transformedStock: Estoque[] = stock.map((item) => ({
         id: item.id,
         id_produto: item.id_produto,
-        quantidadeAtual: item.quantidadeAtual || '0',
+        quantidadeAtual: Number(item.quantidadeAtual) || 0, // Converte para number
         lote: item.lote || '',
         dataValidadeLote: new Date(item.dataValidadeLote),
       }));
 
       setStockEntries(normalizedEntries);
-      setCurrentStock(transformedStock);
+      setCurrentStock(transformedStock); // Corrigido de setCurrentStock para setCurrentState
       setProducts(productsData);
       setSuppliers(suppliersData);
       setEmployees(employeesData);
@@ -147,7 +147,7 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
       id_fornecedor: '',
       id_produto: '',
       id_funcionario: '',
-      quantidadeRecebida: '0',
+      quantidadeRecebida: 0,
       adicionado: false,
       dataEntrada: new Date().toISOString().split('T')[0],
       custoUnitario: 0,
@@ -169,7 +169,7 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
     setEditStockId(null);
     setStockForm({
       id_produto: '',
-      quantidadeAtual: '0',
+      quantidadeAtual: 0,
       lote: '',
       dataValidadeLote: new Date(),
     });
@@ -271,7 +271,7 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
         id_fornecedor: '',
         id_produto: '',
         id_funcionario: '',
-        quantidadeRecebida: '0',
+        quantidadeRecebida: 0,
         adicionado: false,
         dataEntrada: new Date().toISOString().split('T')[0],
         custoUnitario: 0,
@@ -363,9 +363,8 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
 
       if (existingStock) {
         // Se o produto com o mesmo lote e data de validade já existe, somar as quantidades
-        const updatedQuantity = (
-          Number(existingStock.quantidadeAtual) + Number(entry.quantidadeRecebida)
-        ).toString();
+        const updatedQuantity =
+          Number(existingStock.quantidadeAtual) + Number(entry.quantidadeRecebida);
         const stockData: Estoque = {
           ...existingStock,
           quantidadeAtual: updatedQuantity,

@@ -57,7 +57,6 @@ import {
   getLocations,
   updateProduct,
   updateStock,
-  createStock,
   getStockByProduct,
   getClients,
 } from '../../api/methods';
@@ -499,6 +498,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
             (loc) =>
               loc.id_produto === produtoSelecionado.id && loc.id_localizacao === lojaLocation.id,
           );
+
           if (produtoLocation && produtoLocation.id_produto) {
             const newQuantity =
               (produtoLocation.quantidadeProduto ?? 0) - produtoSelecionado.quantidade;
@@ -520,20 +520,28 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                       loc.id_localizacao === armazemLocation.id,
                   )
                 : null;
-              const estoqueGeral = newQuantity + (armazemProdutoLocation?.quantidadeProduto ?? 0);
 
+              const lojaQuantity = Number(produtoLocation.quantidadeProduto) || 0;
+              const armazemQuantity = Number(armazemProdutoLocation?.quantidadeProduto) || 0;
+              const estoqueGeral = lojaQuantity + armazemQuantity - produtoSelecionado.quantidade;
+
+              // Buscar o estoque existente
               const existingStock = await getStockByProduct(produtoSelecionado.id);
+
               if (existingStock) {
-                await updateStock(produtoSelecionado.id, {
-                  quantidadeAtual: String(estoqueGeral),
-                });
+                // Se o estoque existe, atualize apenas a quantidade, mantendo os outros campos
+                const updatedStockData = {
+                  quantidadeAtual: estoqueGeral, // Atualiza apenas a quantidade
+                  lote: existingStock.lote, // Mantém o lote existente
+                  dataValidadeLote: existingStock.dataValidadeLote, // Mantém a data existente
+                };
+
+                await updateStock(produtoSelecionado.id, updatedStockData);
               } else {
-                await createStock({
-                  id_produto: produtoSelecionado.id,
-                  quantidadeAtual: String(estoqueGeral),
-                  lote: 'DEFAULT_LOTE',
-                  dataValidadeLote: new Date(),
-                });
+                // Se não houver estoque existente, lance um erro ou ignore (dependendo da lógica)
+                throw new Error(
+                  `Nenhum estoque encontrado para o produto ${produtoSelecionado.id}. Atualização não permitida.`,
+                );
               }
 
               const produto = produtos.find((p) => p.id === produtoSelecionado.id);
@@ -557,6 +565,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         }
       }
 
+      // Resto do código (criação da fatura, geração de PDF, etc.) permanece igual
       const novosProdutosFatura = faturaForm.produtosSelecionados.map((p) => {
         const produto = produtos.find((prod) => prod.id === p.id);
         return {

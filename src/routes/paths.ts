@@ -13,6 +13,7 @@ export default {
   // Páginas principais
   dashboard: `/${rootPaths.pagesRoot}/dashboard`,
   loja: `/${rootPaths.pagesRoot}/produt/loja`,
+  tarefa: `${rootPaths.pagesRoot}/tarefa`,
   localizacao: `/${rootPaths.pagesRoot}/produt/localizacao`,
   categorias: `/${rootPaths.pagesRoot}/categorias`,
   estoque: `/${rootPaths.pagesRoot}/stock`,

@@ -31,10 +31,10 @@ export const StockProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (currentQuantity < quantityToDeduct) throw new Error('Quantidade insuficiente no estoque.');
 
     const newQuantity = currentQuantity - quantityToDeduct;
-    await updateStockEntry(entry.id!, { ...entry, quantidadeRecebida: String(newQuantity) });
+    await updateStockEntry(entry.id!, { ...entry, quantidadeRecebida: newQuantity });
     setStockEntries((prev) =>
       prev.map((item) =>
-        item.id === entry.id ? { ...item, quantidadeRecebida: String(newQuantity) } : item,
+        item.id === entry.id ? { ...item, quantidadeRecebida: newQuantity } : item,
       ),
     );
   };

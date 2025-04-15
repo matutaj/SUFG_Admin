@@ -149,8 +149,16 @@ export const drawerItems: DrawerItem[] = [
   {
     id: 10,
     icon: Settings,
+    title: 'Tarefa',
+    path: `/${rootPaths.pagesRoot}/tarefa`,
+    active: true,
+    collapsible: false,
+  },
+  {
+    id: 10,
+    icon: Settings,
     title: 'Settings',
-    path: `/${rootPaths.pagesRoot}/configuracoes`, // '/pages/configuracoes'
+    path: `/${rootPaths.pagesRoot}/configuracoes`,
     active: true,
     collapsible: false,
   },

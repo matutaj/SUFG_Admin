@@ -33,6 +33,7 @@ import {
   FuncionarioCaixaComNome,
   PeriodoMaisVendidoPorProduto,
   Estoque,
+  Tarefa,
   DadosWrapper,
 } from '../types/models';
 
@@ -631,19 +632,82 @@ export const getStock = async (): Promise<Estoque[]> => {
 };
 
 export const createStock = async (data: Estoque): Promise<Estoque> => {
-  const response = await api.post(`/estoque`, data);
+  const response = await api.post(`/estoque`, {
+    ...data,
+    quantidadeAtual: data.quantidadeAtual, // Já é number, nenhum ajuste necessário
+  });
+  return response.data;
+};
+
+export const updateStock = async (idProduto: string, data: Partial<Estoque>): Promise<Estoque> => {
+  const response = await api.put(`/estoque/${idProduto}`, {
+    ...data,
+    quantidadeAtual: data.quantidadeAtual, // Já é number
+  });
   return response.data;
 };
 export const deleteStock = async (id: string): Promise<Estoque> => {
   const response = await api.post(`/estoque/${id}`);
   return response.data;
 };
-export const updateStock = async (idProduto: string, data: Partial<Estoque>): Promise<Estoque> => {
-  const response = await api.put(`/estoque/${idProduto}`, data);
-  return response.data;
-};
 
 export const getStockByProduct = async (idProduto: string): Promise<Estoque> => {
   const response = await api.get(`/estoque/produto/${idProduto}`);
+  return response.data;
+};
+// Tarefas (Tasks)
+export const getTasks = async (): Promise<Tarefa[]> => {
+  const response = await api.get(`/tarefa`);
+  return response.data;
+};
+
+export const createTask = async (data: Tarefa): Promise<Tarefa> => {
+  const response = await api.post(`/tarefa`, data);
+  return response.data;
+};
+
+export const updateTask = async (id: string, data: Tarefa): Promise<Tarefa> => {
+  const response = await api.put(`/tarefa/${id}`, data);
+  return response.data;
+};
+
+export const deleteTask = async (id: string): Promise<void> => {
+  const response = await api.delete(`/tarefa/${id}`);
+  return response.data;
+};
+
+// Atribuir Tarefa a Funcionários e Funções
+export const assignTaskToEmployees = async (
+  tarefaId: string,
+  funcionarioIds: string[],
+  funcaoIds: string[],
+): Promise<void> => {
+  const response = await api.post(`/tarefa/${tarefaId}/assign`, {
+    funcionarioIds,
+    funcaoIds,
+  });
+  return response.data;
+};
+
+// Obter Funcionários e Funções Associados a uma Tarefa
+export const getTaskAssignments = async (
+  tarefaId: string,
+): Promise<{
+  funcionarios: Funcionario[];
+  funcoes: Funcao[];
+}> => {
+  const response = await api.get(`/tarefa/${tarefaId}/assignments`);
+  return response.data;
+};
+
+// Remover Atribuição de Tarefa
+export const removeTaskAssignment = async (
+  tarefaId: string,
+  funcionarioId: string,
+  funcaoId: string,
+): Promise<void> => {
+  const response = await api.delete(`/tarefa/${tarefaId}/assign`, {
+    data: { funcionarioId, funcaoId },
+  });
   return response.data;
 };
