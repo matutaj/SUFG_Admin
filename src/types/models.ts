@@ -46,9 +46,6 @@ export interface CategoriaProduto {
   id?: string;
   nomeCategoria: string;
   descricao?: string | null;
-  produtos?: Produto[];
-  createdAt?: string;
-  updatedAt?: string;
 }
 
 export interface Produto {
@@ -77,11 +74,11 @@ export interface DadosEntradaEstoque {
   id_produto: string;
   id_funcionario: string;
   quantidadeRecebida: number;
-  dataEntrada: string | Date;
+  dataEntrada: Date | string;
   adicionado: boolean;
   custoUnitario: number;
   lote: string;
-  dataValidadeLote: string | Date;
+  dataValidadeLote: Date | string;
 }
 
 export interface Caixa {

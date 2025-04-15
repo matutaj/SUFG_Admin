@@ -62,14 +62,14 @@ export const createStockEntry = async (data: DadosEntradaEstoque): Promise<Dados
 };
 
 export const updateStockEntry = async (
-  lote: string,
+  id: string,
   data: Partial<DadosEntradaEstoque>,
 ): Promise<DadosEntradaEstoque> => {
   try {
-    const response = await api.put(`/entradaEstoque/${lote}`, data);
+    const response = await api.put(`/entradaEstoque/${id}`, data);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to update stock entry with lote ${lote}`);
+    throw new ApiError(`Failed to update stock entry with lote ${id}`);
   }
 };
 

@@ -88,7 +88,7 @@ export const drawerItems: DrawerItem[] = [
     ],
   },
   {
-    id: 3,
+    id: 9,
     icon: Fencing,
     title: 'Faturação',
     collapsible: true,
@@ -96,7 +96,7 @@ export const drawerItems: DrawerItem[] = [
     subList: [
       {
         id: 7,
-        title: 'Faturação',
+        title: 'Venda',
         path: `/${rootPaths.pagesRoot}/faturacao`,
         active: true,
       },
@@ -147,12 +147,12 @@ export const drawerItems: DrawerItem[] = [
     ],
   },
   {
-    id: 10,
-    icon: Settings,
+    id: 6,
+    icon: ShoppingCart,
     title: 'Tarefa',
-    path: `/${rootPaths.pagesRoot}/tarefa`,
-    active: true,
+    path: `/${rootPaths.pagesRoot}/relatorio`, // '/pages/estoque'
     collapsible: false,
+    active: true,
   },
   {
     id: 10,

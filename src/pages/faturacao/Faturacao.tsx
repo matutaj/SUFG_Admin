@@ -529,12 +529,13 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
               if (existingStock) {
                 // Se o estoque existe, atualize apenas a quantidade, mantendo os outros campos
                 const updatedStockData = {
+                  id_produto: produtoSelecionado.id,
                   quantidadeAtual: estoqueGeral, // Atualiza apenas a quantidade
                   lote: existingStock.lote, // Mantém o lote existente
                   dataValidadeLote: existingStock.dataValidadeLote, // Mantém a data existente
                 };
 
-                await updateStock(produtoSelecionado.id, updatedStockData);
+                await updateStock(existingStock.id!, updatedStockData);
               } else {
                 // Se não houver estoque existente, lance um erro ou ignore (dependendo da lógica)
                 throw new Error(

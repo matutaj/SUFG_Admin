@@ -218,8 +218,9 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       }
 
       try {
-        const stock = await getStockByProduct(idProdutoLocalizacao).catch(() => null);
-        const totalStock = stock ? Number(stock.quantidadeAtual) : 0;
+        const stock = await getStockByProduct(idProdutoLocalizacao);
+        const totalStock = Number(stock.quantidadeAtual) || 0;
+        console.log(`Estoque total para produto ${idProdutoLocalizacao}: ${totalStock}`);
         setStockQuantity(totalStock);
 
         const warehouseQty = productLocations
@@ -298,7 +299,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     if (quantidadeProduto < quantidadeMinimaProduto)
       newErrors.quantidadeProduto = `A quantidade não pode ser inferior ao limite mínimo (${quantidadeMinimaProduto})!`;
 
-    // Check for duplicate location
+    // Verificar duplicatas
     const isDuplicate = productLocations.some(
       (loc) =>
         loc.id_produto === idProdutoLocalizacao &&
@@ -312,27 +313,35 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       newErrors.idProdutoLocalizacao = 'Já existe uma localização idêntica para este produto.';
     }
 
+    // Verificar estoque
     let totalStock = 0;
     try {
       const stockItem = await getStockByProduct(idProdutoLocalizacao);
-      totalStock = Number(stockItem?.quantidadeAtual) || 0;
+      totalStock = Number(stockItem.quantidadeAtual) || 0;
+      console.log(`Validando estoque para produto ${idProdutoLocalizacao}: ${totalStock}`);
     } catch {
-      newErrors.idProdutoLocalizacao = 'Este produtonão possui estoque registrado.';
+      newErrors.idProdutoLocalizacao = 'Este produto não possui estoque registrado.';
     }
 
-    if (totalStock > 0) {
+    // Exigir estoque para quantidadeProduto > 0
+    if (quantidadeProduto > 0 && totalStock === 0) {
+      newErrors.quantidadeProduto = 'Não há estoque disponível para este produto.';
+    }
+
+    if (totalStock > 0 && quantidadeProduto > 0) {
       const currentTotal = getTotalStockInLocations(idProdutoLocalizacao, editLocationId);
       const newTotal = currentTotal + quantidadeProduto;
 
+      if (newTotal > totalStock) {
+        newErrors.quantidadeProduto = `Quantidade excede o estoque total disponível (${totalStock})!`;
+      }
+
       if (isStoreLocation(idLocalizacao, locations)) {
-        if (newTotal > totalStock) {
-          newErrors.quantidadeProduto = `Quantidade excede o estoque total disponível (${totalStock})!`;
-        } else if (remainingStoreQuantity === 0 && quantidadeProduto > 0 && !editLocationId) {
-          newErrors.quantidadeProduto = 'Não há estoque disponível para adicionar mais na loja!';
-        }
-      } else {
-        if (newTotal > totalStock) {
-          newErrors.quantidadeProduto = `Quantidade excede o estoque total disponível (${totalStock})!`;
+        const remaining = totalStock - warehouseQuantity;
+        if (remaining <= 0 && !editLocationId) {
+          newErrors.quantidadeProduto = 'Não há estoque disponível para adicionar na loja!';
+        } else if (quantidadeProduto > remaining) {
+          newErrors.quantidadeProduto = `Quantidade excede o estoque restante para loja (${remaining})!`;
         }
       }
     }
@@ -374,6 +383,8 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
           ? 'Localização atualizada com sucesso!'
           : 'Localização cadastrada com sucesso!',
       });
+
+      // Fechar modal após sucesso (similar a Stock.tsx)
       handleCloseLocation();
     } catch (error) {
       console.error('Erro ao salvar localização do produto:', error);
@@ -392,7 +403,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     editLocationId,
     productLocations,
     locations,
-    remainingStoreQuantity,
+    warehouseQuantity,
     getTotalStockInLocations,
     handleCloseLocation,
   ]);
@@ -522,7 +533,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                   Selecione um Produto
                 </MenuItem>
                 {products.map((prod) => (
-                  <MenuItem key={prod.referenciaProduto} value={prod.referenciaProduto}>
+                  <MenuItem key={prod.id!} value={prod.id!}>
                     {prod.nomeProduto}
                   </MenuItem>
                 ))}
@@ -723,9 +734,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                   <TableCell>
                     <strong>Produto</strong>
                   </TableCell>
-                  <TableCell>
-                    <strong>Referência</strong>
-                  </TableCell>
+
                   <TableCell>
                     <strong>Localização</strong>
                   </TableCell>
@@ -769,7 +778,6 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                         <TableCell sx={{ color: isBelowLimit ? 'red' : 'inherit' }}>
                           {product?.nomeProduto || 'N/A'}
                         </TableCell>
-                        <TableCell>{product?.referenciaProduto || 'N/A'}</TableCell>
                         <TableCell>
                           {locations.find((l) => l.id === location.id_localizacao)
                             ?.nomeLocalizacao || 'N/A'}

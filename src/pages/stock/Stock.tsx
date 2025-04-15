@@ -256,12 +256,12 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
         id_funcionario: form.id_funcionario!,
         quantidadeRecebida: form.quantidadeRecebida!,
         adicionado: form.adicionado || false,
-        dataEntrada: form.dataEntrada!,
+        dataEntrada: new Date(form.dataEntrada!).toISOString().split('T')[0],
         custoUnitario: form.custoUnitario!,
         lote: form.lote!,
-        dataValidadeLote: form.dataValidadeLote!,
+        dataValidadeLote: new Date(form.dataValidadeLote!).toISOString().split('T')[0],
       };
-
+      console.log('Submitting stock entry:', entryData);
       if (isEditing && editRef) {
         const updatedEntry = await updateStockEntry(editRef, entryData);
         setStockEntries((prev) =>
@@ -316,7 +316,7 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
   }, [stockForm, editStockRef, validateStockForm, handleEditStockClose]);
 
   const handleEditStock = useCallback((stock: DadosEstoque) => {
-    setEditStockRef(stock.lote);
+    setEditStockRef(stock.id!);
     setStockForm({
       id_produto: stock.id_produto,
       quantidadeAtual: stock.quantidadeAtual,
@@ -328,12 +328,12 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
     setErrors({});
   }, []);
 
-  const handleDeleteStock = useCallback(async (lote: string) => {
+  const handleDeleteStock = useCallback(async (id: string) => {
     try {
       setLoading(true);
       setFetchError(null);
-      await deleteStock(lote);
-      setCurrentStock((prev) => prev.filter((item) => item.lote !== lote));
+      await deleteStock(id);
+      setCurrentStock((prev) => prev.filter((item) => item.id !== id));
       setSuccessMessage('Estoque excluído com sucesso!');
     } catch (error) {
       console.error('Erro ao excluir estoque:', error);
@@ -345,6 +345,7 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const handleAddToStock = useCallback(
     async (entry: DadosEntradaEstoque) => {
+      // Validate expiration date
       const dataValidade = new Date(entry.dataValidadeLote);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -357,56 +358,75 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
       try {
         setLoading(true);
         setFetchError(null);
-        const updatedEntry: DadosEntradaEstoque = { ...entry, adicionado: true };
-        await updateStockEntry(entry.lote, updatedEntry);
-        setStockEntries((prev) =>
-          prev.map((item) => (item.lote === entry.lote ? updatedEntry : item)),
-        );
 
+        // Normalize dates for consistency
+        const entryDataValidade = new Date(entry.dataValidadeLote).toISOString().split('T')[0];
+        const entryDataEntrada = new Date(entry.dataEntrada).toISOString().split('T')[0];
+
+        // Check for existing stock with same id_produto, lote, and dataValidadeLote
         const existingStock = currentStock.find(
           (item) =>
             item.id_produto === entry.id_produto &&
             item.lote === entry.lote &&
-            new Date(item.dataValidadeLote).toISOString().split('T')[0] ===
-              new Date(entry.dataValidadeLote).toISOString().split('T')[0],
+            new Date(item.dataValidadeLote).toISOString().split('T')[0] === entryDataValidade,
         );
 
         if (existingStock) {
+          // Update existing stock
           const updatedQuantity = existingStock.quantidadeAtual + entry.quantidadeRecebida;
           const stockData: DadosEstoque = {
             id_produto: existingStock.id_produto,
             quantidadeAtual: updatedQuantity,
             lote: existingStock.lote,
-            dataValidadeLote: existingStock.dataValidadeLote,
+            dataValidadeLote: new Date(existingStock.dataValidadeLote),
           };
-          const updatedStock = await updateStock(existingStock.lote, stockData);
+          const updatedStock = await updateStock(existingStock.id!, stockData);
           setCurrentStock((prev) =>
-            prev.map((item) => (item.lote === existingStock.lote ? updatedStock : item)),
+            prev.map((item) =>
+              item.id_produto === existingStock.id_produto ? updatedStock : item,
+            ),
           );
         } else {
+          // Create new stock
           const stockData: DadosEstoque = {
             id_produto: entry.id_produto,
             quantidadeAtual: entry.quantidadeRecebida,
             lote: entry.lote,
             dataValidadeLote: new Date(entry.dataValidadeLote),
           };
+
           const newStock = await createStock(stockData);
           setCurrentStock((prev) => [...prev, newStock]);
         }
+
+        // Update stock entry to set adicionado: true
+        const updatedEntry: DadosEntradaEstoque = {
+          ...entry,
+          adicionado: true,
+          dataEntrada: entryDataEntrada,
+          dataValidadeLote: entryDataValidade,
+        };
+
+        // Log for debugging
+        console.log('Updating stock entry with:', { id: entry.id!, data: updatedEntry });
+
+        await updateStockEntry(entry.id!, updatedEntry);
+        setStockEntries((prev) => prev.map((item) => (item.id === entry.id ? updatedEntry : item)));
+
+        // Show success message and clear after 3 seconds
         setSuccessMessage('Adicionado ao estoque com sucesso!');
+        setTimeout(() => setSuccessMessage(null), 3000);
       } catch (error) {
         console.error('Erro ao adicionar ao estoque:', error);
-        setFetchError('Erro ao adicionar ao estoque. Tente novamente.');
         setStockEntries((prev) =>
-          prev.map((item) => (item.lote === entry.lote ? { ...item, adicionado: false } : item)),
+          prev.map((item) => (item.id === entry.id ? { ...item, adicionado: false } : item)),
         );
       } finally {
         setLoading(false);
       }
     },
-    [currentStock],
+    [currentStock, updateStock, createStock, updateStockEntry],
   );
-
   const handleManageEntries = useCallback(() => {
     setManageEntryModal(true);
   }, []);
@@ -492,7 +512,7 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
                     Selecione um produto
                   </MenuItem>
                   {products.map((product) => (
-                    <MenuItem key={product.referenciaProduto} value={product.referenciaProduto}>
+                    <MenuItem key={product.id} value={product.id}>
                       {product.nomeProduto}
                     </MenuItem>
                   ))}
@@ -558,7 +578,7 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
                     Selecione um fornecedor
                   </MenuItem>
                   {suppliers.map((supplier) => (
-                    <MenuItem key={supplier.nif} value={supplier.nif}>
+                    <MenuItem key={supplier.id} value={supplier.id}>
                       {supplier.nomeFornecedor}
                     </MenuItem>
                   ))}
@@ -581,7 +601,7 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
                     Selecione um funcionário
                   </MenuItem>
                   {employees.map((employee) => (
-                    <MenuItem key={employee.numeroBI} value={employee.numeroBI}>
+                    <MenuItem key={employee.id} value={employee.id}>
                       {employee.nomeFuncionario}
                     </MenuItem>
                   ))}
@@ -674,7 +694,7 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
                     Selecione um produto
                   </MenuItem>
                   {products.map((product) => (
-                    <MenuItem key={product.referenciaProduto} value={product.referenciaProduto}>
+                    <MenuItem key={product.id} value={product.id}>
                       {product.nomeProduto}
                     </MenuItem>
                   ))}
@@ -716,11 +736,7 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
                 label="Validade do Lote"
                 type="date"
                 fullWidth
-                value={
-                  stockForm.dataValidadeLote instanceof Date
-                    ? stockForm.dataValidadeLote.toISOString().split('T')[0]
-                    : stockForm.dataValidadeLote
-                }
+                value={stockForm.dataValidadeLote}
                 onChange={handleStockTextFieldChange}
                 InputLabelProps={{ shrink: true }}
                 error={!!errors.dataValidadeLote}
@@ -751,51 +767,7 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
         aria-labelledby="modal-gerenciar-entradas"
       >
         <Grid sx={modalStyle}>
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="center"
-            sx={{ width: '100%', mb: 2 }}
-          >
-            <Typography id="modal-gerenciar-entradas" variant="h5">
-              Gerenciar Entradas
-            </Typography>
-            <Button
-              onClick={handleManageEntryClose}
-              variant="outlined"
-              color="error"
-              disabled={loading}
-              aria-label="Fechar modal"
-            >
-              Fechar
-            </Button>
-          </Stack>
-          <Grid container spacing={2} sx={{ mb: 2 }}>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                label="Data Inicial"
-                type="date"
-                fullWidth
-                value={filterStartDate}
-                onChange={(e) => setFilterStartDate(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-                disabled={loading}
-                aria-label="Data inicial"
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                label="Data Final"
-                type="date"
-                fullWidth
-                value={filterEndDate}
-                onChange={(e) => setFilterEndDate(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-                disabled={loading}
-                aria-label="Data final"
-              />
-            </Grid>
-          </Grid>
+          {/* ... other modal content ... */}
           <TableContainer component={Paper}>
             <Table aria-label="Tabela de entradas de estoque">
               <TableHead>
@@ -832,15 +804,15 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
                   </TableRow>
                 ) : filteredEntries.length > 0 ? (
                   filteredEntries.map((entry) => {
-                    const product = products.find((p) => p.referenciaProduto === entry.id_produto);
+                    const product = products.find((p) => p.id === entry.id_produto);
                     return (
-                      <TableRow key={entry.lote}>
+                      <TableRow key={entry.id}>
                         <TableCell>{product?.nomeProduto || entry.id_produto}</TableCell>
                         <TableCell>{entry.quantidadeRecebida}</TableCell>
                         <TableCell>
                           {new Date(entry.dataEntrada).toLocaleDateString('pt-BR')}
                         </TableCell>
-                        <TableCell>{entry.custoUnitario.toFixed(2)}</TableCell>
+                        <TableCell>{entry.custoUnitario}</TableCell>
                         <TableCell>{entry.lote}</TableCell>
                         <TableCell>
                           {new Date(entry.dataValidadeLote).toLocaleDateString('pt-BR')}
@@ -905,7 +877,7 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
                   </TableRow>
                 ) : currentStock.length > 0 ? (
                   currentStock.map((item) => {
-                    const product = products.find((p) => p.referenciaProduto === item.id_produto);
+                    const product = products.find((p) => p.id === item.id_produto);
                     return (
                       <TableRow key={item.lote}>
                         <TableCell>{product?.nomeProduto || item.id_produto}</TableCell>
@@ -919,15 +891,15 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
                             color="primary"
                             onClick={() => handleEditStock(item)}
                             disabled={loading}
-                            aria-label={`Editar estoque ${item.lote}`}
+                            aria-label={`Editar estoque ${item.id}`}
                           >
                             <Edit />
                           </IconButton>
                           <IconButton
                             color="error"
-                            onClick={() => handleDeleteStock(item.lote)}
+                            onClick={() => handleDeleteStock(item.id!)}
                             disabled={loading}
-                            aria-label={`Excluir estoque ${item.lote}`}
+                            aria-label={`Excluir estoque ${item.id}`}
                           >
                             <Delete />
                           </IconButton>

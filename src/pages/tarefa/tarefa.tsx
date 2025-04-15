@@ -51,6 +51,7 @@ const style = {
 };
 
 const TarefaComponent = ({ open }: CollapsedItemProps) => {
+  console.log('Tarefa renderizado, open:', open);
   const [openTarefa, setOpenTarefa] = React.useState(false);
   const [editTarefaId, setEditTarefaId] = React.useState<string | null>(null); // ID como string (UUID)
   const [nomeTarefa, setNomeTarefa] = React.useState('');

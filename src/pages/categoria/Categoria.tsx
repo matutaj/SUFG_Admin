@@ -116,10 +116,9 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
     try {
       setLoading(true);
       const categoriaData = {
-        nomeCategoria: nomeCategoria.trim(), // Garantindo que não haja espaços extras
-        descricao: descricao.trim(), // Garantindo que a descrição seja enviada corretamente
+        nomeCategoria: nomeCategoria,
+        descricao: descricao,
       };
-      console.log('Dados enviados para a API:', categoriaData); // Log para depuração
 
       if (editCategoriaId) {
         await updateProductCategory(editCategoriaId, categoriaData);
