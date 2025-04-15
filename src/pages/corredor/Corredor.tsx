@@ -21,7 +21,7 @@ import Modal from '@mui/material/Modal';
 import React from 'react';
 import Delete from 'components/icons/factor/Delete';
 import Edit from 'components/icons/factor/Edit';
-import { getCorridors, createCorridor, updateCorridor, deleteCorridor } from '../../api/methods';
+import { getAllCorridors, createCorridor, updateCorridor, deleteCorridor } from '../../api/methods';
 import { Corredor } from '../../types/models';
 
 interface CollapsedItemProps {
@@ -71,7 +71,7 @@ const CorredorComponent = ({ open }: CollapsedItemProps) => {
   const fetchCorridors = async () => {
     try {
       setLoading(true);
-      const data = await getCorridors();
+      const data = await getAllCorridors();
       console.log('Dados retornados pela API:', data); // Log para depuração
       setCorredores(data);
     } catch (error) {

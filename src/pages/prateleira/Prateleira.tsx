@@ -21,9 +21,8 @@ import Modal from '@mui/material/Modal';
 import React from 'react';
 import Delete from 'components/icons/factor/Delete';
 import Edit from 'components/icons/factor/Edit';
-import { getShelves, createShelf, updateShelf, deleteShelf } from '../../api/methods'; // Ajuste o caminho
-import { Prateleira } from '../../types/models'; // Importa a interface correta
-
+import { getAllShelves, createShelf, updateShelf, deleteShelf } from '../../api/methods'; // Ajuste o caminho
+import { Prateleira } from '../../types/models';
 interface CollapsedItemProps {
   open: boolean;
 }
@@ -72,7 +71,7 @@ const PrateleiraComponent = ({ open }: CollapsedItemProps) => {
   const fetchShelves = async () => {
     try {
       setLoading(true);
-      const data = await getShelves();
+      const data = await getAllShelves();
       setPrateleiras(data);
     } catch (error) {
       console.error('Erro ao buscar prateleiras:', error);

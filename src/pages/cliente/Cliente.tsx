@@ -23,7 +23,7 @@ import Delete from 'components/icons/factor/Delete';
 import Edit from 'components/icons/factor/Edit';
 import React from 'react';
 import { Cliente } from '../../types/models'; // Import Cliente from models.ts
-import { getClients, createClient, updateClient, deleteClient } from '../../api/methods';
+import { getAllClients, createClient, updateClient, deleteClient } from '../../api/methods';
 
 interface CollapsedItemProps {
   open: boolean;
@@ -73,7 +73,7 @@ const ClienteComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const fetchClientes = async () => {
     try {
-      const data = await getClients();
+      const data = await getAllClients();
       setClientes(data); // Type matches Cliente[]
     } catch (error) {
       console.error('Error fetching clients:', error);

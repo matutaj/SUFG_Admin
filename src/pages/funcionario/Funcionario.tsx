@@ -23,7 +23,7 @@ import Delete from 'components/icons/factor/Delete';
 import Edit from 'components/icons/factor/Edit';
 import React from 'react';
 import { Funcionario } from 'types/models';
-import { getEmployees, createEmployee, updateEmployee, deleteEmployee } from '../../api/methods';
+import { getAllEmployees, createEmployee, updateEmployee, deleteEmployee } from '../../api/methods';
 
 interface CollapsedItemProps {
   open: boolean;
@@ -71,7 +71,7 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const fetchEmployees = async () => {
     try {
-      const data = await getEmployees();
+      const data = await getAllEmployees();
       setFuncionarios(data);
     } catch (error) {
       console.error('Error fetching employees:', error);

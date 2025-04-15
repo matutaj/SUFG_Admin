@@ -24,7 +24,7 @@ import Edit from 'components/icons/factor/Edit';
 import Delete from 'components/icons/factor/Delete';
 import { CategoriaProduto } from '../../types/models';
 import {
-  getProductCategories,
+  getAllProductCategories,
   createProductCategory,
   updateProductCategory,
   deleteProductCategory,
@@ -81,7 +81,7 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
   const fetchCategories = async () => {
     try {
       setLoading(true);
-      const data = await getProductCategories();
+      const data = await getAllProductCategories();
       console.log('Dados retornados por getProductCategories:', JSON.stringify(data, null, 2));
 
       const idSet = new Set(data.map((cat: CategoriaProduto) => cat.id));

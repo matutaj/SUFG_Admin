@@ -22,7 +22,8 @@ import {
   FormHelperText,
   Grid,
 } from '@mui/material';
-import React from 'react';
+import { SelectChangeEvent } from '@mui/material/Select';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import IconifyIcon from 'components/base/IconifyIcon';
 import Edit from 'components/icons/factor/Edit';
 import Delete from 'components/icons/factor/Delete';
@@ -35,15 +36,15 @@ import {
   Corredor,
 } from '../../types/models';
 import {
-  getProducts,
-  getProductLocations,
+  getAllProducts,
+  getAllProductLocations,
   createProductLocation,
   updateProductLocation,
   deleteProductLocation,
-  getLocations,
-  getSections,
-  getShelves,
-  getCorridors,
+  getAllLocations,
+  getAllSections,
+  getAllShelves,
+  getAllCorridors,
   getStockByProduct,
 } from '../../api/methods';
 
@@ -51,25 +52,20 @@ interface CollapsedItemProps {
   open: boolean;
 }
 
-const style = {
+const modalStyle = {
   position: 'absolute' as const,
   top: '50%',
   left: '50%',
   transform: 'translate(-50%, -50%)',
   width: { xs: '90%', sm: '80%', md: 980 },
   maxWidth: '100%',
-  height: { xs: '80%', sm: '50%', md: 650 },
-  maxHeight: '80%',
+  maxHeight: '80vh',
   bgcolor: 'background.paper',
   boxShadow: 24,
-  display: 'flex',
-  flexDirection: 'column' as const,
-  justifyContent: 'start' as const,
-  alignItems: 'center' as const,
-  backgroundColor: '#f9f9f9',
   p: 4,
-  overflowY: 'auto' as const,
-  scrollbarWidth: 'thin' as const,
+  overflowY: 'auto',
+  borderRadius: 2,
+  scrollbarWidth: 'thin',
   scrollbarColor: '#6c63ff #f1f1f1',
 };
 
@@ -82,7 +78,7 @@ const confirmModalStyle = {
   bgcolor: 'background.paper',
   boxShadow: 24,
   p: 4,
-  borderRadius: 1,
+  borderRadius: 2,
 };
 
 const isStoreLocation = (locationId: string | undefined, locations: Localizacao[]): boolean => {
@@ -92,32 +88,29 @@ const isStoreLocation = (locationId: string | undefined, locations: Localizacao[
 };
 
 const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
-  const [openLocationModal, setOpenLocationModal] = React.useState(false);
-  const [openConfirmModal, setOpenConfirmModal] = React.useState(false);
-  const [locationToDelete, setLocationToDelete] = React.useState<string | null>(null);
-  const [editLocationId, setEditLocationId] = React.useState<string | null>(null);
-  const [idProdutoLocalizacao, setIdProdutoLocalizacao] = React.useState<string>('');
-  const [idLocalizacao, setIdLocalizacao] = React.useState<string>('');
-  const [idSeccao, setIdSeccao] = React.useState<string>('');
-  const [idPrateleira, setIdPrateleira] = React.useState<string>('');
-  const [idCorredor, setIdCorredor] = React.useState<string>('');
-  const [quantidadeProduto, setQuantidadeProduto] = React.useState<number>(0);
-  const [quantidadeMinimaProduto, setQuantidadeMinimaProduto] = React.useState<number>(0);
-  const [stockQuantity, setStockQuantity] = React.useState<number | null>(null);
-  const [warehouseQuantity, setWarehouseQuantity] = React.useState<number>(0);
-  const [remainingStoreQuantity, setRemainingStoreQuantity] = React.useState<number | null>(null);
-  const [selectedLocationType, setSelectedLocationType] = React.useState<string>('');
-  const [searchQuery, setSearchQuery] = React.useState<string>('');
-  const [products, setProducts] = React.useState<Produto[]>([]);
-  const [locations, setLocations] = React.useState<Localizacao[]>([]);
-  const [sections, setSections] = React.useState<Seccao[]>([]);
-  const [shelves, setShelves] = React.useState<Prateleira[]>([]);
-  const [corridors, setCorridors] = React.useState<Corredor[]>([]);
-  const [productLocations, setProductLocations] = React.useState<ProdutoLocalizacao[]>([]);
-  const [filteredProductLocations, setFilteredProductLocations] = React.useState<
-    ProdutoLocalizacao[]
-  >([]);
-  const [errors, setErrors] = React.useState<{
+  const [openLocationModal, setOpenLocationModal] = useState(false);
+  const [openConfirmModal, setOpenConfirmModal] = useState(false);
+  const [locationToDelete, setLocationToDelete] = useState<string | undefined>(undefined);
+  const [editLocationId, setEditLocationId] = useState<string | undefined>(undefined);
+  const [idProdutoLocalizacao, setIdProdutoLocalizacao] = useState<string>('');
+  const [idLocalizacao, setIdLocalizacao] = useState<string>('');
+  const [idSeccao, setIdSeccao] = useState<string>('');
+  const [idPrateleira, setIdPrateleira] = useState<string>('');
+  const [idCorredor, setIdCorredor] = useState<string>('');
+  const [quantidadeProduto, setQuantidadeProduto] = useState<number>(0);
+  const [quantidadeMinimaProduto, setQuantidadeMinimaProduto] = useState<number>(0);
+  const [stockQuantity, setStockQuantity] = useState<number | null>(null);
+  const [warehouseQuantity, setWarehouseQuantity] = useState<number>(0);
+  const [remainingStoreQuantity, setRemainingStoreQuantity] = useState<number | null>(null);
+  const [selectedLocationType, setSelectedLocationType] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [products, setProducts] = useState<Produto[]>([]);
+  const [locations, setLocations] = useState<Localizacao[]>([]);
+  const [sections, setSections] = useState<Seccao[]>([]);
+  const [shelves, setShelves] = useState<Prateleira[]>([]);
+  const [corridors, setCorridors] = useState<Corredor[]>([]);
+  const [productLocations, setProductLocations] = useState<ProdutoLocalizacao[]>([]);
+  const [errors, setErrors] = useState<{
     idProdutoLocalizacao?: string;
     idLocalizacao?: string;
     idSeccao?: string;
@@ -126,17 +119,17 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     quantidadeProduto?: string;
     quantidadeMinimaProduto?: string;
   }>({});
-  const [loading, setLoading] = React.useState(false);
-  const [alert, setAlert] = React.useState<{
+  const [loading, setLoading] = useState(false);
+  const [alert, setAlert] = useState<{
     severity: 'success' | 'error' | 'info' | 'warning';
     message: string;
   } | null>(null);
 
-  const handleOpenLocation = () => setOpenLocationModal(true);
+  const handleOpenLocation = useCallback(() => setOpenLocationModal(true), []);
 
-  const handleCloseLocation = () => {
+  const handleCloseLocation = useCallback(() => {
     setOpenLocationModal(false);
-    setEditLocationId(null);
+    setEditLocationId(undefined);
     setIdProdutoLocalizacao('');
     setIdLocalizacao('');
     setIdSeccao('');
@@ -148,55 +141,61 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     setWarehouseQuantity(0);
     setRemainingStoreQuantity(null);
     setErrors({});
-  };
+  }, []);
 
-  const handleOpenConfirmModal = (id: string) => {
+  const handleOpenConfirmModal = useCallback((id: string) => {
     setLocationToDelete(id);
     setOpenConfirmModal(true);
-  };
+  }, []);
 
-  const handleCloseConfirmModal = () => {
+  const handleCloseConfirmModal = useCallback(() => {
     setOpenConfirmModal(false);
-    setLocationToDelete(null);
-  };
+    setLocationToDelete(undefined);
+  }, []);
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [
-        productsData,
-        locationsData,
-        sectionsData,
-        shelvesData,
-        corridorsData,
-        productLocationsData,
-      ] = await Promise.all([
-        getProducts(),
-        getLocations(),
-        getSections(),
-        getShelves(),
-        getCorridors(),
-        getProductLocations(),
+      setAlert(null);
+      const results = await Promise.allSettled([
+        getAllProducts(),
+        getAllLocations(),
+        getAllSections(),
+        getAllShelves(),
+        getAllCorridors(),
+        getAllProductLocations(),
       ]);
 
-      const cleanedProductLocations = productLocationsData.map((loc) => ({
-        ...loc,
-        id_produto: loc.id_produto ?? '',
-        id_localizacao: loc.id_localizacao ?? '',
-        id_seccao: loc.id_seccao ?? '',
-        id_prateleira: loc.id_prateleira ?? '',
-        id_corredor: loc.id_corredor ?? '',
-        quantidadeProduto: loc.quantidadeProduto ?? 0,
-        quantidadeMinimaProduto: loc.quantidadeMinimaProduto ?? 0,
-      }));
+      const [
+        productsResult,
+        locationsResult,
+        sectionsResult,
+        shelvesResult,
+        corridorsResult,
+        productLocationsResult,
+      ] = results;
 
-      setProducts(productsData);
-      setLocations(locationsData);
-      setSections(sectionsData);
-      setShelves(shelvesData);
-      setCorridors(corridorsData);
-      setProductLocations(cleanedProductLocations);
-      setFilteredProductLocations(cleanedProductLocations);
+      const newProducts = productsResult.status === 'fulfilled' ? productsResult.value : [];
+      const newLocations = locationsResult.status === 'fulfilled' ? locationsResult.value : [];
+      const newSections = sectionsResult.status === 'fulfilled' ? sectionsResult.value : [];
+      const newShelves = shelvesResult.status === 'fulfilled' ? shelvesResult.value : [];
+      const newCorridors = corridorsResult.status === 'fulfilled' ? corridorsResult.value : [];
+      const newProductLocations =
+        productLocationsResult.status === 'fulfilled' ? productLocationsResult.value : [];
+
+      setProducts(newProducts);
+      setLocations(newLocations);
+      setSections(newSections);
+      setShelves(newShelves);
+      setCorridors(newCorridors);
+      setProductLocations(newProductLocations);
+
+      if (results.some((result) => result.status === 'rejected')) {
+        setAlert({
+          severity: 'warning',
+          message: 'Alguns dados não foram carregados corretamente.',
+        });
+      }
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       setAlert({ severity: 'error', message: 'Erro ao carregar dados!' });
@@ -205,30 +204,20 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     }
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     fetchData();
   }, []);
 
-  React.useEffect(() => {
-    let filtered = productLocations;
-
-    if (selectedLocationType !== '') {
-      filtered = filtered.filter((location) => location.id_localizacao === selectedLocationType);
-    }
-
-    if (searchQuery !== '') {
-      filtered = filtered.filter((location) => {
-        const product = products.find((p) => p.id === location.id_produto);
-        return product?.nomeProduto.toLowerCase().includes(searchQuery.toLowerCase()) || false;
-      });
-    }
-
-    setFilteredProductLocations(filtered);
-  }, [selectedLocationType, searchQuery, productLocations, products]);
-
-  React.useEffect(() => {
+  useEffect(() => {
     const fetchStockAndWarehouseData = async () => {
-      if (idProdutoLocalizacao) {
+      if (!idProdutoLocalizacao) {
+        setStockQuantity(null);
+        setWarehouseQuantity(0);
+        setRemainingStoreQuantity(null);
+        return;
+      }
+
+      try {
         const stock = await getStockByProduct(idProdutoLocalizacao).catch(() => null);
         const totalStock = stock ? Number(stock.quantidadeAtual) : 0;
         setStockQuantity(totalStock);
@@ -244,22 +233,50 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
         const remaining = totalStock - warehouseQty;
         setRemainingStoreQuantity(remaining >= 0 ? remaining : 0);
-      } else {
-        setStockQuantity(null);
+      } catch (error) {
+        console.error('Erro ao buscar estoque:', error);
+        setStockQuantity(0);
         setWarehouseQuantity(0);
-        setRemainingStoreQuantity(null);
+        setRemainingStoreQuantity(0);
       }
     };
     fetchStockAndWarehouseData();
   }, [idProdutoLocalizacao, productLocations, locations]);
 
-  const getTotalStockInLocations = (productId: string): number => {
-    return productLocations
-      .filter((loc) => loc.id_produto === productId)
-      .reduce((sum, loc) => sum + (loc.quantidadeProduto ?? 0), 0);
-  };
+  useEffect(() => {
+    if (alert) {
+      const timer = setTimeout(() => setAlert(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [alert]);
 
-  const handleAddProductLocation = async () => {
+  const getTotalStockInLocations = useCallback(
+    (productId: string, excludeLocationId?: string): number => {
+      return productLocations
+        .filter((loc) => loc.id_produto === productId && loc.id !== excludeLocationId)
+        .reduce((sum, loc) => sum + (loc.quantidadeProduto ?? 0), 0);
+    },
+    [productLocations],
+  );
+
+  const filteredProductLocations = useMemo(() => {
+    let filtered = productLocations;
+
+    if (selectedLocationType) {
+      filtered = filtered.filter((location) => location.id_localizacao === selectedLocationType);
+    }
+
+    if (searchQuery) {
+      filtered = filtered.filter((location) => {
+        const product = products.find((p) => p.referenciaProduto === location.id_produto);
+        return product?.nomeProduto.toLowerCase().includes(searchQuery.toLowerCase()) || false;
+      });
+    }
+
+    return filtered;
+  }, [selectedLocationType, searchQuery, productLocations, products]);
+
+  const handleAddProductLocation = useCallback(async () => {
     const newErrors: {
       idProdutoLocalizacao?: string;
       idLocalizacao?: string;
@@ -281,27 +298,39 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     if (quantidadeProduto < quantidadeMinimaProduto)
       newErrors.quantidadeProduto = `A quantidade não pode ser inferior ao limite mínimo (${quantidadeMinimaProduto})!`;
 
-    const stockItem = await getStockByProduct(idProdutoLocalizacao).catch(() => null);
-    const totalStock = Number(stockItem?.quantidadeAtual) || 0;
+    // Check for duplicate location
+    const isDuplicate = productLocations.some(
+      (loc) =>
+        loc.id_produto === idProdutoLocalizacao &&
+        loc.id_localizacao === idLocalizacao &&
+        loc.id_seccao === idSeccao &&
+        loc.id_prateleira === idPrateleira &&
+        loc.id_corredor === idCorredor &&
+        loc.id !== editLocationId,
+    );
+    if (isDuplicate) {
+      newErrors.idProdutoLocalizacao = 'Já existe uma localização idêntica para este produto.';
+    }
 
-    if (!stockItem) {
-      newErrors.idProdutoLocalizacao = 'Este produto não possui estoque registrado.';
-    } else {
-      const currentLocationQty = editLocationId
-        ? productLocations.find((loc) => loc.id === editLocationId)?.quantidadeProduto || 0
-        : 0;
-      const currentTotal = getTotalStockInLocations(idProdutoLocalizacao);
-      const newTotal = currentTotal - currentLocationQty + quantidadeProduto;
+    let totalStock = 0;
+    try {
+      const stockItem = await getStockByProduct(idProdutoLocalizacao);
+      totalStock = Number(stockItem?.quantidadeAtual) || 0;
+    } catch {
+      newErrors.idProdutoLocalizacao = 'Este produtonão possui estoque registrado.';
+    }
+
+    if (totalStock > 0) {
+      const currentTotal = getTotalStockInLocations(idProdutoLocalizacao, editLocationId);
+      const newTotal = currentTotal + quantidadeProduto;
 
       if (isStoreLocation(idLocalizacao, locations)) {
-        // Para "loja": permitir até o estoque total se houver quantidade no armazém
         if (newTotal > totalStock) {
           newErrors.quantidadeProduto = `Quantidade excede o estoque total disponível (${totalStock})!`;
-        } else if (remainingStoreQuantity === 0 && quantidadeProduto > currentLocationQty) {
+        } else if (remainingStoreQuantity === 0 && quantidadeProduto > 0 && !editLocationId) {
           newErrors.quantidadeProduto = 'Não há estoque disponível para adicionar mais na loja!';
         }
       } else {
-        // Para "armazém": permitir até o limite do estoque total
         if (newTotal > totalStock) {
           newErrors.quantidadeProduto = `Quantidade excede o estoque total disponível (${totalStock})!`;
         }
@@ -315,22 +344,23 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
     try {
       setLoading(true);
+      setAlert(null);
       const locationData: ProdutoLocalizacao = {
         id_produto: idProdutoLocalizacao,
         id_localizacao: idLocalizacao,
         id_seccao: idSeccao,
         id_prateleira: idPrateleira,
         id_corredor: idCorredor,
-        quantidadeProduto: quantidadeProduto,
-        quantidadeMinimaProduto: quantidadeMinimaProduto,
-        id: editLocationId || undefined,
+        quantidadeProduto,
+        quantidadeMinimaProduto,
+        id: editLocationId,
       };
 
       let updatedLocations: ProdutoLocalizacao[];
       if (editLocationId) {
         await updateProductLocation(editLocationId, locationData);
         updatedLocations = productLocations.map((loc) =>
-          loc.id === editLocationId ? locationData : loc,
+          loc.id === editLocationId ? { ...loc, ...locationData } : loc,
         );
       } else {
         const newLocation = await createProductLocation(locationData);
@@ -338,7 +368,6 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       }
 
       setProductLocations(updatedLocations);
-      setFilteredProductLocations(updatedLocations);
       setAlert({
         severity: 'success',
         message: editLocationId
@@ -348,45 +377,56 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       handleCloseLocation();
     } catch (error) {
       console.error('Erro ao salvar localização do produto:', error);
-      setErrors({
-        idProdutoLocalizacao: (error as Error).message || 'Erro ao salvar. Tente novamente.',
-      });
+      setAlert({ severity: 'error', message: 'Erro ao salvar localização!' });
     } finally {
       setLoading(false);
     }
-  };
+  }, [
+    idProdutoLocalizacao,
+    idLocalizacao,
+    idSeccao,
+    idPrateleira,
+    idCorredor,
+    quantidadeProduto,
+    quantidadeMinimaProduto,
+    editLocationId,
+    productLocations,
+    locations,
+    remainingStoreQuantity,
+    getTotalStockInLocations,
+    handleCloseLocation,
+  ]);
 
-  const handleEditLocation = (id: string) => {
-    const locationToEdit = productLocations.find((loc) => loc.id === id);
-    if (locationToEdit) {
-      setIdProdutoLocalizacao(locationToEdit.id_produto ?? '');
-      setIdLocalizacao(locationToEdit.id_localizacao ?? '');
-      setIdSeccao(locationToEdit.id_seccao ?? '');
-      setIdPrateleira(locationToEdit.id_prateleira ?? '');
-      setIdCorredor(locationToEdit.id_corredor ?? '');
-      setQuantidadeProduto(locationToEdit.quantidadeProduto ?? 0);
-      setQuantidadeMinimaProduto(locationToEdit.quantidadeMinimaProduto ?? 0);
-      setEditLocationId(id);
-      setOpenLocationModal(true);
-    } else {
-      console.warn('Localização não encontrada para o ID:', id);
-      setAlert({ severity: 'error', message: 'Localização não encontrada!' });
-    }
-  };
+  const handleEditLocation = useCallback(
+    (id: string) => {
+      const locationToEdit = productLocations.find((loc) => loc.id === id);
+      if (locationToEdit) {
+        setIdProdutoLocalizacao(locationToEdit.id_produto);
+        setIdLocalizacao(locationToEdit.id_localizacao);
+        setIdSeccao(locationToEdit.id_seccao);
+        setIdPrateleira(locationToEdit.id_prateleira);
+        setIdCorredor(locationToEdit.id_corredor);
+        setQuantidadeProduto(locationToEdit.quantidadeProduto);
+        setQuantidadeMinimaProduto(locationToEdit.quantidadeMinimaProduto);
+        setEditLocationId(id);
+        setErrors({});
+        setOpenLocationModal(true);
+      } else {
+        setAlert({ severity: 'error', message: 'Localização não encontrada!' });
+      }
+    },
+    [productLocations],
+  );
 
-  const handleDeleteLocation = async () => {
+  const handleDeleteLocation = useCallback(async () => {
     if (!locationToDelete) return;
 
     try {
       setLoading(true);
-      const locationToRemove = productLocations.find((loc) => loc.id === locationToDelete);
-      if (!locationToRemove) throw new Error('Localização não encontrada.');
-
+      setAlert(null);
       await deleteProductLocation(locationToDelete);
       const updatedLocations = productLocations.filter((loc) => loc.id !== locationToDelete);
-
       setProductLocations(updatedLocations);
-      setFilteredProductLocations(updatedLocations);
       setAlert({ severity: 'success', message: 'Localização do produto excluída com sucesso!' });
     } catch (error) {
       console.error('Erro ao excluir localização do produto:', error);
@@ -395,12 +435,12 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       setLoading(false);
       handleCloseConfirmModal();
     }
-  };
+  }, [locationToDelete, productLocations, handleCloseConfirmModal]);
 
   return (
     <>
       {alert && (
-        <Box sx={{ position: 'fixed', top: 20, right: 40, zIndex: 9999 }}>
+        <Box sx={{ position: 'fixed', top: 20, right: 20, zIndex: 9999, minWidth: 300 }}>
           <Alert severity={alert.severity}>{alert.message}</Alert>
         </Box>
       )}
@@ -412,9 +452,11 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             <Stack direction="row" spacing={2} alignItems="center">
               <Select
                 value={selectedLocationType}
-                onChange={(e) => setSelectedLocationType(e.target.value as string)}
+                onChange={(e: SelectChangeEvent<string>) => setSelectedLocationType(e.target.value)}
                 displayEmpty
                 sx={{ minWidth: 200 }}
+                disabled={loading}
+                aria-label="Filtrar por localização"
               >
                 <MenuItem value="">Todas as Localizações</MenuItem>
                 {locations.map((loc) => (
@@ -429,11 +471,13 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 sx={{ minWidth: 200 }}
                 placeholder="Digite o nome do produto"
+                disabled={loading}
                 InputProps={{
                   endAdornment: (
                     <IconifyIcon icon="heroicons-solid:search" sx={{ color: 'text.secondary' }} />
                   ),
                 }}
+                aria-label="Pesquisar produto"
               />
               <Button
                 variant="contained"
@@ -441,6 +485,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 onClick={handleOpenLocation}
                 disabled={loading}
                 startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
+                aria-label="Adicionar nova localização"
               >
                 Nova Localização
               </Button>
@@ -449,25 +494,35 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         </Collapse>
       </Paper>
 
-      <Modal open={openLocationModal} onClose={handleCloseLocation}>
-        <Box sx={style} component="form" noValidate autoComplete="off">
-          <Typography variant="h5" mb={2}>
+      <Modal
+        open={openLocationModal}
+        onClose={handleCloseLocation}
+        aria-labelledby="modal-localizacao-produto"
+        aria-describedby="modal-localizacao-descricao"
+      >
+        <Box sx={modalStyle} component="form" noValidate autoComplete="off">
+          <Typography id="modal-localizacao-produto" variant="h5" mb={2}>
             {editLocationId ? 'Editar Localização do Produto' : 'Cadastrar Localização do Produto'}
+          </Typography>
+          <Typography id="modal-localizacao-descricao" sx={{ display: 'none' }}>
+            Formulário para cadastrar ou editar a localização de um produto no estoque.
           </Typography>
           <Grid container spacing={2} sx={{ width: '100%' }}>
             <Grid item xs={12} sm={6}>
               <Select
                 value={idProdutoLocalizacao}
-                onChange={(e) => setIdProdutoLocalizacao(e.target.value as string)}
+                onChange={(e: SelectChangeEvent<string>) => setIdProdutoLocalizacao(e.target.value)}
                 displayEmpty
                 fullWidth
                 error={!!errors.idProdutoLocalizacao}
+                disabled={loading || !!editLocationId}
+                aria-label="Selecionar produto"
               >
                 <MenuItem value="" disabled>
                   Selecione um Produto
                 </MenuItem>
                 {products.map((prod) => (
-                  <MenuItem key={prod.id} value={prod.id}>
+                  <MenuItem key={prod.referenciaProduto} value={prod.referenciaProduto}>
                     {prod.nomeProduto}
                   </MenuItem>
                 ))}
@@ -479,10 +534,12 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             <Grid item xs={12} sm={6}>
               <Select
                 value={idLocalizacao}
-                onChange={(e) => setIdLocalizacao(e.target.value as string)}
+                onChange={(e: SelectChangeEvent<string>) => setIdLocalizacao(e.target.value)}
                 displayEmpty
                 fullWidth
                 error={!!errors.idLocalizacao}
+                disabled={loading}
+                aria-label="Selecionar localização"
               >
                 <MenuItem value="" disabled>
                   Selecione uma Localização
@@ -500,10 +557,12 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             <Grid item xs={12} sm={6}>
               <Select
                 value={idSeccao}
-                onChange={(e) => setIdSeccao(e.target.value as string)}
+                onChange={(e: SelectChangeEvent<string>) => setIdSeccao(e.target.value)}
                 displayEmpty
                 fullWidth
                 error={!!errors.idSeccao}
+                disabled={loading}
+                aria-label="Selecionar seção"
               >
                 <MenuItem value="" disabled>
                   Selecione uma Seção
@@ -519,10 +578,12 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             <Grid item xs={12} sm={6}>
               <Select
                 value={idPrateleira}
-                onChange={(e) => setIdPrateleira(e.target.value as string)}
+                onChange={(e: SelectChangeEvent<string>) => setIdPrateleira(e.target.value)}
                 displayEmpty
                 fullWidth
                 error={!!errors.idPrateleira}
+                disabled={loading}
+                aria-label="Selecionar prateleira"
               >
                 <MenuItem value="" disabled>
                   Selecione uma Prateleira
@@ -538,10 +599,12 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             <Grid item xs={12} sm={6}>
               <Select
                 value={idCorredor}
-                onChange={(e) => setIdCorredor(e.target.value as string)}
+                onChange={(e: SelectChangeEvent<string>) => setIdCorredor(e.target.value)}
                 displayEmpty
                 fullWidth
                 error={!!errors.idCorredor}
+                disabled={loading}
+                aria-label="Selecionar corredor"
               >
                 <MenuItem value="" disabled>
                   Selecione um Corredor
@@ -565,16 +628,17 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                   helperText={errors.quantidadeProduto}
                   disabled={loading}
                   fullWidth
+                  inputProps={{ min: 0 }}
+                  aria-label="Quantidade do produto"
                 />
                 {isStoreLocation(idLocalizacao, locations) ? (
                   <Typography variant="body2" color="text.secondary">
-                    Estoque: {stockQuantity !== null ? stockQuantity : 'N/A'} | Armazém:{' '}
-                    {warehouseQuantity} | Restante:{' '}
-                    {remainingStoreQuantity !== null ? remainingStoreQuantity : 'N/A'}
+                    Estoque: {stockQuantity ?? 'N/A'} | Armazém: {warehouseQuantity} | Restante:{' '}
+                    {remainingStoreQuantity ?? 'N/A'}
                   </Typography>
                 ) : (
                   <Typography variant="body2" color="text.secondary">
-                    Estoque: {stockQuantity !== null ? stockQuantity : 'N/A'}
+                    Estoque: {stockQuantity ?? 'N/A'}
                   </Typography>
                 )}
               </Stack>
@@ -589,6 +653,8 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 helperText={errors.quantidadeMinimaProduto}
                 disabled={loading}
                 fullWidth
+                inputProps={{ min: 0 }}
+                aria-label="Limite mínimo"
               />
             </Grid>
             <Grid item xs={12}>
@@ -599,6 +665,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 disabled={loading}
                 fullWidth
                 sx={{ mt: 2 }}
+                aria-label={editLocationId ? 'Atualizar localização' : 'Cadastrar localização'}
               >
                 {loading ? 'Salvando...' : editLocationId ? 'Atualizar' : 'Cadastrar'}
               </Button>
@@ -607,12 +674,17 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         </Box>
       </Modal>
 
-      <Modal open={openConfirmModal} onClose={handleCloseConfirmModal}>
+      <Modal
+        open={openConfirmModal}
+        onClose={handleCloseConfirmModal}
+        aria-labelledby="modal-confirmar-exclusao"
+        aria-describedby="modal-confirmar-exclusao-descricao"
+      >
         <Box sx={confirmModalStyle}>
-          <Typography variant="h6" gutterBottom>
+          <Typography id="modal-confirmar-exclusao" variant="h6" gutterBottom>
             Confirmar Exclusão
           </Typography>
-          <Typography variant="body1" mb={3}>
+          <Typography id="modal-confirmar-exclusao-descricao" variant="body1" mb={3}>
             Tem certeza que deseja excluir esta localização do produto? Esta ação não pode ser
             desfeita.
           </Typography>
@@ -622,6 +694,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               color="secondary"
               onClick={handleCloseConfirmModal}
               disabled={loading}
+              aria-label="Cancelar exclusão"
             >
               Cancelar
             </Button>
@@ -630,6 +703,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               color="error"
               onClick={handleDeleteLocation}
               disabled={loading}
+              aria-label="Confirmar exclusão"
             >
               {loading ? 'Excluindo...' : 'Excluir'}
             </Button>
@@ -643,7 +717,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             Localizações dos Produtos
           </Typography>
           <TableContainer component={Paper}>
-            <Table>
+            <Table aria-label="Tabela de localizações de produtos">
               <TableHead>
                 <TableRow>
                   <TableCell>
@@ -684,11 +758,14 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                   </TableRow>
                 ) : filteredProductLocations.length > 0 ? (
                   filteredProductLocations.map((location) => {
-                    const product = products.find((p) => p.id === location.id_produto);
+                    if (!location.id) return null;
+                    const product = products.find(
+                      (p) => p.referenciaProduto === location.id_produto,
+                    );
                     const isBelowLimit =
                       (location.quantidadeProduto ?? 0) <= (location.quantidadeMinimaProduto ?? 0);
                     return (
-                      <TableRow key={location.id ?? ''}>
+                      <TableRow key={location.id}>
                         <TableCell sx={{ color: isBelowLimit ? 'red' : 'inherit' }}>
                           {product?.nomeProduto || 'N/A'}
                         </TableCell>
@@ -713,15 +790,17 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                         <TableCell align="right">
                           <IconButton
                             color="primary"
-                            onClick={() => handleEditLocation(location.id ?? '')}
+                            onClick={() => handleEditLocation(location.id!)}
                             disabled={loading}
+                            aria-label={`Editar localização ${location.id}`}
                           >
                             <Edit />
                           </IconButton>
                           <IconButton
                             color="error"
-                            onClick={() => handleOpenConfirmModal(location.id ?? '')}
+                            onClick={() => handleOpenConfirmModal(location.id!)}
                             disabled={loading}
+                            aria-label={`Excluir localização ${location.id}`}
                           >
                             <Delete />
                           </IconButton>

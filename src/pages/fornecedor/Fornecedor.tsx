@@ -23,7 +23,7 @@ import Delete from 'components/icons/factor/Delete';
 import Edit from 'components/icons/factor/Edit';
 import React from 'react';
 import { Fornecedor } from 'types/models';
-import { getSuppliers, createSupplier, updateSupplier, deleteSupplier } from '../../api/methods';
+import { getAllSuppliers, createSupplier, updateSupplier, deleteSupplier } from '../../api/methods';
 
 interface CollapsedItemProps {
   open: boolean;
@@ -72,7 +72,7 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const fetchFornecedores = async () => {
     try {
-      const data = await getSuppliers();
+      const data = await getAllSuppliers();
       setFornecedores(data);
     } catch (error) {
       console.error('Error fetching suppliers:', error);

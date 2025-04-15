@@ -44,21 +44,21 @@ import {
   Cliente,
 } from '../../types/models';
 import {
-  getEmployeeCashRegisters,
+  getAllEmployeeCashRegisters,
   createEmployeeCashRegister,
   updateEmployeeCashRegister,
-  getEmployees,
-  getCashRegisters,
+  getAllEmployees,
+  getAllCashRegisters,
   createSale,
-  getSales,
-  getProducts,
-  getProductLocations,
+  getAllSales,
+  getAllProducts,
+  getAllProductLocations,
   updateProductLocation,
-  getLocations,
+  getAllLocations,
   updateProduct,
   updateStock,
   getStockByProduct,
-  getClients,
+  getAllClients,
 } from '../../api/methods';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -149,14 +149,14 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           productLocationsData,
           clientsData,
         ] = await Promise.all([
-          getSales(),
-          getEmployeeCashRegisters(),
-          getEmployees(),
-          getCashRegisters(),
-          getLocations(),
-          getProducts(),
-          getProductLocations(),
-          getClients(),
+          getAllSales(),
+          getAllEmployeeCashRegisters(),
+          getAllEmployees(),
+          getAllCashRegisters(),
+          getAllLocations(),
+          getAllProducts(),
+          getAllProductLocations(),
+          getAllClients(),
         ]);
 
         setClientes(clientsData as Cliente[]);
@@ -181,12 +181,10 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                     id_categoriaProduto: produto?.id_categoriaProduto || '',
                     referenciaProduto: produto?.referenciaProduto || '',
                     nomeProduto: produto?.nomeProduto || '',
-                    custoAquisicao: produto?.custoAquisicao || '0',
                     precoVenda: produto?.precoVenda || 0,
-                    quantidadeEstoque: produto?.quantidadeEstoque || 0,
+                    quantidadePorUnidade: produto?.quantidadePorUnidade || 0,
                     unidadeMedida: produto?.unidadeMedida || '',
                     unidadeConteudo: produto?.unidadeConteudo || '',
-                    codigoBarras: produto?.codigoBarras || '',
                   },
                   quantidade: vp.quantidadeVendida,
                 };
@@ -212,8 +210,8 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   const fetchProductsAndLocations = async () => {
     try {
       const [productsData, productLocationsData] = await Promise.all([
-        getProducts(),
-        getProductLocations(),
+        getAllProducts(),
+        getAllProductLocations(),
       ]);
       setProdutos(productsData);
       setProductLocations(productLocationsData);
@@ -263,10 +261,10 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     if (field === 'quantidade') {
       const produto = produtos.find((p) => p.id === updatedProdutos[index].id);
       const quantidade = Number(value);
-      if (produto && quantidade > produto.quantidadeEstoque) {
+      if (produto && quantidade > produto.quantidadePorUnidade) {
         setFaturaErrors((prev) => ({
           ...prev,
-          [`produto_${index}`]: `Quantidade indisponível. Estoque total: ${produto.quantidadeEstoque}`,
+          [`produto_${index}`]: `Quantidade indisponível. Estoque total: ${produto.quantidadePorUnidade}`,
         }));
       } else {
         setFaturaErrors((prev) => {
@@ -321,9 +319,9 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         newErrors[`produto_${index}`] = 'Selecione um produto';
       } else {
         const produto = produtos.find((prod) => prod.id === p.id);
-        if (produto && p.quantidade > produto.quantidadeEstoque) {
+        if (produto && p.quantidade > produto.quantidadePorUnidade) {
           newErrors[`produto_${index}`] =
-            `Quantidade indisponível. Estoque total: ${produto.quantidadeEstoque}`;
+            `Quantidade indisponível. Estoque total: ${produto.quantidadePorUnidade}`;
         }
       }
     });
@@ -548,7 +546,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
               if (produto) {
                 const updatedProduto: Produto = {
                   ...produto,
-                  quantidadeEstoque: estoqueGeral,
+                  quantidadePorUnidade: estoqueGeral,
                 };
                 await updateProduct(produto.id!, updatedProduto);
               }
@@ -574,12 +572,10 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
             id_categoriaProduto: produto!.id_categoriaProduto,
             referenciaProduto: produto!.referenciaProduto,
             nomeProduto: produto!.nomeProduto,
-            custoAquisicao: produto!.custoAquisicao,
             precoVenda: produto!.precoVenda,
-            quantidadeEstoque: produto!.quantidadeEstoque - p.quantidade,
+            quantidadePorUnidade: produto!.quantidadePorUnidade - p.quantidade,
             unidadeMedida: produto!.unidadeMedida,
             unidadeConteudo: produto!.unidadeConteudo,
-            codigoBarras: produto!.codigoBarras,
           },
           quantidade: p.quantidade,
         };
@@ -618,7 +614,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
             );
             const newStock =
               (lojaLoc?.quantidadeProduto ?? 0) + (armazemLoc?.quantidadeProduto ?? 0);
-            return { ...produto, quantidadeEstoque: newStock };
+            return { ...produto, quantidadePorUnidade: newStock };
           }
           return produto;
         }),
@@ -1043,7 +1039,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                     >
                       {produtos.map((p) => (
                         <MenuItem key={p.id} value={p.id}>
-                          {p.nomeProduto} - {p.precoVenda}kzs (Estoque: {p.quantidadeEstoque})
+                          {p.nomeProduto} - {p.precoVenda}kzs (Estoque: {p.quantidadePorUnidade})
                         </MenuItem>
                       ))}
                     </Select>

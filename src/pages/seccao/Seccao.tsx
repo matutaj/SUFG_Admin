@@ -22,7 +22,7 @@ import IconifyIcon from 'components/base/IconifyIcon';
 import React from 'react';
 import Delete from 'components/icons/factor/Delete';
 import Edit from 'components/icons/factor/Edit';
-import { getSections, createSection, updateSection, deleteSection } from '../../api/methods';
+import { getAllSections, createSection, updateSection, deleteSection } from '../../api/methods';
 import { Seccao } from '../../types/models';
 
 interface CollapsedItemProps {
@@ -76,7 +76,7 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const fetchSections = async () => {
     try {
       setLoading(true);
-      const data = await getSections();
+      const data = await getAllSections();
       console.log('Dados retornados por getSections:', JSON.stringify(data, null, 2));
 
       if (!Array.isArray(data)) {

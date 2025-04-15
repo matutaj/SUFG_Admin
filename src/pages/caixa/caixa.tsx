@@ -24,7 +24,7 @@ import Delete from 'components/icons/factor/Delete';
 import Edit from 'components/icons/factor/Edit';
 import { Caixa } from 'types/models';
 import {
-  getCashRegisters,
+  getAllCashRegisters,
   createCashRegister,
   updateCashRegister,
   deleteCashRegister,
@@ -69,7 +69,7 @@ const Caixas: React.FC<CollapsedItemProps> = ({ open }) => {
   const fetchCaixas = async () => {
     setLoading(true);
     try {
-      const data = await getCashRegisters();
+      const data = await getAllCashRegisters();
       setCaixas(data);
     } catch (error) {
       console.error('Erro ao carregar caixas:', error);

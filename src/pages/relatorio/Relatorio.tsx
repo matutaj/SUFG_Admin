@@ -40,13 +40,20 @@ import {
   ProdutoMaisVendido,
   FaturamentoPorPeriodo,
   QuantidadeFaturadaPorCaixa,
-  EstoqueAtual,
   EntradaEstoqueComFuncionario,
   FuncionarioCaixaComNome,
   ProdutoAbaixoMinimo,
   TransferenciaComFuncionario,
   PeriodoMaisVendidoPorProduto,
 } from '../../types/models';
+
+// Assuming DadosEstoque type based on error context
+interface DadosEstoque {
+  id_produto: string;
+  nome?: string; // Placeholder for product name
+  quantidade?: number; // Placeholder for stock quantity
+  localizacao?: string; // Placeholder for location info
+}
 
 type JsPDFWithAutoTable = jsPDF & {
   autoTable: (options: {
@@ -169,14 +176,12 @@ const ReportPage = () => {
           break;
 
         case 'ListarEstoqueAtual': {
-          const stock: EstoqueAtual[] = await getCurrentStock();
-          data = stock.map((item: EstoqueAtual) => ({
+          const stock: DadosEstoque[] = await getCurrentStock();
+          data = stock.map((item: DadosEstoque) => ({
             id: item.id_produto,
-            name: item.nomeProduto,
-            quantidade: item.quantidadeEstoque,
-            extra: item.localizacoes
-              .map((loc: { id: string; nome: string }) => loc.nome)
-              .join(', '),
+            name: item.nome || 'Produto Desconhecido',
+            quantidade: item.quantidade || 0,
+            extra: item.localizacao || 'Sem localização',
           }));
           break;
         }
@@ -306,7 +311,7 @@ const ReportPage = () => {
       case 'ListarQuantidadeFaturadaPorCaixa':
         return ['Caixa', 'Quantidade Faturada', 'Funcionários'];
       case 'ListarEstoqueAtual':
-        return ['Produto', 'Quantidade', 'Localizações'];
+        return ['Produto', 'Quantidade', 'Localização'];
       case 'ListarEntradasEstoquePorPeriodo':
       case 'ListarTransferenciasPorPeriodo':
         return ['Produto', 'Quantidade', 'Data', 'Funcionário'];

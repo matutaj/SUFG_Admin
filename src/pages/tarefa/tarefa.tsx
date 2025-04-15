@@ -21,7 +21,7 @@ import Modal from '@mui/material/Modal';
 import React from 'react';
 import Delete from 'components/icons/factor/Delete';
 import Edit from 'components/icons/factor/Edit';
-import { getTasks, createTask, updateTask, deleteTask } from '../../api/methods'; // Ajuste o caminho
+import { getAllTasks, createTask, updateTask, deleteTask } from '../../api/methods'; // Ajuste o caminho
 import { Tarefa } from '../../types/models'; // Importa a interface correta para Tarefa
 
 interface CollapsedItemProps {
@@ -72,7 +72,7 @@ const TarefaComponent = ({ open }: CollapsedItemProps) => {
   const fetchTasks = async () => {
     try {
       setLoading(true);
-      const data = await getTasks();
+      const data = await getAllTasks();
       setTarefas(data);
     } catch (error) {
       console.error('Erro ao buscar tarefas:', error);

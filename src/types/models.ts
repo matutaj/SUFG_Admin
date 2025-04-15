@@ -1,5 +1,3 @@
-// src/types/models.ts
-
 export enum TipoDocumento {
   FATURA = 'FATURA',
   RECIBO = 'RECIBO',
@@ -42,13 +40,6 @@ export interface Funcionario {
   moradaFuncionario: string;
   telefoneFuncionario: string;
   emailFuncionario: string;
-  createdAt?: string;
-  updatedAt?: string;
-  funcionariosPermissoes?: FuncionarioPermissao[];
-  funcionariosFuncoes?: FuncionarioFuncao[];
-  entradasEstoque?: EntradaEstoque[];
-  transferencias?: Transferencia[];
-  funcionariosCaixa?: FuncionarioCaixa[];
 }
 
 export interface CategoriaProduto {
@@ -65,20 +56,10 @@ export interface Produto {
   id_categoriaProduto: string;
   referenciaProduto: string;
   nomeProduto: string;
-  custoAquisicao: string;
   precoVenda: number;
-  quantidadeEstoque: number;
+  quantidadePorUnidade: number;
   unidadeMedida: string;
   unidadeConteudo: string;
-  codigoBarras: string;
-  entradasEstoque?: EntradaEstoque[];
-  produtosLocalizacoes?: ProdutoLocalizacao[];
-  alertas?: Alerta[];
-  transferencias?: Transferencia[];
-  vendasProdutos?: VendaProduto[];
-  createdAt?: string;
-  updatedAt?: string;
-  categoriasProdutos?: CategoriaProduto;
 }
 
 export interface Fornecedor {
@@ -88,28 +69,19 @@ export interface Fornecedor {
   moradaFornecedor: string;
   telefoneFornecedor: number;
   emailFornecedor: string;
-  entradasEstoque?: EntradaEstoque[];
-  funcionariosCaixa?: FuncionarioCaixa[];
-  createdAt?: string;
-  updatedAt?: string;
 }
 
-export interface EntradaEstoque {
+export interface DadosEntradaEstoque {
   id?: string;
   id_fornecedor: string;
   id_produto: string;
   id_funcionario: string;
   quantidadeRecebida: number;
+  dataEntrada: string | Date;
   adicionado: boolean;
-  dataEntrada: string;
   custoUnitario: number;
   lote: string;
-  dataValidadeLote: string;
-  createdAt?: string;
-  updatedAt?: string;
-  fornecedores?: Fornecedor;
-  produtos?: Produto;
-  funcionarios?: Funcionario;
+  dataValidadeLote: string | Date;
 }
 
 export interface Caixa {
@@ -232,14 +204,16 @@ export interface FuncionarioCaixa {
   updatedAt?: Date;
 }
 
-export interface Estoque {
+export interface DadosEstoque {
   id?: string;
   id_produto: string;
   quantidadeAtual: number;
   lote: string;
   dataValidadeLote: Date;
+  produtos?: Produto;
+  createdAt?: string;
+  updatedAt?: string;
 }
-// ... (mantenha todas as interfaces existentes acima)
 
 export interface Tarefa {
   id?: string;
@@ -247,9 +221,10 @@ export interface Tarefa {
   descricao: string;
   createdAt?: string;
   updatedAt?: string;
-  funcionarios?: Funcionario[]; // Referência opcional para funcionários associados
-  funcoes?: Funcao[]; // Referência opcional para funções associadas
+  funcionarios?: Funcionario[];
+  funcoes?: Funcao[];
 }
+
 export interface TarefaFuncionarioFuncao {
   id?: string;
   id_tarefa: string;
@@ -261,6 +236,7 @@ export interface TarefaFuncionarioFuncao {
   funcionarios?: Funcionario;
   funcoes?: Funcao;
 }
+
 export interface Alerta {
   id?: string;
   id_caixa: string;
@@ -336,7 +312,6 @@ export interface VendaComFuncionario {
   cliente?: { nome: string };
 }
 
-// Interface para produtos mais vendidos
 export interface ProdutoMaisVendido {
   id_produto: string;
   nomeProduto: string;
@@ -344,13 +319,11 @@ export interface ProdutoMaisVendido {
   valorTotal: number;
 }
 
-// Interface para faturamento por período
 export interface FaturamentoPorPeriodo {
   totalFaturado: number;
   vendas: VendaComFuncionario[];
 }
 
-// Interface para quantidade faturada por caixa
 export interface QuantidadeFaturadaPorCaixa {
   idCaixa: string;
   nomeCaixa: string;
@@ -358,7 +331,6 @@ export interface QuantidadeFaturadaPorCaixa {
   funcionarios: string[];
 }
 
-// Interface para estoque atual
 export interface EstoqueAtual {
   id_produto: string;
   nomeProduto: string;
@@ -366,7 +338,6 @@ export interface EstoqueAtual {
   localizacoes: { id: string; nome: string }[];
 }
 
-// Interface para entradas de estoque com nome do funcionário
 export interface EntradaEstoqueComFuncionario {
   id: string;
   idProduto?: string;
@@ -376,7 +347,6 @@ export interface EntradaEstoqueComFuncionario {
   produto?: { nomeProduto: string };
 }
 
-// Interface para transferências com nome do funcionário
 export interface TransferenciaComFuncionario {
   id: string;
   idProduto?: string;
@@ -386,7 +356,6 @@ export interface TransferenciaComFuncionario {
   produto?: { nomeProduto: string };
 }
 
-// Interface para produtos abaixo do mínimo
 export interface ProdutoAbaixoMinimo {
   id_produto: string;
   nomeProduto: string;
@@ -395,7 +364,6 @@ export interface ProdutoAbaixoMinimo {
   localizacao: string;
 }
 
-// Interface para atividade de funcionários no caixa
 export interface FuncionarioCaixaComNome {
   id: string;
   idFuncionario?: string;
@@ -405,7 +373,6 @@ export interface FuncionarioCaixaComNome {
   caixa?: { nome: string };
 }
 
-// Interface para período mais vendido por produto
 export interface PeriodoMaisVendidoPorProduto {
   id_produto: string;
   nomeProduto: string;
@@ -413,5 +380,3 @@ export interface PeriodoMaisVendidoPorProduto {
   quantidadeVendida: number;
   valorTotal: number;
 }
-
-// ... (outras interfaces existentes como Cliente, Produto, etc., se já estiverem no arquivo)

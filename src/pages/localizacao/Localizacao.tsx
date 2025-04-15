@@ -23,7 +23,7 @@ import IconifyIcon from 'components/base/IconifyIcon';
 import Edit from 'components/icons/factor/Edit';
 import Delete from 'components/icons/factor/Delete';
 import { Localizacao } from '../../types/models'; // Importando a interface do models.ts
-import { getLocations, createLocation, deleteLocation, updateLocation } from '../../api/methods'; // Ajuste o caminho conforme sua estrutura
+import { getAllLocations, createLocation, deleteLocation, updateLocation } from '../../api/methods'; // Ajuste o caminho conforme sua estrutura
 
 interface CollapsedItemProps {
   open: boolean;
@@ -76,7 +76,7 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const fetchWarehouses = async () => {
     try {
       setLoading(true);
-      const data = await getLocations();
+      const data = await getAllLocations();
       console.log('Dados retornados por getLocations:', JSON.stringify(data, null, 2));
 
       // Verificar IDs duplicados

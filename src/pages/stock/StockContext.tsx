@@ -1,10 +1,10 @@
 // StockContext.tsx
 import React, { createContext, useContext, ReactNode, useState } from 'react';
-import { EntradaEstoque } from 'types/models';
-import { getStockEntries, updateStockEntry } from '../../api/methods';
+import { DadosEntradaEstoque } from 'types/models';
+import { getAllStockEntries, updateStockEntry } from '../../api/methods';
 
 interface StockContextType {
-  stockEntries: EntradaEstoque[];
+  stockEntries: DadosEntradaEstoque[];
   updateStockQuantity: (productId: string, quantityToDeduct: number) => Promise<void>;
   fetchStock: () => Promise<void>;
 }
@@ -12,11 +12,11 @@ interface StockContextType {
 const StockContext = createContext<StockContextType | undefined>(undefined);
 
 export const StockProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [stockEntries, setStockEntries] = useState<EntradaEstoque[]>([]);
+  const [stockEntries, setStockEntries] = useState<DadosEntradaEstoque[]>([]);
 
   const fetchStock = async () => {
     try {
-      const entries = await getStockEntries();
+      const entries = await getAllStockEntries();
       setStockEntries(entries);
     } catch (error) {
       console.error('Erro ao buscar estoque:', error);
