@@ -21,12 +21,14 @@ import {
   MenuItem,
   Alert,
   Collapse,
+  TablePagination,
+  Box,
 } from '@mui/material';
 import { SelectChangeEvent } from '@mui/material/Select';
 import IconifyIcon from 'components/base/IconifyIcon';
 import Delete from 'components/icons/factor/Delete';
 import Edit from 'components/icons/factor/Edit';
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useEffect } from 'react';
 import { DadosEntradaEstoque, DadosEstoque, Produto, Fornecedor, Funcionario } from 'types/models';
 import {
   getAllStock,
@@ -60,10 +62,24 @@ const modalStyle = {
   borderRadius: 2,
 };
 
+const confirmModalStyle = {
+  position: 'absolute' as const,
+  top: '50%',
+  left: '50%',
+  transform: 'translate(-50%, -50%)',
+  width: 400,
+  bgcolor: 'background.paper',
+  boxShadow: 24,
+  p: 4,
+  borderRadius: 1,
+};
+
 const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
   const [openModal, setOpenModal] = React.useState(false);
   const [manageEntryModal, setManageEntryModal] = React.useState(false);
   const [editStockModal, setEditStockModal] = React.useState(false);
+  const [openConfirmDelete, setOpenConfirmDelete] = React.useState(false);
+  const [deleteStockId, setDeleteStockId] = React.useState<string | null>(null);
   const [isEditing, setIsEditing] = React.useState(false);
   const [editRef, setEditRef] = React.useState<string | null>(null);
   const [editStockRef, setEditStockRef] = React.useState<string | null>(null);
@@ -86,6 +102,7 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
   });
   const [stockEntries, setStockEntries] = React.useState<DadosEntradaEstoque[]>([]);
   const [currentStock, setCurrentStock] = React.useState<DadosEstoque[]>([]);
+  const [filteredStock, setFilteredStock] = React.useState<DadosEstoque[]>([]);
   const [products, setProducts] = React.useState<Produto[]>([]);
   const [suppliers, setSuppliers] = React.useState<Fornecedor[]>([]);
   const [employees, setEmployees] = React.useState<Funcionario[]>([]);
@@ -94,6 +111,9 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
   const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
   const [filterStartDate, setFilterStartDate] = React.useState<string>('');
   const [filterEndDate, setFilterEndDate] = React.useState<string>('');
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [page, setPage] = React.useState(0);
+  const [rowsPerPage] = React.useState(6);
   const [loading, setLoading] = React.useState(false);
 
   React.useEffect(() => {
@@ -115,6 +135,7 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
 
       setStockEntries(stockEntriesData);
       setCurrentStock(stockData);
+      setFilteredStock(stockData);
       setProducts(productsData);
       setSuppliers(suppliersData);
       setEmployees(employeesData);
@@ -168,6 +189,16 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
     setErrors({});
     setSuccessMessage(null);
   }, []);
+
+  const handleOpenConfirmDelete = (id: string) => {
+    setDeleteStockId(id);
+    setOpenConfirmDelete(true);
+  };
+
+  const handleCloseConfirmDelete = () => {
+    setOpenConfirmDelete(false);
+    setDeleteStockId(null);
+  };
 
   const handleTextFieldChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -261,7 +292,6 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
         lote: form.lote!,
         dataValidadeLote: new Date(form.dataValidadeLote!).toISOString().split('T')[0],
       };
-      console.log('Submitting stock entry:', entryData);
       if (isEditing && editRef) {
         const updatedEntry = await updateStockEntry(editRef, entryData);
         setStockEntries((prev) =>
@@ -300,10 +330,14 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
         setCurrentStock((prev) =>
           prev.map((item) => (item.lote === editStockRef ? updatedStock : item)),
         );
+        setFilteredStock((prev) =>
+          prev.map((item) => (item.lote === editStockRef ? updatedStock : item)),
+        );
         setSuccessMessage('Estoque atualizado com sucesso!');
       } else {
         const newStock = await createStock(stockData);
         setCurrentStock((prev) => [...prev, newStock]);
+        setFilteredStock((prev) => [...prev, newStock]);
         setSuccessMessage('Estoque criado com sucesso!');
       }
       handleEditStockClose();
@@ -328,24 +362,27 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
     setErrors({});
   }, []);
 
-  const handleDeleteStock = useCallback(async (id: string) => {
-    try {
-      setLoading(true);
-      setFetchError(null);
-      await deleteStock(id);
-      setCurrentStock((prev) => prev.filter((item) => item.id !== id));
-      setSuccessMessage('Estoque excluído com sucesso!');
-    } catch (error) {
-      console.error('Erro ao excluir estoque:', error);
-      setFetchError('Erro ao excluir estoque. Tente novamente.');
-    } finally {
-      setLoading(false);
+  const handleDeleteStock = useCallback(async () => {
+    if (deleteStockId) {
+      try {
+        setLoading(true);
+        setFetchError(null);
+        await deleteStock(deleteStockId);
+        setCurrentStock((prev) => prev.filter((item) => item.id !== deleteStockId));
+        setFilteredStock((prev) => prev.filter((item) => item.id !== deleteStockId));
+        setSuccessMessage('Estoque excluído com sucesso!');
+        handleCloseConfirmDelete();
+      } catch (error) {
+        console.error('Erro ao excluir estoque:', error);
+        setFetchError('Erro ao excluir estoque. Tente novamente.');
+      } finally {
+        setLoading(false);
+      }
     }
-  }, []);
+  }, [deleteStockId]);
 
   const handleAddToStock = useCallback(
     async (entry: DadosEntradaEstoque) => {
-      // Validate expiration date
       const dataValidade = new Date(entry.dataValidadeLote);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -359,11 +396,7 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
         setLoading(true);
         setFetchError(null);
 
-        // Normalize dates for consistency
         const entryDataValidade = new Date(entry.dataValidadeLote).toISOString().split('T')[0];
-        const entryDataEntrada = new Date(entry.dataEntrada).toISOString().split('T')[0];
-
-        // Check for existing stock with same id_produto, lote, and dataValidadeLote
         const existingStock = currentStock.find(
           (item) =>
             item.id_produto === entry.id_produto &&
@@ -372,7 +405,6 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
         );
 
         if (existingStock) {
-          // Update existing stock
           const updatedQuantity = existingStock.quantidadeAtual + entry.quantidadeRecebida;
           const stockData: DadosEstoque = {
             id_produto: existingStock.id_produto,
@@ -382,51 +414,63 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
           };
           const updatedStock = await updateStock(existingStock.id!, stockData);
           setCurrentStock((prev) =>
-            prev.map((item) =>
-              item.id_produto === existingStock.id_produto ? updatedStock : item,
-            ),
+            prev.map((item) => (item.id === existingStock.id ? updatedStock : item)),
+          );
+          setFilteredStock((prev) =>
+            prev.map((item) => (item.id === existingStock.id ? updatedStock : item)),
           );
         } else {
-          // Create new stock
           const stockData: DadosEstoque = {
             id_produto: entry.id_produto,
             quantidadeAtual: entry.quantidadeRecebida,
             lote: entry.lote,
             dataValidadeLote: new Date(entry.dataValidadeLote),
           };
-
           const newStock = await createStock(stockData);
           setCurrentStock((prev) => [...prev, newStock]);
+          setFilteredStock((prev) => [...prev, newStock]);
         }
 
-        // Update stock entry to set adicionado: true
         const updatedEntry: DadosEntradaEstoque = {
           ...entry,
           adicionado: true,
-          dataEntrada: entryDataEntrada,
-          dataValidadeLote: entryDataValidade,
         };
-
-        // Log for debugging
-        console.log('Updating stock entry with:', { id: entry.id!, data: updatedEntry });
-
         await updateStockEntry(entry.id!, updatedEntry);
         setStockEntries((prev) => prev.map((item) => (item.id === entry.id ? updatedEntry : item)));
 
-        // Show success message and clear after 3 seconds
         setSuccessMessage('Adicionado ao estoque com sucesso!');
         setTimeout(() => setSuccessMessage(null), 3000);
       } catch (error) {
         console.error('Erro ao adicionar ao estoque:', error);
-        setStockEntries((prev) =>
-          prev.map((item) => (item.id === entry.id ? { ...item, adicionado: false } : item)),
-        );
+        setFetchError('Erro ao adicionar ao estoque. Tente novamente.');
       } finally {
         setLoading(false);
       }
     },
     [currentStock, updateStock, createStock, updateStockEntry],
   );
+
+  const handleSearch = useCallback(() => {
+    const query = searchQuery.toLowerCase().trim();
+    if (query === '') {
+      setFilteredStock(currentStock);
+    } else {
+      const filtered = currentStock.filter((stock) => {
+        const product = products.find((p) => p.id === stock.id_produto);
+        return (
+          product?.nomeProduto?.toLowerCase().includes(query) ||
+          stock.lote?.toLowerCase().includes(query)
+        );
+      });
+      setFilteredStock(filtered);
+    }
+    setPage(0);
+  }, [searchQuery, currentStock, products]);
+
+  useEffect(() => {
+    handleSearch();
+  }, [searchQuery, currentStock, handleSearch]);
+
   const handleManageEntries = useCallback(() => {
     setManageEntryModal(true);
   }, []);
@@ -440,6 +484,15 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
     });
   }, [stockEntries, filterStartDate, filterEndDate]);
 
+  const handleChangePage = (
+    _event: React.MouseEvent<HTMLButtonElement> | null,
+    newPage: number,
+  ) => {
+    setPage(newPage);
+  };
+
+  const paginatedStock = filteredStock.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+
   return (
     <>
       {(fetchError || successMessage) && (
@@ -451,7 +504,16 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
         <Collapse in={open}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
             <Typography variant="h5">Gestão de Estoque</Typography>
-            <Stack direction="row" spacing={2}>
+            <Stack direction="row" spacing={2} alignItems="center">
+              <TextField
+                id="search-stock"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                label="Pesquisar Produto ou Lote"
+                variant="outlined"
+                size="small"
+                disabled={loading}
+              />
               <Button
                 variant="contained"
                 color="secondary"
@@ -767,7 +829,6 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
         aria-labelledby="modal-gerenciar-entradas"
       >
         <Grid sx={modalStyle}>
-          {/* ... other modal content ... */}
           <TableContainer component={Paper}>
             <Table aria-label="Tabela de entradas de estoque">
               <TableHead>
@@ -844,9 +905,45 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
         </Grid>
       </Modal>
 
+      <Modal
+        open={openConfirmDelete}
+        onClose={handleCloseConfirmDelete}
+        aria-labelledby="confirm-delete-modal-title"
+        aria-describedby="confirm-delete-modal-description"
+      >
+        <Box sx={confirmModalStyle}>
+          <Typography id="confirm-delete-modal-title" variant="h6" component="h2" gutterBottom>
+            Confirmar Exclusão
+          </Typography>
+          <Typography id="confirm-delete-modal-description" sx={{ mb: 3 }}>
+            Tem certeza que deseja excluir este item do estoque?
+          </Typography>
+          <Stack direction="row" spacing={2} justifyContent="flex-end">
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={handleCloseConfirmDelete}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="contained"
+              color="error"
+              onClick={handleDeleteStock}
+              disabled={loading}
+            >
+              {loading ? 'Excluindo...' : 'Excluir'}
+            </Button>
+          </Stack>
+        </Box>
+      </Modal>
+
       <Card sx={{ maxWidth: '100%', margin: 'auto', mt: 4 }}>
         <CardContent>
-          <Typography variant="h6">Estoque Atual</Typography>
+          <Typography variant="h6" mb={2}>
+            Estoque Atual
+          </Typography>
           <TableContainer component={Paper}>
             <Table aria-label="Tabela de estoque atual">
               <TableHead>
@@ -875,48 +972,60 @@ const Stock: React.FC<CollapsedItemProps> = ({ open }) => {
                       Carregando...
                     </TableCell>
                   </TableRow>
-                ) : currentStock.length > 0 ? (
-                  currentStock.map((item) => {
-                    const product = products.find((p) => p.id === item.id_produto);
-                    return (
-                      <TableRow key={item.lote}>
-                        <TableCell>{product?.nomeProduto || item.id_produto}</TableCell>
-                        <TableCell>{item.quantidadeAtual}</TableCell>
-                        <TableCell>{item.lote}</TableCell>
-                        <TableCell>
-                          {new Date(item.dataValidadeLote).toLocaleDateString('pt-BR')}
-                        </TableCell>
-                        <TableCell align="right">
-                          <IconButton
-                            color="primary"
-                            onClick={() => handleEditStock(item)}
-                            disabled={loading}
-                            aria-label={`Editar estoque ${item.id}`}
-                          >
-                            <Edit />
-                          </IconButton>
-                          <IconButton
-                            color="error"
-                            onClick={() => handleDeleteStock(item.id!)}
-                            disabled={loading}
-                            aria-label={`Excluir estoque ${item.id}`}
-                          >
-                            <Delete />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
+                ) : paginatedStock.length > 0 ? (
+                  paginatedStock
+                    .filter((item) => item.id)
+                    .map((item) => {
+                      const product = products.find((p) => p.id === item.id_produto);
+                      return (
+                        <TableRow key={item.id}>
+                          <TableCell>{product?.nomeProduto || item.id_produto}</TableCell>
+                          <TableCell>{item.quantidadeAtual}</TableCell>
+                          <TableCell>{item.lote}</TableCell>
+                          <TableCell>
+                            {new Date(item.dataValidadeLote).toLocaleDateString('pt-BR')}
+                          </TableCell>
+                          <TableCell align="right">
+                            <IconButton
+                              color="primary"
+                              onClick={() => handleEditStock(item)}
+                              disabled={loading}
+                              aria-label={`Editar estoque ${item.id}`}
+                            >
+                              <Edit />
+                            </IconButton>
+                            <IconButton
+                              color="error"
+                              onClick={() => handleOpenConfirmDelete(item.id!)}
+                              disabled={loading}
+                              aria-label={`Excluir estoque ${item.id}`}
+                            >
+                              <Delete />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
                 ) : (
                   <TableRow>
                     <TableCell colSpan={5} align="center">
-                      Nenhum produto no estoque.
+                      Nenhum produto encontrado.
                     </TableCell>
                   </TableRow>
                 )}
               </TableBody>
             </Table>
           </TableContainer>
+          <TablePagination
+            rowsPerPageOptions={[6]}
+            component="div"
+            count={filteredStock.length}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={handleChangePage}
+            labelRowsPerPage="Itens por página"
+            labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+          />
         </CardContent>
       </Card>
     </>
