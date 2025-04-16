@@ -23,9 +23,11 @@ import {
   InputLabel,
   FormControl,
   FormHelperText,
-  SelectChangeEvent,
   Divider,
   Autocomplete,
+  TablePagination,
+  Alert,
+  SelectChangeEvent,
 } from '@mui/material';
 import IconifyIcon from 'components/base/IconifyIcon';
 import Delete from 'components/icons/factor/Delete';
@@ -59,6 +61,7 @@ import {
   updateStock,
   getStockByProduct,
   getAllClients,
+  deleteSale, // Added for deleting invoices
 } from '../../api/methods';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -96,15 +99,36 @@ const modalStyle = {
   overflowY: 'auto' as const,
 };
 
+const confirmModalStyle = {
+  position: 'absolute' as const,
+  top: '50%',
+  left: '50%',
+  transform: 'translate(-50%, -50%)',
+  width: 400,
+  bgcolor: 'background.paper',
+  boxShadow: 24,
+  p: 4,
+  borderRadius: 1,
+};
+
 const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   const [openFaturaModal, setOpenFaturaModal] = useState(false);
   const [openCaixaModal, setOpenCaixaModal] = useState(false);
   const [openCaixaListModal, setOpenCaixaListModal] = useState(false);
+  const [openConfirmModal, setOpenConfirmModal] = useState(false);
+  const [faturaToDelete, setFaturaToDelete] = useState<number | null>(null);
   const [faturas, setFaturas] = useState<Fatura[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [productLocations, setProductLocations] = useState<ProdutoLocalizacao[]>([]);
   const [locations, setLocations] = useState<Localizacao[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [alert, setAlert] = useState<{
+    severity: 'success' | 'error' | 'info' | 'warning';
+    message: string;
+  } | null>(null);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(5);
 
   const [faturaForm, setFaturaForm] = useState({
     cliente: '',
@@ -164,7 +188,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         const mappedFaturas = salesData.map((venda: Venda, index: number) => {
           const cliente = clientsData.find((c: Cliente) => c.id === venda.id_cliente);
           return {
-            id: index + 1,
+            id: venda.id ? Number(venda.id) : index + 1,
             cliente: cliente ? cliente.nomeCliente : venda.id_cliente || 'Desconhecido',
             nif: cliente?.numeroContribuinte || venda.clientes?.numeroContribuinte || '',
             telefone: cliente?.telefoneCliente || venda.clientes?.telefoneCliente || '',
@@ -202,6 +226,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         setProductLocations(productLocationsData);
       } catch (error) {
         console.error('Erro ao carregar dados iniciais:', error);
+        setAlert({ severity: 'error', message: 'Erro ao carregar dados iniciais!' });
       }
     };
     fetchInitialData();
@@ -217,6 +242,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       setProductLocations(productLocationsData);
     } catch (error) {
       console.error('Erro ao buscar produtos e localizações:', error);
+      setAlert({ severity: 'error', message: 'Erro ao buscar produtos e localizações!' });
     }
   };
 
@@ -224,6 +250,18 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   const handleCloseFaturaModal = () => {
     setOpenFaturaModal(false);
     resetFaturaForm();
+  };
+
+  const handleOpenConfirmModal = (faturaId: number) => {
+    console.log(`Opening confirm modal for fatura id: ${faturaId}`);
+    setFaturaToDelete(faturaId);
+    setOpenConfirmModal(true);
+  };
+
+  const handleCloseConfirmModal = () => {
+    console.log('Closing confirm modal');
+    setOpenConfirmModal(false);
+    setFaturaToDelete(null);
   };
 
   const resetFaturaForm = () => {
@@ -337,49 +375,68 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     });
 
     // Configurações de fonte e cores
-    doc.setFont('helvetica');
-    const blueColor = '#1E90FF'; // Cor azul da imagem
+    doc.setFont('helvetica', 'normal');
+    const blueColor = '#1E90FF'; // Cor azul do design
     const blackColor = '#000000';
+    const whiteColor = '#FFFFFF';
 
     // Cabeçalho
     doc.setFillColor(blueColor);
     doc.rect(0, 0, 210, 20, 'F'); // Retângulo azul no topo
-    doc.setTextColor(blackColor);
-    doc.setFontSize(18);
-    doc.text('SISTEMA UNIFICADO DE FATURAÇÃO E GESTÃO', 105, 10, { align: 'center' }); // Nome centralizado
-    doc.setFontSize(10);
-    doc.text('Contato: lorem@empresa.com', 150, 15); // Contato
-    doc.text('CNPJ: 00.000.000/0000-00', 150, 18);
+    doc.setTextColor(whiteColor);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('NOME DE SUA EMPRESA', 10, 10);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text('00, muito bom', 10, 15);
+    doc.text('AB CD, Nome da cidade', 10, 18);
+    doc.text('SUAEMPRESA@EMAIL.COM', 150, 10, { align: 'right' });
+    doc.text('(COI) 000 000 000', 150, 15, { align: 'right' });
 
     // Título e número da fatura
+    doc.setTextColor(blackColor);
     doc.setFontSize(40);
-    doc.text('Fatura.', 20, 30);
-    doc.setFontSize(12);
-    doc.text(`Fatura: 00-0000-0000`, 160, 30); // Substitua por fatura.id se disponível
-    doc.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`, 160, 35);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Fatura.', 10, 35);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Fatura: ${fatura.id.toString().padStart(10, '00-0000')}`, 150, 30, {
+      align: 'right',
+    });
+    doc.text(`Data: ${new Date(fatura.data).toLocaleDateString('pt-BR')}`, 150, 35, {
+      align: 'right',
+    });
 
     // Emitido Para e Valor Total
-    doc.setFontSize(14);
-    doc.text('CLIENTE', 20, 50);
     doc.setFontSize(12);
-    doc.text(fatura.cliente, 20, 55);
-    doc.text(`Tel: ${fatura.telefone || 'N/A'}`, 20, 60);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Emitido Para', 10, 50);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(fatura.cliente, 10, 55);
+    doc.text(`Tel: ${fatura.telefone || 'N/A'}`, 10, 60);
+    doc.text(`${fatura.localizacao || 'N/A'}`, 10, 65);
     doc.setFontSize(20);
-    doc.text(`${calcularTotalFatura(fatura).toFixed(2)}`, 160, 55);
-    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 150, 55, { align: 'right' });
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Data de Vencimento: 02.11.2024', 150, 65, { align: 'right' });
 
     // Tabela de itens
     doc.setFontSize(12);
     doc.setFillColor(blueColor);
-    doc.rect(10, 70, 190, 10, 'F'); // Cabeçalho da tabela
-    doc.setTextColor(blackColor);
-    doc.text('Descrição do Produto', 15, 76);
-    doc.text('Qtd', 90, 76, { align: 'center' });
-    doc.text('Preço', 130, 76, { align: 'center' });
-    doc.text('Total', 170, 76, { align: 'center' });
+    doc.rect(10, 75, 190, 10, 'F');
+    doc.setTextColor(whiteColor);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Descrição do Produto', 15, 81);
+    doc.text('Qtd', 90, 81, { align: 'center' });
+    doc.text('Preço', 130, 81, { align: 'center' });
+    doc.text('Total', 170, 81, { align: 'center' });
 
     const produtosTable = fatura.produtos.map((p) => {
-      const precoVenda = Number(p.produto.precoVenda) || 0; // Converte para número, usa 0 se inválido
+      const precoVenda = Number(p.produto.precoVenda) || 0;
       return [
         p.produto.nomeProduto || 'Produto sem nome',
         p.quantidade.toString(),
@@ -388,62 +445,64 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       ];
     });
 
-    autoTable(doc, {
-      startY: 80,
-      head: [['', '', '', '']],
-      body: produtosTable,
-      theme: 'plain',
-      styles: {
-        fontSize: 10,
-        cellPadding: 2,
-        textColor: blackColor,
-      },
-      columnStyles: {
-        0: { cellWidth: 75 },
-        1: { cellWidth: 40, halign: 'center' },
-        2: { cellWidth: 40, halign: 'center' },
-        3: { cellWidth: 35, halign: 'right' },
-      },
-      didDrawCell: (data) => {
-        if (
-          data.section === 'body' &&
-          data.column.index === 0 &&
-          data.cell.raw === fatura.produtos[0]?.produto.nomeProduto
-        ) {
-          doc.setFillColor(blueColor);
-          doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, 'F');
-          doc.setTextColor(blackColor);
-        }
-      },
-    });
+    let finalY = 85;
+    if (produtosTable.length > 0) {
+      autoTable(doc, {
+        startY: 85,
+        head: [['', '', '', '']],
+        body: produtosTable,
+        theme: 'plain',
+        styles: {
+          fontSize: 10,
+          cellPadding: 2,
+          textColor: blackColor,
+        },
+        columnStyles: {
+          0: { cellWidth: 75 },
+          1: { cellWidth: 40, halign: 'center' },
+          2: { cellWidth: 40, halign: 'center' },
+          3: { cellWidth: 35, halign: 'right' },
+        },
+      });
+      finalY = doc.lastAutoTable.finalY;
+    }
 
-    const finalY = doc.lastAutoTable.finalY;
-
+    // Resumo (Subtotal, Imposto, Total)
     doc.setFontSize(12);
+    doc.setTextColor(blackColor);
+    doc.setFont('helvetica', 'normal');
     doc.text('Subtotal', 130, finalY + 10);
     doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 170, finalY + 10, { align: 'right' });
     doc.text('Imposto', 130, finalY + 15);
-    doc.text('Kzs 0.00', 170, finalY + 15, { align: 'right' }); // Ajuste conforme lógica de imposto
+    doc.text('Kzs 0.00', 170, finalY + 15, { align: 'right' });
     doc.setFillColor(blueColor);
-    doc.rect(10, finalY + 20, 190, 10, 'F');
-    doc.setTextColor(blackColor);
-    doc.text('Total', 130, finalY + 26);
+    doc.rect(130, finalY + 20, 70, 10, 'F');
+    doc.setTextColor(whiteColor);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Total', 132, finalY + 26);
     doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 170, finalY + 26, { align: 'right' });
 
     // Informações de pagamento
+    doc.setFontSize(12);
+    doc.setTextColor(blackColor);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Informação de pagamento', 10, finalY + 40);
+    doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    doc.text('Informação de pagamento', 20, finalY + 40);
     doc.text(
       'Se você tiver alguma dúvida sobre esta fatura, favor entrar em contato:',
-      20,
+      10,
       finalY + 45,
     );
+
+    // Rodapé
     doc.setFillColor(blueColor);
-    doc.rect(10, finalY + 50, 190, 10, 'F');
-    doc.setTextColor(blackColor);
-    doc.text('Tel: +00 0123 345', 20, finalY + 56);
-    doc.text('sufggeral@gmail.com', 70, finalY + 56);
-    doc.text('www.sufggeral.com', 120, finalY + 56);
+    doc.rect(0, 270, 210, 27, 'F');
+    doc.setTextColor(whiteColor);
+    doc.setFontSize(10);
+    doc.text('(000) 0123 345', 10, 280);
+    doc.text('NOME@EMAIL.COM', 70, 280);
+    doc.text('WWW.WEBSITENOME.COM', 150, 280, { align: 'right' });
 
     // Forçar download do PDF
     const pdfBlob = doc.output('blob');
@@ -454,7 +513,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     link.click();
     document.body.removeChild(link);
   };
-
   const onAddFaturaSubmit = async () => {
     if (!validateFaturaForm()) return;
 
@@ -523,21 +581,18 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
               const armazemQuantity = Number(armazemProdutoLocation?.quantidadeProduto) || 0;
               const estoqueGeral = lojaQuantity + armazemQuantity - produtoSelecionado.quantidade;
 
-              // Buscar o estoque existente
               const existingStock = await getStockByProduct(produtoSelecionado.id);
 
               if (existingStock) {
-                // Se o estoque existe, atualize apenas a quantidade, mantendo os outros campos
                 const updatedStockData = {
                   id_produto: produtoSelecionado.id,
-                  quantidadeAtual: estoqueGeral, // Atualiza apenas a quantidade
-                  lote: existingStock.lote, // Mantém o lote existente
-                  dataValidadeLote: existingStock.dataValidadeLote, // Mantém a data existente
+                  quantidadeAtual: estoqueGeral,
+                  lote: existingStock.lote,
+                  dataValidadeLote: existingStock.dataValidadeLote,
                 };
 
                 await updateStock(existingStock.id!, updatedStockData);
               } else {
-                // Se não houver estoque existente, lance um erro ou ignore (dependendo da lógica)
                 throw new Error(
                   `Nenhum estoque encontrado para o produto ${produtoSelecionado.id}. Atualização não permitida.`,
                 );
@@ -564,7 +619,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         }
       }
 
-      // Resto do código (criação da fatura, geração de PDF, etc.) permanece igual
       const novosProdutosFatura = faturaForm.produtosSelecionados.map((p) => {
         const produto = produtos.find((prod) => prod.id === p.id);
         return {
@@ -620,11 +674,11 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           return produto;
         }),
       );
+      setAlert({ severity: 'success', message: 'Fatura criada com sucesso!' });
       generatePDF(newFatura);
       handleCloseFaturaModal();
       await fetchProductsAndLocations();
 
-      // Atualiza a lista de clientes se um novo cliente foi criado
       const clienteExistente = clientes.find((c) => c.id === createdVenda.id_cliente);
       if (!clienteExistente && createdVenda.id_cliente) {
         const novoCliente: Cliente = {
@@ -639,12 +693,102 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       }
     } catch (error) {
       console.error('Erro ao criar fatura:', error);
-      alert('Falha ao cadastrar fatura. Verifique sua conexão ou tente novamente.');
+      setAlert({ severity: 'error', message: 'Falha ao cadastrar fatura. Tente novamente.' });
     }
   };
 
-  const excluirFatura = (faturaId: number) => {
-    setFaturas((prev) => prev.filter((f) => f.id !== faturaId));
+  const excluirFatura = async () => {
+    if (faturaToDelete === null) {
+      console.warn('No fatura to delete (faturaToDelete is null)');
+      return;
+    }
+
+    console.log(`handleDeleteFatura called for id: ${faturaToDelete}`);
+    try {
+      setLoading(true);
+      console.log('Deleting fatura...');
+      const fatura = faturas.find((f) => f.id === faturaToDelete);
+      if (!fatura) {
+        throw new Error('Fatura não encontrada');
+      }
+
+      // Call API to delete the sale
+      await deleteSale(faturaToDelete.toString());
+
+      // Revert stock changes
+      const lojaLocation = locations.find((loc) => isStoreLocation(loc.id, locations));
+      if (lojaLocation) {
+        for (const produtoFatura of fatura.produtos) {
+          const produtoLocation = productLocations.find(
+            (loc) =>
+              loc.id_produto === produtoFatura.produto.id && loc.id_localizacao === lojaLocation.id,
+          );
+
+          if (produtoLocation && produtoLocation.id_produto) {
+            const newQuantity = (produtoLocation.quantidadeProduto ?? 0) + produtoFatura.quantidade;
+            const updatedLocation: ProdutoLocalizacao = {
+              ...produtoLocation,
+              quantidadeProduto: newQuantity,
+              id_produto: produtoLocation.id_produto,
+            };
+            await updateProductLocation(produtoLocation.id ?? '', updatedLocation);
+
+            const armazemLocation = locations.find((loc) =>
+              loc.nomeLocalizacao.toLowerCase().includes('armazém'),
+            );
+            const armazemProdutoLocation = armazemLocation
+              ? productLocations.find(
+                  (loc) =>
+                    loc.id_produto === produtoFatura.produto.id &&
+                    loc.id_localizacao === armazemLocation.id,
+                )
+              : null;
+
+            const lojaQuantity = Number(produtoLocation.quantidadeProduto) || 0;
+            const armazemQuantity = Number(armazemProdutoLocation?.quantidadeProduto) || 0;
+            const estoqueGeral = lojaQuantity + armazemQuantity + produtoFatura.quantidade;
+
+            const existingStock = await getStockByProduct(produtoFatura.produto.id!);
+            if (existingStock) {
+              const updatedStockData = {
+                id_produto: produtoFatura.produto.id,
+                quantidadeAtual: estoqueGeral,
+                lote: existingStock.lote,
+                dataValidadeLote: existingStock.dataValidadeLote,
+              };
+              await updateStock(existingStock.id!, updatedStockData);
+            }
+
+            const produto = produtos.find((p) => p.id === produtoFatura.produto.id);
+            if (produto) {
+              const updatedProduto: Produto = {
+                ...produto,
+                quantidadePorUnidade: estoqueGeral,
+              };
+              await updateProduct(produto.id!, updatedProduto);
+            }
+          }
+        }
+      }
+
+      // Update state
+      setFaturas((prev) => prev.filter((f) => f.id !== faturaToDelete));
+      setAlert({ severity: 'success', message: 'Fatura excluída com sucesso!' });
+
+      // Adjust pagination if necessary
+      const totalPages = Math.ceil(faturas.length / rowsPerPage);
+      if (page >= totalPages && page > 0) {
+        setPage(page - 1);
+      }
+    } catch (error) {
+      console.error('Error deleting fatura:', error);
+      setAlert({ severity: 'error', message: 'Erro ao excluir fatura!' });
+    } finally {
+      setLoading(false);
+      console.log('handleDeleteFatura completed, loading:', false);
+      handleCloseConfirmModal();
+      await fetchProductsAndLocations();
+    }
   };
 
   const editarFatura = (faturaId: number) => {
@@ -720,10 +864,11 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
 
       const createdCaixa = await createEmployeeCashRegister(newFuncionarioCaixa);
       setFuncionariosCaixa((prev) => [...prev, createdCaixa]);
+      setAlert({ severity: 'success', message: 'Caixa aberto com sucesso!' });
       handleCloseCaixaModal();
     } catch (error) {
       console.error('Erro ao abrir caixa:', error);
-      alert('Falha ao abrir o caixa. Tente novamente.');
+      setAlert({ severity: 'error', message: 'Falha ao abrir o caixa. Tente novamente.' });
     }
   };
 
@@ -732,14 +877,13 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       const caixaAtual = funcionariosCaixa.find((c) => c.id === caixaId);
       if (!caixaAtual) {
         console.error('Caixa não encontrado para o ID:', caixaId);
-        alert('Caixa não encontrado.');
+        setAlert({ severity: 'error', message: 'Caixa não encontrado.' });
         return;
       }
 
-      // Verifica se horarioAbertura é válido
       if (!caixaAtual.horarioAbertura) {
         console.error('horarioAbertura inválido para o caixa:', caixaId);
-        alert('Erro: Horário de abertura não definido.');
+        setAlert({ severity: 'error', message: 'Erro: Horário de abertura não definido.' });
         return;
       }
 
@@ -772,10 +916,11 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       const response = await updateEmployeeCashRegister(caixaId, updatedCaixa);
       console.log('Resposta da API:', response);
       setFuncionariosCaixa((prev) => prev.map((c) => (c.id === caixaId ? response : c)));
+      setAlert({ severity: 'success', message: 'Caixa fechado com sucesso!' });
       handleCloseCaixaListModal();
     } catch (error) {
       console.error('Erro ao fechar o caixa:', error);
-      alert('Falha ao fechar o caixa. Verifique o console para mais detalhes.');
+      setAlert({ severity: 'error', message: 'Falha ao fechar o caixa. Tente novamente.' });
     }
   };
 
@@ -820,8 +965,28 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     }
   };
 
+  const handleChangePage = (event: unknown, newPage: number) => {
+    console.log('Changing page to:', event);
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const newRowsPerPage = parseInt(event.target.value, 10);
+    console.log('Changing rows per page to:', newRowsPerPage);
+    setRowsPerPage(newRowsPerPage);
+    setPage(0);
+  };
+
+  const paginatedFaturas = faturas.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+
   return (
     <>
+      {alert && (
+        <Grid sx={{ position: 'fixed', top: 20, right: 40, zIndex: 9999 }}>
+          <Alert severity={alert.severity}>{alert.message}</Alert>
+        </Grid>
+      )}
+
       <Paper sx={{ p: { xs: 1, sm: 2 }, width: '100%', borderRadius: 2 }}>
         <Collapse in={open}>
           <Stack
@@ -869,7 +1034,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         </Collapse>
       </Paper>
 
-      {/* Modal de Nova Venda */}
       <Modal open={openFaturaModal} onClose={handleCloseFaturaModal}>
         <Box sx={modalStyle}>
           <Typography variant="h5" fontWeight="bold" color="primary" sx={{ mb: 3 }}>
@@ -1106,7 +1270,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         </Box>
       </Modal>
 
-      {/* Modal de Abrir Caixa */}
       <Modal open={openCaixaModal} onClose={handleCloseCaixaModal}>
         <Box sx={modalStyle}>
           <Typography variant="h5" fontWeight="bold" color="primary" sx={{ mb: 3 }}>
@@ -1170,7 +1333,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         </Box>
       </Modal>
 
-      {/* Modal de Lista de Caixas */}
       <Modal open={openCaixaListModal} onClose={handleCloseCaixaListModal}>
         <Box sx={modalStyle}>
           <Typography variant="h5" fontWeight="bold" color="primary" sx={{ mb: 3 }}>
@@ -1216,6 +1378,30 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         </Box>
       </Modal>
 
+      <Modal open={openConfirmModal} onClose={handleCloseConfirmModal}>
+        <Box sx={confirmModalStyle}>
+          <Typography variant="h6" gutterBottom>
+            Confirmar Exclusão
+          </Typography>
+          <Typography variant="body1" mb={3}>
+            Tem certeza que deseja excluir esta fatura? Esta ação não pode ser desfeita.
+          </Typography>
+          <Stack direction="row" spacing={2} justifyContent="flex-end">
+            <Button
+              variant="outlined"
+              color="secondary"
+              onClick={handleCloseConfirmModal}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button variant="contained" color="error" onClick={excluirFatura} disabled={loading}>
+              {loading ? 'Excluindo...' : 'Excluir'}
+            </Button>
+          </Stack>
+        </Box>
+      </Modal>
+
       <Card sx={{ mt: 2, borderRadius: 2 }}>
         <CardContent sx={{ p: { xs: 1, sm: 2 } }}>
           <TableContainer component={Paper}>
@@ -1230,44 +1416,65 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {faturas.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell>{item.cliente}</TableCell>
-                    <TableCell>
-                      {new Intl.DateTimeFormat('pt-BR').format(new Date(item.data))}
-                    </TableCell>
-                    <TableCell>{calcularTotalFatura(item)}kzs</TableCell>
-                    <TableCell>{item.funcionariosCaixa?.caixas?.nomeCaixa || 'N/A'}</TableCell>
-                    <TableCell align="right">
-                      <Stack direction="row" spacing={0.5}>
-                        <IconButton
-                          color="primary"
-                          onClick={() => editarFatura(item.id)}
-                          size="small"
-                        >
-                          <Edit />
-                        </IconButton>
-                        <IconButton
-                          color="error"
-                          onClick={() => excluirFatura(item.id)}
-                          size="small"
-                        >
-                          <Delete />
-                        </IconButton>
-                        <IconButton
-                          color="secondary"
-                          onClick={() => generatePDF(item)}
-                          size="small"
-                        >
-                          <IconifyIcon icon="mdi:file-pdf" />
-                        </IconButton>
-                      </Stack>
+                {paginatedFaturas.length > 0 ? (
+                  paginatedFaturas.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell>{item.cliente}</TableCell>
+                      <TableCell>
+                        {new Intl.DateTimeFormat('pt-BR').format(new Date(item.data))}
+                      </TableCell>
+                      <TableCell>{calcularTotalFatura(item)}kzs</TableCell>
+                      <TableCell>{item.funcionariosCaixa?.caixas?.nomeCaixa || 'N/A'}</TableCell>
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={0.5}>
+                          <IconButton
+                            color="primary"
+                            onClick={() => editarFatura(item.id)}
+                            size="small"
+                          >
+                            <Edit />
+                          </IconButton>
+                          <IconButton
+                            color="error"
+                            onClick={() => handleOpenConfirmModal(item.id)}
+                            size="small"
+                          >
+                            <Delete />
+                          </IconButton>
+                          <IconButton
+                            color="secondary"
+                            onClick={() => generatePDF(item)}
+                            size="small"
+                          >
+                            <IconifyIcon icon="mdi:file-pdf" />
+                          </IconButton>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center">
+                      Nenhuma fatura encontrada.
                     </TableCell>
                   </TableRow>
-                ))}
+                )}
               </TableBody>
             </Table>
           </TableContainer>
+          <TablePagination
+            rowsPerPageOptions={[5, 10, 25]}
+            component="div"
+            count={faturas.length}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={handleChangePage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+            labelRowsPerPage="Linhas por página:"
+            labelDisplayedRows={({ from, to, count }) =>
+              `${from}–${to} de ${count !== -1 ? count : `mais de ${to}`}`
+            }
+          />
         </CardContent>
       </Card>
     </>

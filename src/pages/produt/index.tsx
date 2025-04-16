@@ -19,6 +19,7 @@ import {
   Collapse,
   Grid,
   Box,
+  TablePagination,
 } from '@mui/material';
 import React from 'react';
 import IconifyIcon from 'components/base/IconifyIcon';
@@ -98,6 +99,8 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     severity: 'success' | 'error' | 'info' | 'warning';
     message: string;
   } | null>(null);
+  const [page, setPage] = React.useState(0);
+  const [rowsPerPage, setRowsPerPage] = React.useState(5);
 
   const handleOpenProduct = () => {
     console.log('Opening product modal');
@@ -185,6 +188,7 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       unidadeConteudo?: string;
     } = {};
 
+    // Existing validations
     if (!nomeProduto.trim()) newErrors.nomeProduto = 'O nome do produto é obrigatório.';
     if (!referenciaProduto.trim()) newErrors.referenciaProduto = 'A referência é obrigatória.';
     if (!idCategoriaProduto) newErrors.idCategoriaProduto = 'A categoria é obrigatória.';
@@ -193,6 +197,16 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       newErrors.quantidadePorUnidade = 'A quantidade em estoque não pode ser negativa.';
     if (!unidadeMedida.trim()) newErrors.unidadeMedida = 'A unidade de medida é obrigatória.';
     if (!unidadeConteudo.trim()) newErrors.unidadeConteudo = 'O conteúdo é obrigatório.';
+
+    // Check for duplicate product name
+    const existingProduct = products.find(
+      (p) =>
+        p.nomeProduto.toLowerCase() === nomeProduto.trim().toLowerCase() &&
+        (!editProductRef || p.id !== editProductRef), // Exclude the product being edited
+    );
+    if (existingProduct) {
+      newErrors.nomeProduto = 'Já existe um produto com este nome.';
+    }
 
     if (Object.keys(newErrors).length > 0) {
       console.log('Validation errors:', newErrors);
@@ -231,6 +245,7 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       console.log('Products state after fetch:', products);
       console.log('Closing modal after successful save');
       handleCloseProduct();
+      setPage(0);
     } catch (error) {
       console.error('Error saving product:', error);
       setErrors({ nomeProduto: 'Erro ao salvar. Tente novamente.' });
@@ -272,6 +287,10 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         await fetchProducts();
         console.log('Products state after fetch:', products);
         setAlert({ severity: 'success', message: 'Produto excluído com sucesso!' });
+        const totalPages = Math.ceil(filteredProducts.length / rowsPerPage);
+        if (page >= totalPages && page > 0) {
+          setPage(page - 1);
+        }
       } catch (error) {
         console.error('Error deleting product:', error);
         setAlert({ severity: 'error', message: 'Erro ao excluir produto!' });
@@ -293,6 +312,23 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   );
   console.log('Filtered products:', filteredProducts);
 
+  const handleChangePage = (event: unknown, newPage: number) => {
+    console.log('Changing page to:', event);
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const newRowsPerPage = parseInt(event.target.value, 10);
+    console.log('Changing rows per page to:', newRowsPerPage);
+    setRowsPerPage(newRowsPerPage);
+    setPage(0);
+  };
+
+  const paginatedProducts = filteredProducts.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage,
+  );
+
   return (
     <>
       {alert && (
@@ -308,7 +344,10 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             <TextField
               label="Pesquisar Produtos"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setPage(0);
+              }}
               sx={{ minWidth: 400 }}
             />
             <Button
@@ -441,7 +480,7 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             Confirmar Exclusão
           </Typography>
           <Typography variant="body1" mb={3}>
-            Tem certeza que deseja excluir este produto? Esta ação não pode ser desfeita.
+            Tem certeza que deseja excluir este produto? Esta ação não pode be desfeita.
           </Typography>
           <Stack direction="row" spacing={2} justifyContent="flex-end">
             <Button
@@ -497,8 +536,8 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                       Carregando...
                     </TableCell>
                   </TableRow>
-                ) : filteredProducts.length > 0 ? (
-                  filteredProducts.map((product) => (
+                ) : paginatedProducts.length > 0 ? (
+                  paginatedProducts.map((product) => (
                     <TableRow key={product.referenciaProduto}>
                       <TableCell>{product.nomeProduto || 'Sem nome'}</TableCell>
                       <TableCell>{product.referenciaProduto || 'N/A'}</TableCell>
@@ -535,6 +574,19 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               </TableBody>
             </Table>
           </TableContainer>
+          <TablePagination
+            rowsPerPageOptions={[5, 10, 25]}
+            component="div"
+            count={filteredProducts.length}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={handleChangePage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+            labelRowsPerPage="Linhas por página:"
+            labelDisplayedRows={({ from, to, count }) =>
+              `${from}–${to} de ${count !== -1 ? count : `mais de ${to}`}`
+            }
+          />
         </CardContent>
       </Card>
     </>

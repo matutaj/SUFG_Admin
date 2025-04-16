@@ -18,6 +18,7 @@ import {
   Collapse,
   Modal,
   Grid,
+  TablePagination,
 } from '@mui/material';
 import IconifyIcon from 'components/base/IconifyIcon';
 import Delete from 'components/icons/factor/Delete';
@@ -50,9 +51,25 @@ const modalStyle = {
   borderRadius: 2,
 };
 
+const confirmModalStyle = {
+  position: 'absolute' as const,
+  top: '50%',
+  left: '50%',
+  transform: 'translate(-50%, -50%)',
+  width: 400,
+  bgcolor: 'background.paper',
+  boxShadow: 24,
+  p: 4,
+  borderRadius: 1,
+};
+
 const Caixas: React.FC<CollapsedItemProps> = ({ open }) => {
   const [caixas, setCaixas] = useState<Caixa[]>([]);
+  const [filteredCaixas, setFilteredCaixas] = useState<Caixa[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [openModal, setOpenModal] = useState(false);
+  const [openConfirmModal, setOpenConfirmModal] = useState(false);
+  const [caixaToDelete, setCaixaToDelete] = useState<string | null>(null);
   const [form, setForm] = useState({
     id: '',
     nomeCaixa: '',
@@ -61,18 +78,30 @@ const Caixas: React.FC<CollapsedItemProps> = ({ open }) => {
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [editId, setEditId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(5);
 
   useEffect(() => {
     fetchCaixas();
   }, []);
+
+  useEffect(() => {
+    const filtered = caixas.filter((caixa) =>
+      caixa.nomeCaixa?.toLowerCase().includes(searchTerm.toLowerCase()),
+    );
+    setFilteredCaixas(filtered);
+    setPage(0);
+  }, [searchTerm, caixas]);
 
   const fetchCaixas = async () => {
     setLoading(true);
     try {
       const data = await getAllCashRegisters();
       setCaixas(data);
+      setFilteredCaixas(data);
     } catch (error) {
       console.error('Erro ao carregar caixas:', error);
+      setErrors({ fetch: 'Erro ao carregar caixas. Tente novamente.' });
     } finally {
       setLoading(false);
     }
@@ -82,6 +111,16 @@ const Caixas: React.FC<CollapsedItemProps> = ({ open }) => {
   const handleClose = () => {
     setOpenModal(false);
     resetForm();
+  };
+
+  const handleOpenConfirmModal = (id: string) => {
+    setCaixaToDelete(id);
+    setOpenConfirmModal(true);
+  };
+
+  const handleCloseConfirmModal = () => {
+    setOpenConfirmModal(false);
+    setCaixaToDelete(null);
   };
 
   const resetForm = () => {
@@ -102,6 +141,17 @@ const Caixas: React.FC<CollapsedItemProps> = ({ open }) => {
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {};
     if (!form.nomeCaixa.trim()) newErrors.nomeCaixa = 'Nome do caixa é obrigatório';
+
+    // Check for duplicate nomeCaixa (case-insensitive)
+    const normalizedNomeCaixa = form.nomeCaixa.trim().toLowerCase();
+    const exists = caixas.some(
+      (caixa) =>
+        caixa.nomeCaixa?.toLowerCase() === normalizedNomeCaixa && (!editId || caixa.id !== editId),
+    );
+    if (exists) {
+      newErrors.nomeCaixa = 'Já existe um caixa com este nome.';
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -124,9 +174,13 @@ const Caixas: React.FC<CollapsedItemProps> = ({ open }) => {
       if (editId) {
         const updatedCaixa = await updateCashRegister(editId, caixaData);
         setCaixas((prev) => prev.map((caixa) => (caixa.id === editId ? updatedCaixa : caixa)));
+        setFilteredCaixas((prev) =>
+          prev.map((caixa) => (caixa.id === editId ? updatedCaixa : caixa)),
+        );
       } else {
         const newCaixa = await createCashRegister(caixaData);
         setCaixas((prev) => [...prev, newCaixa]);
+        setFilteredCaixas((prev) => [...prev, newCaixa]);
       }
       handleClose();
     } catch (error) {
@@ -137,15 +191,25 @@ const Caixas: React.FC<CollapsedItemProps> = ({ open }) => {
     }
   };
 
-  const excluirCaixa = async (caixaId: string) => {
+  const excluirCaixa = async () => {
+    if (!caixaToDelete) return;
+
     setLoading(true);
     try {
-      await deleteCashRegister(caixaId);
-      setCaixas((prev) => prev.filter((c) => c.id !== caixaId));
+      await deleteCashRegister(caixaToDelete);
+      setCaixas((prev) => prev.filter((c) => c.id !== caixaToDelete));
+      setFilteredCaixas((prev) => prev.filter((c) => c.id !== caixaToDelete));
+
+      const totalPages = Math.ceil(filteredCaixas.length / rowsPerPage);
+      if (page >= totalPages && page > 0) {
+        setPage(page - 1);
+      }
     } catch (error) {
       console.error('Erro ao excluir caixa:', error);
+      setErrors({ delete: 'Erro ao excluir o caixa. Tente novamente.' });
     } finally {
       setLoading(false);
+      handleCloseConfirmModal();
     }
   };
 
@@ -162,6 +226,21 @@ const Caixas: React.FC<CollapsedItemProps> = ({ open }) => {
     }
   };
 
+  const handleChangePage = (event: unknown, newPage: number) => {
+    console.log(event);
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  const paginatedCaixas = filteredCaixas.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage,
+  );
+
   return (
     <>
       <Paper sx={{ p: 2, width: '100%', borderRadius: 2 }}>
@@ -170,15 +249,24 @@ const Caixas: React.FC<CollapsedItemProps> = ({ open }) => {
             <Typography variant="h5" fontWeight="bold">
               Caixas
             </Typography>
-            <Button
-              variant="contained"
-              color="secondary"
-              onClick={handleOpen}
-              startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
-              disabled={loading}
-            >
-              Adicionar Caixa
-            </Button>
+            <Stack direction="row" spacing={2} alignItems="center">
+              <TextField
+                label="Pesquisar Caixa"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                variant="outlined"
+                sx={{ width: { xs: '100%', sm: 300 } }}
+              />
+              <Button
+                variant="contained"
+                color="secondary"
+                onClick={handleOpen}
+                startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
+                disabled={loading}
+              >
+                Adicionar Caixa
+              </Button>
+            </Stack>
           </Stack>
         </Collapse>
       </Paper>
@@ -247,6 +335,30 @@ const Caixas: React.FC<CollapsedItemProps> = ({ open }) => {
         </Box>
       </Modal>
 
+      <Modal open={openConfirmModal} onClose={handleCloseConfirmModal}>
+        <Box sx={confirmModalStyle}>
+          <Typography variant="h6" gutterBottom>
+            Confirmar Exclusão
+          </Typography>
+          <Typography variant="body1" mb={3}>
+            Tem certeza que deseja excluir este caixa? Esta ação não pode ser desfeita.
+          </Typography>
+          <Stack direction="row" spacing={2} justifyContent="flex-end">
+            <Button
+              variant="outlined"
+              color="secondary"
+              onClick={handleCloseConfirmModal}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button variant="contained" color="error" onClick={excluirCaixa} disabled={loading}>
+              {loading ? 'Excluindo...' : 'Excluir'}
+            </Button>
+          </Stack>
+        </Box>
+      </Modal>
+
       <Card sx={{ mt: 4, borderRadius: 2 }}>
         <CardContent>
           <TableContainer component={Paper}>
@@ -265,18 +377,18 @@ const Caixas: React.FC<CollapsedItemProps> = ({ open }) => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} align="center">
+                    <TableCell colSpan={5} align="center">
                       Carregando...
                     </TableCell>
                   </TableRow>
-                ) : caixas.length === 0 ? (
+                ) : paginatedCaixas.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} align="center">
+                    <TableCell colSpan={5} align="center">
                       Nenhum caixa encontrado
                     </TableCell>
                   </TableRow>
                 ) : (
-                  caixas.map((item) => (
+                  paginatedCaixas.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell>{item.nomeCaixa}</TableCell>
                       <TableCell>{item.descricao || '-'}</TableCell>
@@ -300,7 +412,7 @@ const Caixas: React.FC<CollapsedItemProps> = ({ open }) => {
                         </IconButton>
                         <IconButton
                           color="error"
-                          onClick={() => excluirCaixa(item.id!)}
+                          onClick={() => handleOpenConfirmModal(item.id!)}
                           disabled={loading}
                         >
                           <Delete />
@@ -312,6 +424,19 @@ const Caixas: React.FC<CollapsedItemProps> = ({ open }) => {
               </TableBody>
             </Table>
           </TableContainer>
+          <TablePagination
+            rowsPerPageOptions={[5, 10, 25]}
+            component="div"
+            count={filteredCaixas.length}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={handleChangePage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+            labelRowsPerPage="Linhas por página:"
+            labelDisplayedRows={({ from, to, count }) =>
+              `${from}–${to} de ${count !== -1 ? count : `mais de ${to}`}`
+            }
+          />
         </CardContent>
       </Card>
     </>

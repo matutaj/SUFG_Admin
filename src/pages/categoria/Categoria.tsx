@@ -17,8 +17,9 @@ import {
   IconButton,
   Modal,
   Alert,
+  TablePagination,
 } from '@mui/material';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import IconifyIcon from 'components/base/IconifyIcon';
 import Edit from 'components/icons/factor/Edit';
 import Delete from 'components/icons/factor/Delete';
@@ -34,7 +35,7 @@ interface CollapsedItemProps {
   open: boolean;
 }
 
-const style = {
+const modalStyle = {
   position: 'absolute' as const,
   top: '50%',
   left: '50%',
@@ -56,18 +57,36 @@ const style = {
   scrollbarColor: '#6c63ff #f1f1f1',
 };
 
+const confirmModalStyle = {
+  position: 'absolute' as const,
+  top: '50%',
+  left: '50%',
+  transform: 'translate(-50%, -50%)',
+  width: 400,
+  bgcolor: 'background.paper',
+  boxShadow: 24,
+  p: 4,
+  borderRadius: 1,
+};
+
 const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
-  const [openCategoria, setOpenCategoria] = React.useState(false);
-  const [editCategoriaId, setEditCategoriaId] = React.useState<string | null>(null);
-  const [nomeCategoria, setNomeCategoria] = React.useState('');
-  const [descricao, setDescricao] = React.useState('');
-  const [categorias, setCategorias] = React.useState<CategoriaProduto[]>([]);
-  const [errors, setErrors] = React.useState<{ nomeCategoria?: string; descricao?: string }>({});
-  const [loading, setLoading] = React.useState(false);
-  const [alert, setAlert] = React.useState<{
+  const [openCategoria, setOpenCategoria] = useState(false);
+  const [openConfirmModal, setOpenConfirmModal] = useState(false);
+  const [categoriaToDelete, setCategoriaToDelete] = useState<string | null>(null);
+  const [editCategoriaId, setEditCategoriaId] = useState<string | null>(null);
+  const [nomeCategoria, setNomeCategoria] = useState('');
+  const [descricao, setDescricao] = useState('');
+  const [categorias, setCategorias] = useState<CategoriaProduto[]>([]);
+  const [filteredCategorias, setFilteredCategorias] = useState<CategoriaProduto[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [errors, setErrors] = useState<{ nomeCategoria?: string; descricao?: string }>({});
+  const [loading, setLoading] = useState(false);
+  const [alert, setAlert] = useState<{
     severity: 'success' | 'error' | 'info' | 'warning';
     message: string;
   } | null>(null);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(5);
 
   const handleOpen = () => setOpenCategoria(true);
   const handleClose = () => {
@@ -76,6 +95,16 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
     setNomeCategoria('');
     setDescricao('');
     setErrors({});
+  };
+
+  const handleOpenConfirmModal = (id: string) => {
+    setCategoriaToDelete(id);
+    setOpenConfirmModal(true);
+  };
+
+  const handleCloseConfirmModal = () => {
+    setOpenConfirmModal(false);
+    setCategoriaToDelete(null);
   };
 
   const fetchCategories = async () => {
@@ -90,6 +119,7 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
       }
 
       setCategorias(data);
+      setFilteredCategorias(data);
     } catch (error) {
       console.error('Erro ao buscar categorias:', error);
       setAlert({ severity: 'error', message: 'Erro ao carregar categorias!' });
@@ -99,9 +129,17 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
     }
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     fetchCategories();
   }, []);
+
+  useEffect(() => {
+    const filtered = categorias.filter((categoria) =>
+      categoria.nomeCategoria?.toLowerCase().includes(searchTerm.toLowerCase()),
+    );
+    setFilteredCategorias(filtered);
+    setPage(0);
+  }, [searchTerm, categorias]);
 
   const handleAddCategoria = async () => {
     const newErrors: { nomeCategoria?: string; descricao?: string } = {};
@@ -144,29 +182,50 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
     const categoriaToEdit = categorias.find((cat) => cat.id === id);
     if (categoriaToEdit) {
       setNomeCategoria(categoriaToEdit.nomeCategoria || '');
-      setDescricao(categoriaToEdit.descricao || ''); // Garantindo que a descrição seja carregada
+      setDescricao(categoriaToEdit.descricao || '');
       setEditCategoriaId(id);
       handleOpen();
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('Tem certeza que deseja excluir esta categoria?')) {
-      try {
-        setLoading(true);
-        await deleteProductCategory(id);
-        await fetchCategories();
-        setAlert({ severity: 'success', message: 'Categoria excluída com sucesso!' });
-        setTimeout(() => setAlert(null), 3000);
-      } catch (error) {
-        console.error('Erro ao excluir categoria:', error);
-        setAlert({ severity: 'error', message: 'Erro ao excluir categoria!' });
-        setTimeout(() => setAlert(null), 3000);
-      } finally {
-        setLoading(false);
+  const handleDelete = async () => {
+    if (!categoriaToDelete) return;
+
+    try {
+      setLoading(true);
+      await deleteProductCategory(categoriaToDelete);
+      await fetchCategories();
+      setAlert({ severity: 'success', message: 'Categoria excluída com sucesso!' });
+      setTimeout(() => setAlert(null), 3000);
+
+      const totalPages = Math.ceil(filteredCategorias.length / rowsPerPage);
+      if (page >= totalPages && page > 0) {
+        setPage(page - 1);
       }
+    } catch (error) {
+      console.error('Erro ao excluir categoria:', error);
+      setAlert({ severity: 'error', message: 'Erro ao excluir categoria!' });
+      setTimeout(() => setAlert(null), 3000);
+    } finally {
+      setLoading(false);
+      handleCloseConfirmModal();
     }
   };
+
+  const handleChangePage = (event: unknown, newPage: number) => {
+    console.log(event);
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  const paginatedCategorias = filteredCategorias.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage,
+  );
 
   return (
     <>
@@ -200,7 +259,7 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
       </Paper>
 
       <Modal open={openCategoria} onClose={handleClose}>
-        <Box sx={style} component="form" noValidate autoComplete="off">
+        <Box sx={modalStyle} component="form" noValidate autoComplete="off">
           <Stack
             direction="row"
             justifyContent="space-between"
@@ -251,8 +310,41 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
         </Box>
       </Modal>
 
+      <Modal open={openConfirmModal} onClose={handleCloseConfirmModal}>
+        <Box sx={confirmModalStyle}>
+          <Typography variant="h6" gutterBottom>
+            Confirmar Exclusão
+          </Typography>
+          <Typography variant="body1" mb={3}>
+            Tem certeza que deseja excluir esta categoria? Esta ação não pode ser desfeita.
+          </Typography>
+          <Stack direction="row" spacing={2} justifyContent="flex-end">
+            <Button
+              variant="outlined"
+              color="secondary"
+              onClick={handleCloseConfirmModal}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button variant="contained" color="error" onClick={handleDelete} disabled={loading}>
+              {loading ? 'Excluindo...' : 'Excluir'}
+            </Button>
+          </Stack>
+        </Box>
+      </Modal>
+
       <Card sx={{ maxWidth: '100%', margin: 'auto', mt: 4 }}>
         <CardContent>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+            <TextField
+              label="Pesquisar Categoria"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              variant="outlined"
+              sx={{ width: { xs: '100%', sm: 300 } }}
+            />
+          </Stack>
           <TableContainer component={Paper}>
             <Table>
               <TableHead>
@@ -275,8 +367,8 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
                       Carregando...
                     </TableCell>
                   </TableRow>
-                ) : categorias.length > 0 ? (
-                  categorias.map((categoria) => (
+                ) : paginatedCategorias.length > 0 ? (
+                  paginatedCategorias.map((categoria) => (
                     <TableRow key={categoria.id}>
                       <TableCell>{categoria.nomeCategoria || 'Sem nome'}</TableCell>
                       <TableCell>{categoria.descricao || 'Sem descrição'}</TableCell>
@@ -290,7 +382,7 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
                         </IconButton>
                         <IconButton
                           color="error"
-                          onClick={() => handleDelete(categoria.id!)}
+                          onClick={() => handleOpenConfirmModal(categoria.id!)}
                           disabled={loading}
                         >
                           <Delete />
@@ -301,13 +393,26 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={3} align="center">
-                      Nenhuma categoria cadastrada.
+                      Nenhuma categoria encontrada.
                     </TableCell>
                   </TableRow>
                 )}
               </TableBody>
             </Table>
           </TableContainer>
+          <TablePagination
+            rowsPerPageOptions={[5, 10, 25]}
+            component="div"
+            count={filteredCategorias.length}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={handleChangePage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+            labelRowsPerPage="Linhas por página:"
+            labelDisplayedRows={({ from, to, count }) =>
+              `${from}–${to} de ${count !== -1 ? count : `mais de ${to}`}`
+            }
+          />
         </CardContent>
       </Card>
     </>
