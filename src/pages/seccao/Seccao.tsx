@@ -17,6 +17,7 @@ import {
   IconButton,
   Modal,
   Alert,
+  TablePagination,
 } from '@mui/material';
 import IconifyIcon from 'components/base/IconifyIcon';
 import React from 'react';
@@ -51,18 +52,36 @@ const style = {
   scrollbarColor: '#6c63ff #f1f1f1',
 };
 
+const confirmModalStyle = {
+  position: 'absolute' as const,
+  top: '50%',
+  left: '50%',
+  transform: 'translate(-50%, -50%)',
+  width: 400,
+  bgcolor: 'background.paper',
+  boxShadow: 24,
+  p: 4,
+  borderRadius: 1,
+};
+
 const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const [openSeccao, setOpenSeccao] = React.useState(false);
+  const [openConfirmDelete, setOpenConfirmDelete] = React.useState(false);
+  const [deleteSeccaoId, setDeleteSeccaoId] = React.useState<string | null>(null);
   const [editSeccaoId, setEditSeccaoId] = React.useState<string | null>(null);
   const [nomeSeccao, setNomeSeccao] = React.useState('');
   const [descricao, setDescricao] = React.useState('');
   const [secoes, setSecoes] = React.useState<Seccao[]>([]);
+  const [filteredSecoes, setFilteredSecoes] = React.useState<Seccao[]>([]);
+  const [searchQuery, setSearchQuery] = React.useState('');
   const [errors, setErrors] = React.useState<{ nomeSeccao?: string; descricao?: string }>({});
   const [loading, setLoading] = React.useState(false);
   const [alert, setAlert] = React.useState<{
     severity: 'success' | 'error' | 'info' | 'warning';
     message: string;
   } | null>(null);
+  const [page, setPage] = React.useState(0);
+  const [rowsPerPage] = React.useState(6);
 
   const handleOpen = () => setOpenSeccao(true);
   const handleClose = () => {
@@ -73,22 +92,25 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     setErrors({});
   };
 
+  const handleOpenConfirmDelete = (id: string) => {
+    setDeleteSeccaoId(id);
+    setOpenConfirmDelete(true);
+  };
+
+  const handleCloseConfirmDelete = () => {
+    setOpenConfirmDelete(false);
+    setDeleteSeccaoId(null);
+  };
+
   const fetchSections = async () => {
     try {
       setLoading(true);
       const data = await getAllSections();
-      console.log('Dados retornados por getSections:', JSON.stringify(data, null, 2));
-
       if (!Array.isArray(data)) {
         throw new Error('A resposta de getSections não é um array');
       }
-
-      const idSet = new Set(data.map((sec: Seccao) => sec.id));
-      if (idSet.size !== data.length) {
-        console.warn('IDs duplicados encontrados nos dados de seções:', data);
-      }
-
       setSecoes(data);
+      setFilteredSecoes(data);
     } catch (error) {
       console.error('Erro ao buscar seções:', error);
       setAlert({ severity: 'error', message: 'Erro ao carregar seções!' });
@@ -101,10 +123,6 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   React.useEffect(() => {
     fetchSections();
   }, []);
-
-  React.useEffect(() => {
-    console.log('Estado secoes atualizado:', JSON.stringify(secoes, null, 2));
-  }, [secoes]);
 
   const onAddSeccaoSubmit = async () => {
     const newErrors: { nomeSeccao?: string; descricao?: string } = {};
@@ -122,14 +140,11 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         nomeSeccao: nomeSeccao.trim(),
         descricao: descricao.trim(),
       };
-      console.log('Dados enviados para a API:', sectionData);
-
       if (editSeccaoId) {
         await updateSection(editSeccaoId, sectionData);
         setAlert({ severity: 'success', message: 'Seção atualizada com sucesso!' });
       } else {
-        const response = await createSection(sectionData);
-        console.log('Resposta de createSection:', JSON.stringify(response, null, 2));
+        await createSection(sectionData);
         setAlert({ severity: 'success', message: 'Seção cadastrada com sucesso!' });
       }
       await fetchSections();
@@ -155,23 +170,53 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('Tem certeza que deseja excluir esta seção?')) {
+  const handleDelete = async () => {
+    if (deleteSeccaoId) {
       try {
         setLoading(true);
-        await deleteSection(id);
+        await deleteSection(deleteSeccaoId);
         setAlert({ severity: 'success', message: 'Seção excluída com sucesso!' });
         await fetchSections();
-        setTimeout(() => setAlert(null), 3000);
+        handleCloseConfirmDelete();
       } catch (error) {
         console.error('Erro ao excluir seção:', error);
-        setAlert({ severity: 'error', message: 'Erro ao excluir seção!' });
-        setTimeout(() => setAlert(null), 3000);
+        setAlert({ severity: 'error', message: 'Falha ao excluir seção. Verifique o console.' });
       } finally {
         setLoading(false);
       }
+    } else {
+      console.error('Nenhum seção selecionada para exclusão');
+      setAlert({ severity: 'error', message: 'Erro: Nenhuma seção selecionada.' });
     }
+    setTimeout(() => setAlert(null), 3000);
   };
+
+  const handleSearch = () => {
+    const query = searchQuery.toLowerCase().trim();
+    if (query === '') {
+      setFilteredSecoes(secoes);
+    } else {
+      const filtered = secoes.filter(
+        (seccao) =>
+          seccao.nomeSeccao?.toLowerCase().includes(query) ||
+          seccao.descricao?.toLowerCase().includes(query),
+      );
+      setFilteredSecoes(filtered);
+    }
+    setPage(0);
+  };
+
+  const handleChangePage = (
+    _event: React.MouseEvent<HTMLButtonElement> | null,
+    newPage: number,
+  ) => {
+    setPage(newPage);
+  };
+
+  const paginatedSecoes = filteredSecoes.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage,
+  );
 
   return (
     <>
@@ -190,16 +235,36 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             sx={{ width: '100%', mb: 2 }}
           >
             <Typography variant="h5">Cadastrar Seção</Typography>
-            <Button
-              variant="contained"
-              color="secondary"
-              sx={(theme) => ({ p: theme.spacing(0.625, 1.5), borderRadius: 1.5 })}
-              startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
-              onClick={handleOpen}
-              disabled={loading}
-            >
-              <Typography variant="body2">Adicionar</Typography>
-            </Button>
+            <Stack direction="row" spacing={2} alignItems="center">
+              <TextField
+                id="search-section"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                label="Pesquisar Seção"
+                variant="outlined"
+                size="small"
+                disabled={loading}
+              />
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={handleSearch}
+                disabled={loading}
+                startIcon={<IconifyIcon icon="material-symbols:search" />}
+              >
+                Pesquisar
+              </Button>
+              <Button
+                variant="contained"
+                color="secondary"
+                sx={(theme) => ({ p: theme.spacing(0.625, 1.5), borderRadius: 1.5 })}
+                startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
+                onClick={handleOpen}
+                disabled={loading}
+              >
+                <Typography variant="body2">Adicionar</Typography>
+              </Button>
+            </Stack>
           </Stack>
         </Collapse>
       </Paper>
@@ -278,13 +343,13 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={4} align="center">
+                    <TableCell colSpan={3} align="center">
                       Carregando...
                     </TableCell>
                   </TableRow>
-                ) : secoes.length > 0 ? (
-                  secoes.map((seccao, index) => (
-                    <TableRow key={seccao.id || `temp-${index}`}>
+                ) : paginatedSecoes.length > 0 ? (
+                  paginatedSecoes.map((seccao) => (
+                    <TableRow key={seccao.id}>
                       <TableCell>{seccao.nomeSeccao || 'Sem nome'}</TableCell>
                       <TableCell>{seccao.descricao || 'Sem descrição'}</TableCell>
                       <TableCell align="right">
@@ -297,7 +362,7 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                         </IconButton>
                         <IconButton
                           color="error"
-                          onClick={() => handleDelete(seccao.id!)}
+                          onClick={() => handleOpenConfirmDelete(seccao.id!)}
                           disabled={loading}
                         >
                           <Delete />
@@ -307,16 +372,55 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={4} align="center">
-                      Nenhuma seção cadastrada.
+                    <TableCell colSpan={3} align="center">
+                      Nenhuma seção encontrada.
                     </TableCell>
                   </TableRow>
                 )}
               </TableBody>
             </Table>
           </TableContainer>
+          <TablePagination
+            rowsPerPageOptions={[6]}
+            component="div"
+            count={filteredSecoes.length}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={handleChangePage}
+            labelRowsPerPage="Itens por página"
+            labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+          />
         </CardContent>
       </Card>
+
+      <Modal
+        open={openConfirmDelete}
+        onClose={handleCloseConfirmDelete}
+        aria-labelledby="confirm-delete-modal-title"
+        aria-describedby="confirm-delete-modal-description"
+      >
+        <Box sx={confirmModalStyle}>
+          <Typography id="confirm-delete-modal-title" variant="h6" component="h2" gutterBottom>
+            Confirmar Exclusão
+          </Typography>
+          <Typography id="confirm-delete-modal-description" sx={{ mb: 3 }}>
+            Tem certeza que deseja excluir esta seção?
+          </Typography>
+          <Stack direction="row" spacing={2} justifyContent="flex-end">
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={handleCloseConfirmDelete}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button variant="contained" color="error" onClick={handleDelete} disabled={loading}>
+              {loading ? 'Excluindo...' : 'Excluir'}
+            </Button>
+          </Stack>
+        </Box>
+      </Modal>
     </>
   );
 };
