@@ -21,6 +21,7 @@ import {
   MenuItem,
   FormHelperText,
   Grid,
+  TablePagination,
 } from '@mui/material';
 import { SelectChangeEvent } from '@mui/material/Select';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -101,7 +102,9 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const [quantidadeMinimaProduto, setQuantidadeMinimaProduto] = useState<number>(0);
   const [stockQuantity, setStockQuantity] = useState<number | null>(null);
   const [warehouseQuantity, setWarehouseQuantity] = useState<number>(0);
+  const [storeQuantity, setStoreQuantity] = useState<number>(0);
   const [remainingStoreQuantity, setRemainingStoreQuantity] = useState<number | null>(null);
+  const [remainingWarehouseQuantity, setRemainingWarehouseQuantity] = useState<number | null>(null);
   const [selectedLocationType, setSelectedLocationType] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [products, setProducts] = useState<Produto[]>([]);
@@ -110,6 +113,8 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const [shelves, setShelves] = useState<Prateleira[]>([]);
   const [corridors, setCorridors] = useState<Corredor[]>([]);
   const [productLocations, setProductLocations] = useState<ProdutoLocalizacao[]>([]);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(5);
   const [errors, setErrors] = useState<{
     idProdutoLocalizacao?: string;
     idLocalizacao?: string;
@@ -139,7 +144,9 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     setQuantidadeMinimaProduto(0);
     setStockQuantity(null);
     setWarehouseQuantity(0);
+    setStoreQuantity(0);
     setRemainingStoreQuantity(null);
+    setRemainingWarehouseQuantity(null);
     setErrors({});
   }, []);
 
@@ -152,6 +159,16 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     setOpenConfirmModal(false);
     setLocationToDelete(undefined);
   }, []);
+
+  const handleChangePage = (event: unknown, newPage: number) => {
+    console.log(event);
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
 
   const fetchData = async () => {
     try {
@@ -213,7 +230,9 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       if (!idProdutoLocalizacao) {
         setStockQuantity(null);
         setWarehouseQuantity(0);
+        setStoreQuantity(0);
         setRemainingStoreQuantity(null);
+        setRemainingWarehouseQuantity(null);
         return;
       }
 
@@ -232,13 +251,27 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
           .reduce((sum, loc) => sum + (loc.quantidadeProduto ?? 0), 0);
         setWarehouseQuantity(warehouseQty);
 
-        const remaining = totalStock - warehouseQty;
-        setRemainingStoreQuantity(remaining >= 0 ? remaining : 0);
+        const storeQty = productLocations
+          .filter(
+            (loc) =>
+              loc.id_produto === idProdutoLocalizacao &&
+              isStoreLocation(loc.id_localizacao, locations),
+          )
+          .reduce((sum, loc) => sum + (loc.quantidadeProduto ?? 0), 0);
+        setStoreQuantity(storeQty);
+
+        const remainingStore = totalStock - warehouseQty;
+        setRemainingStoreQuantity(remainingStore >= 0 ? remainingStore : 0);
+
+        const remainingWarehouse = totalStock - storeQty;
+        setRemainingWarehouseQuantity(remainingWarehouse >= 0 ? remainingWarehouse : 0);
       } catch (error) {
         console.error('Erro ao buscar estoque:', error);
         setStockQuantity(0);
         setWarehouseQuantity(0);
+        setStoreQuantity(0);
         setRemainingStoreQuantity(0);
+        setRemainingWarehouseQuantity(0);
       }
     };
     fetchStockAndWarehouseData();
@@ -276,6 +309,12 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
     return filtered;
   }, [selectedLocationType, searchQuery, productLocations, products]);
+
+  const paginatedProductLocations = useMemo(() => {
+    const start = page * rowsPerPage;
+    const end = start + rowsPerPage;
+    return filteredProductLocations.slice(start, end);
+  }, [filteredProductLocations, page, rowsPerPage]);
 
   const handleAddProductLocation = useCallback(async () => {
     const newErrors: {
@@ -343,6 +382,13 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         } else if (quantidadeProduto > remaining) {
           newErrors.quantidadeProduto = `Quantidade excede o estoque restante para loja (${remaining})!`;
         }
+      } else {
+        const remaining = totalStock - storeQuantity;
+        if (remaining <= 0 && !editLocationId) {
+          newErrors.quantidadeProduto = 'Não há estoque disponível para adicionar no armazém!';
+        } else if (quantidadeProduto > remaining) {
+          newErrors.quantidadeProduto = `Quantidade excede o estoque restante para armazém (${remaining})!`;
+        }
       }
     }
 
@@ -384,7 +430,6 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
           : 'Localização cadastrada com sucesso!',
       });
 
-      // Fechar modal após sucesso (similar a Stock.tsx)
       handleCloseLocation();
     } catch (error) {
       console.error('Erro ao salvar localização do produto:', error);
@@ -404,6 +449,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     productLocations,
     locations,
     warehouseQuantity,
+    storeQuantity,
     getTotalStockInLocations,
     handleCloseLocation,
   ]);
@@ -649,7 +695,8 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                   </Typography>
                 ) : (
                   <Typography variant="body2" color="text.secondary">
-                    Estoque: {stockQuantity ?? 'N/A'}
+                    Estoque: {stockQuantity ?? 'N/A'} | Loja: {storeQuantity} | Restante:{' '}
+                    {remainingWarehouseQuantity ?? 'N/A'}
                   </Typography>
                 )}
               </Stack>
@@ -696,7 +743,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             Confirmar Exclusão
           </Typography>
           <Typography id="modal-confirmar-exclusao-descricao" variant="body1" mb={3}>
-            Tem certeza que deseja excluir esta localização do produto? Esta ação não pode ser
+            Tem certeza que deseja excluir esta localização do produto? Esta ação não pode be
             desfeita.
           </Typography>
           <Stack direction="row" spacing={2} justifyContent="flex-end">
@@ -734,7 +781,6 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                   <TableCell>
                     <strong>Produto</strong>
                   </TableCell>
-
                   <TableCell>
                     <strong>Localização</strong>
                   </TableCell>
@@ -761,12 +807,12 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={9} align="center">
+                    <TableCell colSpan={8} align="center">
                       Carregando...
                     </TableCell>
                   </TableRow>
-                ) : filteredProductLocations.length > 0 ? (
-                  filteredProductLocations.map((location) => {
+                ) : paginatedProductLocations.length > 0 ? (
+                  paginatedProductLocations.map((location) => {
                     if (!location.id) return null;
                     const product = products.find(
                       (p) => p.referenciaProduto === location.id_produto,
@@ -818,13 +864,24 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={9} align="center">
+                    <TableCell colSpan={8} align="center">
                       Nenhuma localização cadastrada.
                     </TableCell>
                   </TableRow>
                 )}
               </TableBody>
             </Table>
+            <TablePagination
+              rowsPerPageOptions={[5, 10, 25]}
+              component="div"
+              count={filteredProductLocations.length}
+              rowsPerPage={rowsPerPage}
+              page={page}
+              onPageChange={handleChangePage}
+              onRowsPerPageChange={handleChangeRowsPerPage}
+              labelRowsPerPage="Linhas por página"
+              labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+            />
           </TableContainer>
         </CardContent>
       </Card>
