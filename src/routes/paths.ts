@@ -29,7 +29,7 @@ export default {
   funcionarios: `/${rootPaths.pagesRoot}/funcionario`,
   calendario: `/${rootPaths.pagesRoot}/calendario`,
   mensagens: `/${rootPaths.pagesRoot}/mensagens`,
-  tarefa: `${rootPaths.pagesRoot}/tarefa`,
+  tarefa: `/${rootPaths.pagesRoot}/tarefa`,
   configuracoes: `/${rootPaths.pagesRoot}/configuracoes`,
   logout: `/${rootPaths.pagesRoot}/logout`,
 
