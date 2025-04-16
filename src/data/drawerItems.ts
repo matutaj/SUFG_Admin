@@ -150,7 +150,7 @@ export const drawerItems: DrawerItem[] = [
     id: 6,
     icon: ShoppingCart,
     title: 'Tarefa',
-    path: `/${rootPaths.pagesRoot}/relatorio`, // '/pages/estoque'
+    path: `/${rootPaths.pagesRoot}/tarefa`,
     collapsible: false,
     active: true,
   },

@@ -24,10 +24,6 @@ import Edit from 'components/icons/factor/Edit';
 import { getAllTasks, createTask, updateTask, deleteTask } from '../../api/methods'; // Ajuste o caminho
 import { Tarefa } from '../../types/models'; // Importa a interface correta para Tarefa
 
-interface CollapsedItemProps {
-  open: boolean;
-}
-
 const style = {
   position: 'absolute' as const,
   top: '50%',
@@ -50,8 +46,7 @@ const style = {
   scrollbarColor: '#6c63ff #f1f1f1',
 };
 
-const TarefaComponent = ({ open }: CollapsedItemProps) => {
-  console.log('Tarefa renderizado, open:', open);
+const TarefaComponent = () => {
   const [openTarefa, setOpenTarefa] = React.useState(false);
   const [editTarefaId, setEditTarefaId] = React.useState<string | null>(null); // ID como string (UUID)
   const [nomeTarefa, setNomeTarefa] = React.useState('');
@@ -150,7 +145,7 @@ const TarefaComponent = ({ open }: CollapsedItemProps) => {
   return (
     <>
       <Paper sx={(theme) => ({ p: theme.spacing(2, 2.5), width: '100%' })}>
-        <Collapse in={open}>
+        <Collapse>
           <Stack
             direction="row"
             justifyContent="space-between"

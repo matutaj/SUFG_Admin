@@ -74,10 +74,7 @@ export const routes = [
             path: paths.loja,
             element: <Loja open={true} />,
           },
-          {
-            path: paths.tarefa,
-            element: <Tarefa open={true} />,
-          },
+
           {
             path: paths.localizacao,
             element: <Armanzem open={true} />,
@@ -113,6 +110,10 @@ export const routes = [
           {
             path: paths.vendas,
             element: <Fornecedor open={true} />,
+          },
+          {
+            path: paths.tarefa,
+            element: <Tarefa />,
           },
           {
             path: paths.localProduto,

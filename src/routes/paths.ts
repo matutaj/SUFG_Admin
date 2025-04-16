@@ -13,7 +13,6 @@ export default {
   // Páginas principais
   dashboard: `/${rootPaths.pagesRoot}/dashboard`,
   loja: `/${rootPaths.pagesRoot}/produt/loja`,
-  tarefa: `${rootPaths.pagesRoot}/tarefa`,
   localizacao: `/${rootPaths.pagesRoot}/produt/localizacao`,
   categorias: `/${rootPaths.pagesRoot}/categorias`,
   estoque: `/${rootPaths.pagesRoot}/stock`,
@@ -30,6 +29,7 @@ export default {
   funcionarios: `/${rootPaths.pagesRoot}/funcionario`,
   calendario: `/${rootPaths.pagesRoot}/calendario`,
   mensagens: `/${rootPaths.pagesRoot}/mensagens`,
+  tarefa: `${rootPaths.pagesRoot}/tarefa`,
   configuracoes: `/${rootPaths.pagesRoot}/configuracoes`,
   logout: `/${rootPaths.pagesRoot}/logout`,
 
