@@ -15,14 +15,17 @@ import {
   TableHead,
   TableRow,
   IconButton,
+  Modal,
+  Alert,
+  TablePagination,
 } from '@mui/material';
 import IconifyIcon from 'components/base/IconifyIcon';
-import Modal from '@mui/material/Modal';
 import React from 'react';
 import Delete from 'components/icons/factor/Delete';
 import Edit from 'components/icons/factor/Edit';
-import { getAllShelves, createShelf, updateShelf, deleteShelf } from '../../api/methods'; // Ajuste o caminho
+import { getAllShelves, createShelf, updateShelf, deleteShelf } from '../../api/methods';
 import { Prateleira } from '../../types/models';
+
 interface CollapsedItemProps {
   open: boolean;
 }
@@ -49,14 +52,36 @@ const style = {
   scrollbarColor: '#6c63ff #f1f1f1',
 };
 
+const confirmModalStyle = {
+  position: 'absolute' as const,
+  top: '50%',
+  left: '50%',
+  transform: 'translate(-50%, -50%)',
+  width: 400,
+  bgcolor: 'background.paper',
+  boxShadow: 24,
+  p: 4,
+  borderRadius: 1,
+};
+
 const PrateleiraComponent = ({ open }: CollapsedItemProps) => {
   const [openPrateleira, setOpenPrateleira] = React.useState(false);
-  const [editPrateleiraId, setEditPrateleiraId] = React.useState<string | null>(null); // ID como string (UUID)
+  const [openConfirmDelete, setOpenConfirmDelete] = React.useState(false);
+  const [deletePrateleiraId, setDeletePrateleiraId] = React.useState<string | null>(null);
+  const [editPrateleiraId, setEditPrateleiraId] = React.useState<string | null>(null);
   const [nomePrateleira, setNomePrateleira] = React.useState('');
   const [descricao, setDescricao] = React.useState('');
   const [prateleiras, setPrateleiras] = React.useState<Prateleira[]>([]);
+  const [filteredPrateleiras, setFilteredPrateleiras] = React.useState<Prateleira[]>([]);
+  const [searchQuery, setSearchQuery] = React.useState('');
   const [errors, setErrors] = React.useState<{ nomePrateleira?: string; descricao?: string }>({});
   const [loading, setLoading] = React.useState(false);
+  const [alert, setAlert] = React.useState<{
+    severity: 'success' | 'error' | 'info' | 'warning';
+    message: string;
+  } | null>(null);
+  const [page, setPage] = React.useState(0);
+  const [rowsPerPage] = React.useState(6);
 
   const handleOpen = () => setOpenPrateleira(true);
   const handleClose = () => {
@@ -67,14 +92,29 @@ const PrateleiraComponent = ({ open }: CollapsedItemProps) => {
     setErrors({});
   };
 
-  // Buscar prateleiras da API
+  const handleOpenConfirmDelete = (id: string) => {
+    setDeletePrateleiraId(id);
+    setOpenConfirmDelete(true);
+  };
+
+  const handleCloseConfirmDelete = () => {
+    setOpenConfirmDelete(false);
+    setDeletePrateleiraId(null);
+  };
+
   const fetchShelves = async () => {
     try {
       setLoading(true);
       const data = await getAllShelves();
+      if (!Array.isArray(data)) {
+        throw new Error('A resposta de getAllShelves não é um array');
+      }
       setPrateleiras(data);
+      setFilteredPrateleiras(data);
     } catch (error) {
       console.error('Erro ao buscar prateleiras:', error);
+      setAlert({ severity: 'error', message: 'Erro ao carregar prateleiras!' });
+      setTimeout(() => setAlert(null), 3000);
     } finally {
       setLoading(false);
     }
@@ -97,17 +137,20 @@ const PrateleiraComponent = ({ open }: CollapsedItemProps) => {
     try {
       setLoading(true);
       if (editPrateleiraId) {
-        // Editar prateleira existente
         await updateShelf(editPrateleiraId, { nomePrateleira, descricao });
+        setAlert({ severity: 'success', message: 'Prateleira atualizada com sucesso!' });
       } else {
-        // Criar nova prateleira
         await createShelf({ nomePrateleira, descricao });
+        setAlert({ severity: 'success', message: 'Prateleira cadastrada com sucesso!' });
       }
-      await fetchShelves(); // Atualiza a lista
+      await fetchShelves();
       handleClose();
+      setTimeout(() => setAlert(null), 3000);
     } catch (error) {
       console.error('Erro ao salvar prateleira:', error);
+      setAlert({ severity: 'error', message: 'Erro ao salvar prateleira!' });
       setErrors({ nomePrateleira: 'Erro ao salvar. Tente novamente.' });
+      setTimeout(() => setAlert(null), 3000);
     } finally {
       setLoading(false);
     }
@@ -123,22 +166,64 @@ const PrateleiraComponent = ({ open }: CollapsedItemProps) => {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('Tem certeza que deseja excluir esta prateleira?')) {
+  const handleDelete = async () => {
+    if (deletePrateleiraId) {
       try {
         setLoading(true);
-        await deleteShelf(id);
-        await fetchShelves(); // Atualiza a lista
+        await deleteShelf(deletePrateleiraId);
+        setAlert({ severity: 'success', message: 'Prateleira excluída com sucesso!' });
+        await fetchShelves();
+        handleCloseConfirmDelete();
       } catch (error) {
         console.error('Erro ao excluir prateleira:', error);
+        setAlert({
+          severity: 'error',
+          message: 'Falha ao excluir prateleira. Verifique o console.',
+        });
       } finally {
         setLoading(false);
       }
+    } else {
+      console.error('Nenhuma prateleira selecionada para exclusão');
+      setAlert({ severity: 'error', message: 'Erro: Nenhuma prateleira selecionada.' });
     }
+    setTimeout(() => setAlert(null), 3000);
   };
+
+  const handleSearch = () => {
+    const query = searchQuery.toLowerCase().trim();
+    if (query === '') {
+      setFilteredPrateleiras(prateleiras);
+    } else {
+      const filtered = prateleiras.filter(
+        (prateleira) =>
+          prateleira.nomePrateleira?.toLowerCase().includes(query) ||
+          prateleira.descricao?.toLowerCase().includes(query),
+      );
+      setFilteredPrateleiras(filtered);
+    }
+    setPage(0);
+  };
+
+  const handleChangePage = (
+    _event: React.MouseEvent<HTMLButtonElement> | null,
+    newPage: number,
+  ) => {
+    setPage(newPage);
+  };
+
+  const paginatedPrateleiras = filteredPrateleiras.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage,
+  );
 
   return (
     <>
+      {alert && (
+        <Box sx={{ position: 'fixed', top: 20, right: 40, zIndex: 9999 }}>
+          <Alert severity={alert.severity}>{alert.message}</Alert>
+        </Box>
+      )}
       <Paper sx={(theme) => ({ p: theme.spacing(2, 2.5), width: '100%' })}>
         <Collapse in={open}>
           <Stack
@@ -150,16 +235,36 @@ const PrateleiraComponent = ({ open }: CollapsedItemProps) => {
             <Typography id="modal-modal-title" variant="h5" component="h2">
               Cadastrar Prateleira
             </Typography>
-            <Button
-              variant="contained"
-              color="secondary"
-              sx={(theme) => ({ p: theme.spacing(0.625, 1.5), borderRadius: 1.5 })}
-              startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
-              onClick={handleOpen}
-              disabled={loading}
-            >
-              <Typography variant="body2">Adicionar</Typography>
-            </Button>
+            <Stack direction="row" spacing={2} alignItems="center">
+              <TextField
+                id="search-shelf"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                label="Pesquisar Prateleira"
+                variant="outlined"
+                size="small"
+                disabled={loading}
+              />
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={handleSearch}
+                disabled={loading}
+                startIcon={<IconifyIcon icon="material-symbols:search" />}
+              >
+                Pesquisar
+              </Button>
+              <Button
+                variant="contained"
+                color="secondary"
+                sx={(theme) => ({ p: theme.spacing(0.625, 1.5), borderRadius: 1.5 })}
+                startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
+                onClick={handleOpen}
+                disabled={loading}
+              >
+                <Typography variant="body2">Adicionar</Typography>
+              </Button>
+            </Stack>
             <Modal
               open={openPrateleira}
               onClose={handleClose}
@@ -245,8 +350,8 @@ const PrateleiraComponent = ({ open }: CollapsedItemProps) => {
                       Carregando...
                     </TableCell>
                   </TableRow>
-                ) : prateleiras.length > 0 ? (
-                  prateleiras.map((prateleira) => (
+                ) : paginatedPrateleiras.length > 0 ? (
+                  paginatedPrateleiras.map((prateleira) => (
                     <TableRow key={prateleira.id}>
                       <TableCell>{prateleira.nomePrateleira || 'Sem nome'}</TableCell>
                       <TableCell>{prateleira.descricao || 'Sem descrição'}</TableCell>
@@ -260,7 +365,7 @@ const PrateleiraComponent = ({ open }: CollapsedItemProps) => {
                         </IconButton>
                         <IconButton
                           color="error"
-                          onClick={() => handleDelete(prateleira.id!)}
+                          onClick={() => handleOpenConfirmDelete(prateleira.id!)}
                           disabled={loading}
                         >
                           <Delete />
@@ -271,15 +376,53 @@ const PrateleiraComponent = ({ open }: CollapsedItemProps) => {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={3} align="center">
-                      Nenhuma prateleira cadastrada.
+                      Nenhuma prateleira encontrada.
                     </TableCell>
                   </TableRow>
                 )}
               </TableBody>
             </Table>
           </TableContainer>
+          <TablePagination
+            rowsPerPageOptions={[6]}
+            component="div"
+            count={filteredPrateleiras.length}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={handleChangePage}
+            labelRowsPerPage="Itens por página"
+            labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+          />
         </CardContent>
       </Card>
+      <Modal
+        open={openConfirmDelete}
+        onClose={handleCloseConfirmDelete}
+        aria-labelledby="confirm-delete-modal-title"
+        aria-describedby="confirm-delete-modal-description"
+      >
+        <Box sx={confirmModalStyle}>
+          <Typography id="confirm-delete-modal-title" variant="h6" component="h2" gutterBottom>
+            Confirmar Exclusão
+          </Typography>
+          <Typography id="confirm-delete-modal-description" sx={{ mb: 3 }}>
+            Tem certeza que deseja excluir esta prateleira?
+          </Typography>
+          <Stack direction="row" spacing={2} justifyContent="flex-end">
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={handleCloseConfirmDelete}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button variant="contained" color="error" onClick={handleDelete} disabled={loading}>
+              {loading ? 'Excluindo...' : 'Excluir'}
+            </Button>
+          </Stack>
+        </Box>
+      </Modal>
     </>
   );
 };
