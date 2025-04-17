@@ -7,7 +7,6 @@ import {
   Fornecedor,
   DadosEntradaEstoque,
   Caixa,
-  AtividadeDoDia,
   Venda,
   VendaProduto,
   Seccao,
@@ -1134,39 +1133,6 @@ export const getTopSellingPeriodByProduct = async (
     return response.data;
   } catch (error) {
     throw new ApiError(`Failed to fetch top-selling period for product ${referenciaProduto}`);
-  }
-};
-export const getAllDailyActivities = async (): Promise<AtividadeDoDia[]> => {
-  try {
-    const response = await api.get('/atividadeDoDia');
-    return response.data;
-  } catch (error) {
-    throw new ApiError('Failed to fetch daily activities');
-  }
-};
-
-export const createDailyActivity = async (data: AtividadeDoDia): Promise<AtividadeDoDia> => {
-  try {
-    const response = await api.post('/atividadeDoDia', {
-      ...data,
-    });
-    return response.data;
-  } catch (error) {
-    throw new ApiError('Failed to create daily activity');
-  }
-};
-
-export const updateDailyActivity = async (
-  id: string,
-  data: Partial<AtividadeDoDia>,
-): Promise<AtividadeDoDia> => {
-  try {
-    const response = await api.put(`/atividadeDoDia/${id}`, {
-      ...data,
-    });
-    return response.data;
-  } catch (error) {
-    throw new ApiError(`Failed to update daily activity with id ${id}`);
   }
 };
 
