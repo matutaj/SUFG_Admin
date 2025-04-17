@@ -103,8 +103,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const [stockQuantity, setStockQuantity] = useState<number | null>(null);
   const [warehouseQuantity, setWarehouseQuantity] = useState<number>(0);
   const [storeQuantity, setStoreQuantity] = useState<number>(0);
-  const [remainingStoreQuantity, setRemainingStoreQuantity] = useState<number | null>(null);
-  const [remainingWarehouseQuantity, setRemainingWarehouseQuantity] = useState<number | null>(null);
+  const [remainingQuantity, setRemainingQuantity] = useState<number | null>(null);
   const [selectedLocationType, setSelectedLocationType] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [products, setProducts] = useState<Produto[]>([]);
@@ -145,8 +144,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     setStockQuantity(null);
     setWarehouseQuantity(0);
     setStoreQuantity(0);
-    setRemainingStoreQuantity(null);
-    setRemainingWarehouseQuantity(null);
+    setRemainingQuantity(null);
     setErrors({});
   }, []);
 
@@ -225,57 +223,57 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     fetchData();
   }, []);
 
+  const updateStockAndWarehouseData = useCallback(async () => {
+    if (!idProdutoLocalizacao) {
+      setStockQuantity(null);
+      setWarehouseQuantity(0);
+      setStoreQuantity(0);
+      setRemainingQuantity(null);
+      return;
+    }
+
+    try {
+      const stock = await getStockByProduct(idProdutoLocalizacao);
+      const totalStock = Number(stock.quantidadeAtual) || 0;
+      setStockQuantity(totalStock);
+
+      const updatedProductLocations = await getAllProductLocations();
+      setProductLocations(updatedProductLocations);
+
+      const storeLocations = updatedProductLocations.filter(
+        (loc) =>
+          loc.id_produto === idProdutoLocalizacao && isStoreLocation(loc.id_localizacao, locations),
+      );
+      const warehouseLocations = updatedProductLocations.filter(
+        (loc) =>
+          loc.id_produto === idProdutoLocalizacao &&
+          !isStoreLocation(loc.id_localizacao, locations),
+      );
+
+      const storeQty = storeLocations.reduce((sum, loc) => sum + (loc.quantidadeProduto ?? 0), 0);
+      const warehouseQty = warehouseLocations.reduce(
+        (sum, loc) => sum + (loc.quantidadeProduto ?? 0),
+        0,
+      );
+
+      setStoreQuantity(storeQty);
+      setWarehouseQuantity(warehouseQty);
+
+      const totalAllocated = storeQty + warehouseQty;
+      const remaining = totalStock - totalAllocated;
+      setRemainingQuantity(remaining >= 0 ? remaining : 0);
+    } catch (error) {
+      console.error('Erro ao buscar estoque:', error);
+      setStockQuantity(0);
+      setWarehouseQuantity(0);
+      setStoreQuantity(0);
+      setRemainingQuantity(0);
+    }
+  }, [idProdutoLocalizacao, locations, productLocations]);
+
   useEffect(() => {
-    const fetchStockAndWarehouseData = async () => {
-      if (!idProdutoLocalizacao) {
-        setStockQuantity(null);
-        setWarehouseQuantity(0);
-        setStoreQuantity(0);
-        setRemainingStoreQuantity(null);
-        setRemainingWarehouseQuantity(null);
-        return;
-      }
-
-      try {
-        const stock = await getStockByProduct(idProdutoLocalizacao);
-        const totalStock = Number(stock.quantidadeAtual) || 0;
-        console.log(`Estoque total para produto ${idProdutoLocalizacao}: ${totalStock}`);
-        setStockQuantity(totalStock);
-
-        const warehouseQty = productLocations
-          .filter(
-            (loc) =>
-              loc.id_produto === idProdutoLocalizacao &&
-              !isStoreLocation(loc.id_localizacao, locations),
-          )
-          .reduce((sum, loc) => sum + (loc.quantidadeProduto ?? 0), 0);
-        setWarehouseQuantity(warehouseQty);
-
-        const storeQty = productLocations
-          .filter(
-            (loc) =>
-              loc.id_produto === idProdutoLocalizacao &&
-              isStoreLocation(loc.id_localizacao, locations),
-          )
-          .reduce((sum, loc) => sum + (loc.quantidadeProduto ?? 0), 0);
-        setStoreQuantity(storeQty);
-
-        const remainingStore = totalStock - warehouseQty;
-        setRemainingStoreQuantity(remainingStore >= 0 ? remainingStore : 0);
-
-        const remainingWarehouse = totalStock - storeQty;
-        setRemainingWarehouseQuantity(remainingWarehouse >= 0 ? remainingWarehouse : 0);
-      } catch (error) {
-        console.error('Erro ao buscar estoque:', error);
-        setStockQuantity(0);
-        setWarehouseQuantity(0);
-        setStoreQuantity(0);
-        setRemainingStoreQuantity(0);
-        setRemainingWarehouseQuantity(0);
-      }
-    };
-    fetchStockAndWarehouseData();
-  }, [idProdutoLocalizacao, productLocations, locations]);
+    updateStockAndWarehouseData();
+  }, [updateStockAndWarehouseData]);
 
   useEffect(() => {
     if (alert) {
@@ -286,9 +284,10 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const getTotalStockInLocations = useCallback(
     (productId: string, excludeLocationId?: string): number => {
-      return productLocations
-        .filter((loc) => loc.id_produto === productId && loc.id !== excludeLocationId)
-        .reduce((sum, loc) => sum + (loc.quantidadeProduto ?? 0), 0);
+      const filteredLocations = productLocations.filter(
+        (loc) => loc.id_produto === productId && loc.id !== excludeLocationId,
+      );
+      return filteredLocations.reduce((sum, loc) => sum + (loc.quantidadeProduto ?? 0), 0);
     },
     [productLocations],
   );
@@ -327,68 +326,49 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       quantidadeMinimaProduto?: string;
     } = {};
 
+    // Validações básicas
     if (!idProdutoLocalizacao) newErrors.idProdutoLocalizacao = 'O produto é obrigatório.';
     if (!idLocalizacao) newErrors.idLocalizacao = 'A localização é obrigatória.';
     if (!idSeccao) newErrors.idSeccao = 'A seção é obrigatória.';
     if (!idPrateleira) newErrors.idPrateleira = 'A prateleira é obrigatória.';
     if (!idCorredor) newErrors.idCorredor = 'O corredor é obrigatório.';
-    if (quantidadeProduto < 0) newErrors.quantidadeProduto = 'A quantidade não pode ser negativa.';
+    if (quantidadeProduto <= 0)
+      newErrors.quantidadeProduto = 'A quantidade deve ser maior que zero.';
     if (quantidadeMinimaProduto < 0)
       newErrors.quantidadeMinimaProduto = 'A quantidade mínima não pode ser negativa.';
     if (quantidadeProduto < quantidadeMinimaProduto)
       newErrors.quantidadeProduto = `A quantidade não pode ser inferior ao limite mínimo (${quantidadeMinimaProduto})!`;
 
-    // Verificar duplicatas
-    const isDuplicate = productLocations.some(
-      (loc) =>
-        loc.id_produto === idProdutoLocalizacao &&
-        loc.id_localizacao === idLocalizacao &&
-        loc.id_seccao === idSeccao &&
-        loc.id_prateleira === idPrateleira &&
-        loc.id_corredor === idCorredor &&
-        loc.id !== editLocationId,
-    );
-    if (isDuplicate) {
-      newErrors.idProdutoLocalizacao = 'Já existe uma localização idêntica para este produto.';
-    }
-
-    // Verificar estoque
+    // Consultar estoque total
     let totalStock = 0;
     try {
       const stockItem = await getStockByProduct(idProdutoLocalizacao);
       totalStock = Number(stockItem.quantidadeAtual) || 0;
-      console.log(`Validando estoque para produto ${idProdutoLocalizacao}: ${totalStock}`);
     } catch {
       newErrors.idProdutoLocalizacao = 'Este produto não possui estoque registrado.';
     }
 
-    // Exigir estoque para quantidadeProduto > 0
-    if (quantidadeProduto > 0 && totalStock === 0) {
+    // Validar estoque
+    if (totalStock === 0) {
       newErrors.quantidadeProduto = 'Não há estoque disponível para este produto.';
     }
 
     if (totalStock > 0 && quantidadeProduto > 0) {
+      const updatedProductLocations = await getAllProductLocations();
+      setProductLocations(updatedProductLocations);
+
       const currentTotal = getTotalStockInLocations(idProdutoLocalizacao, editLocationId);
       const newTotal = currentTotal + quantidadeProduto;
 
-      if (newTotal > totalStock) {
-        newErrors.quantidadeProduto = `Quantidade excede o estoque total disponível (${totalStock})!`;
-      }
-
-      if (isStoreLocation(idLocalizacao, locations)) {
-        const remaining = totalStock - warehouseQuantity;
-        if (remaining <= 0 && !editLocationId) {
-          newErrors.quantidadeProduto = 'Não há estoque disponível para adicionar na loja!';
-        } else if (quantidadeProduto > remaining) {
-          newErrors.quantidadeProduto = `Quantidade excede o estoque restante para loja (${remaining})!`;
-        }
-      } else {
-        const remaining = totalStock - storeQuantity;
-        if (remaining <= 0 && !editLocationId) {
-          newErrors.quantidadeProduto = 'Não há estoque disponível para adicionar no armazém!';
-        } else if (quantidadeProduto > remaining) {
-          newErrors.quantidadeProduto = `Quantidade excede o estoque restante para armazém (${remaining})!`;
-        }
+      if (newTotal <= 0) {
+        newErrors.quantidadeProduto = 'A quantidade total alocada deve ser maior que zero.';
+      } else if (newTotal > totalStock) {
+        newErrors.quantidadeProduto = `A quantidade total alocada (${newTotal}) excede o estoque disponível (${totalStock}).`;
+      } else if (
+        remainingQuantity !== null &&
+        (remainingQuantity <= 0 || quantidadeProduto > remainingQuantity)
+      ) {
+        newErrors.quantidadeProduto = `A quantidade (${quantidadeProduto}) excede o restante disponível (${remainingQuantity}).`;
       }
     }
 
@@ -400,6 +380,18 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     try {
       setLoading(true);
       setAlert(null);
+
+      // Verificar se já existe uma localização com os mesmos dados
+      const existingLocation = productLocations.find(
+        (loc) =>
+          loc.id_produto === idProdutoLocalizacao &&
+          loc.id_localizacao === idLocalizacao &&
+          loc.id_seccao === idSeccao &&
+          loc.id_prateleira === idPrateleira &&
+          loc.id_corredor === idCorredor &&
+          loc.id !== editLocationId, // Excluir a localização em edição
+      );
+
       const locationData: ProdutoLocalizacao = {
         id_produto: idProdutoLocalizacao,
         id_localizacao: idLocalizacao,
@@ -411,23 +403,35 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         id: editLocationId,
       };
 
-      let updatedLocations: ProdutoLocalizacao[];
-      if (editLocationId) {
-        await updateProductLocation(editLocationId, locationData);
-        updatedLocations = productLocations.map((loc) =>
-          loc.id === editLocationId ? { ...loc, ...locationData } : loc,
+      if (existingLocation && !editLocationId) {
+        // Atualizar a localização existente
+        locationData.id = existingLocation.id;
+        locationData.quantidadeProduto =
+          (existingLocation.quantidadeProduto ?? 0) + quantidadeProduto;
+        locationData.quantidadeMinimaProduto = Math.max(
+          existingLocation.quantidadeMinimaProduto ?? 0,
+          quantidadeMinimaProduto,
         );
+        await updateProductLocation(existingLocation.id!, locationData);
+      } else if (editLocationId) {
+        // Atualizar a localização em edição
+        await updateProductLocation(editLocationId, locationData);
       } else {
-        const newLocation = await createProductLocation(locationData);
-        updatedLocations = [...productLocations, newLocation];
+        // Criar uma nova localização
+        await createProductLocation(locationData);
       }
 
+      const updatedLocations = await getAllProductLocations();
       setProductLocations(updatedLocations);
+      await updateStockAndWarehouseData();
+
       setAlert({
         severity: 'success',
         message: editLocationId
           ? 'Localização atualizada com sucesso!'
-          : 'Localização cadastrada com sucesso!',
+          : existingLocation
+            ? 'Quantidade adicionada à localização existente!'
+            : 'Localização cadastrada com sucesso!',
       });
 
       handleCloseLocation();
@@ -447,11 +451,11 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     quantidadeMinimaProduto,
     editLocationId,
     productLocations,
-    locations,
-    warehouseQuantity,
-    storeQuantity,
     getTotalStockInLocations,
     handleCloseLocation,
+    updateStockAndWarehouseData,
+    remainingQuantity,
+    locations,
   ]);
 
   const handleEditLocation = useCallback(
@@ -482,8 +486,9 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       setLoading(true);
       setAlert(null);
       await deleteProductLocation(locationToDelete);
-      const updatedLocations = productLocations.filter((loc) => loc.id !== locationToDelete);
+      const updatedLocations = await getAllProductLocations();
       setProductLocations(updatedLocations);
+      await updateStockAndWarehouseData();
       setAlert({ severity: 'success', message: 'Localização do produto excluída com sucesso!' });
     } catch (error) {
       console.error('Erro ao excluir localização do produto:', error);
@@ -492,7 +497,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       setLoading(false);
       handleCloseConfirmModal();
     }
-  }, [locationToDelete, productLocations, handleCloseConfirmModal]);
+  }, [locationToDelete, handleCloseConfirmModal, updateStockAndWarehouseData]);
 
   return (
     <>
@@ -679,8 +684,11 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 <TextField
                   label="Quantidade do Produto"
                   type="number"
-                  value={quantidadeProduto}
-                  onChange={(e) => setQuantidadeProduto(Number(e.target.value) || 0)}
+                  value={Number.isNaN(quantidadeProduto) ? '' : quantidadeProduto}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value, 10);
+                    setQuantidadeProduto(Number.isNaN(value) ? 0 : Math.max(0, value));
+                  }}
                   error={!!errors.quantidadeProduto}
                   helperText={errors.quantidadeProduto}
                   disabled={loading}
@@ -688,25 +696,21 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                   inputProps={{ min: 0 }}
                   aria-label="Quantidade do produto"
                 />
-                {isStoreLocation(idLocalizacao, locations) ? (
-                  <Typography variant="body2" color="text.secondary">
-                    Estoque: {stockQuantity ?? 'N/A'} | Armazém: {warehouseQuantity} | Restante:{' '}
-                    {remainingStoreQuantity ?? 'N/A'}
-                  </Typography>
-                ) : (
-                  <Typography variant="body2" color="text.secondary">
-                    Estoque: {stockQuantity ?? 'N/A'} | Loja: {storeQuantity} | Restante:{' '}
-                    {remainingWarehouseQuantity ?? 'N/A'}
-                  </Typography>
-                )}
+                <Typography variant="body2" color="text.secondary">
+                  Estoque: {stockQuantity ?? 'N/A'} | Loja: {storeQuantity} | Armazém:{' '}
+                  {warehouseQuantity} | Restante: {remainingQuantity ?? 'N/A'}
+                </Typography>
               </Stack>
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
                 label="Limite Mínimo"
                 type="number"
-                value={quantidadeMinimaProduto}
-                onChange={(e) => setQuantidadeMinimaProduto(Number(e.target.value) || 0)}
+                value={Number.isNaN(quantidadeMinimaProduto) ? '' : quantidadeMinimaProduto}
+                onChange={(e) => {
+                  const value = parseInt(e.target.value, 10);
+                  setQuantidadeMinimaProduto(Number.isNaN(value) ? 0 : Math.max(0, value));
+                }}
                 error={!!errors.quantidadeMinimaProduto}
                 helperText={errors.quantidadeMinimaProduto}
                 disabled={loading}
@@ -743,7 +747,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             Confirmar Exclusão
           </Typography>
           <Typography id="modal-confirmar-exclusao-descricao" variant="body1" mb={3}>
-            Tem certeza que deseja excluir esta localização do produto? Esta ação não pode be
+            Tem certeza que deseja excluir esta localização do produto? Esta ação não pode ser
             desfeita.
           </Typography>
           <Stack direction="row" spacing={2} justifyContent="flex-end">
@@ -817,30 +821,37 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                     const product = products.find(
                       (p) => p.referenciaProduto === location.id_produto,
                     );
-                    const isBelowLimit =
+                    const isAtOrBelowLimit =
                       (location.quantidadeProduto ?? 0) <= (location.quantidadeMinimaProduto ?? 0);
                     return (
-                      <TableRow key={location.id}>
-                        <TableCell sx={{ color: isBelowLimit ? 'red' : 'inherit' }}>
+                      <TableRow
+                        key={location.id}
+                        sx={{ bgcolor: isAtOrBelowLimit ? '#ffebee' : 'inherit' }}
+                      >
+                        <TableCell sx={{ color: isAtOrBelowLimit ? 'red' : 'inherit' }}>
                           {product?.nomeProduto || 'N/A'}
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={{ color: isAtOrBelowLimit ? 'red' : 'inherit' }}>
                           {locations.find((l) => l.id === location.id_localizacao)
                             ?.nomeLocalizacao || 'N/A'}
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={{ color: isAtOrBelowLimit ? 'red' : 'inherit' }}>
                           {sections.find((s) => s.id === location.id_seccao)?.nomeSeccao || 'N/A'}
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={{ color: isAtOrBelowLimit ? 'red' : 'inherit' }}>
                           {shelves.find((s) => s.id === location.id_prateleira)?.nomePrateleira ||
                             'N/A'}
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={{ color: isAtOrBelowLimit ? 'red' : 'inherit' }}>
                           {corridors.find((c) => c.id === location.id_corredor)?.nomeCorredor ||
                             'N/A'}
                         </TableCell>
-                        <TableCell>{location.quantidadeProduto ?? 0}</TableCell>
-                        <TableCell>{location.quantidadeMinimaProduto ?? 0}</TableCell>
+                        <TableCell sx={{ color: isAtOrBelowLimit ? 'red' : 'inherit' }}>
+                          {location.quantidadeProduto ?? 0}
+                        </TableCell>
+                        <TableCell sx={{ color: isAtOrBelowLimit ? 'red' : 'inherit' }}>
+                          {location.quantidadeMinimaProduto ?? 0}
+                        </TableCell>
                         <TableCell align="right">
                           <IconButton
                             color="primary"

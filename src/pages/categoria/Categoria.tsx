@@ -244,16 +244,32 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
             sx={{ width: '100%', mb: 2 }}
           >
             <Typography variant="h5">Cadastrar Categoria</Typography>
-            <Button
-              variant="contained"
-              color="secondary"
-              sx={(theme) => ({ p: theme.spacing(0.625, 1.5), borderRadius: 1.5 })}
-              startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
-              onClick={handleOpen}
-              disabled={loading}
-            >
-              <Typography variant="body2">Adicionar</Typography>
-            </Button>
+            <Stack direction="row" spacing={2} alignItems="center">
+              <TextField
+                label="Pesquisar Categoria"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                variant="outlined"
+                size="small"
+                sx={(theme) => ({
+                  p: theme.spacing(0.625, 1.5),
+                  borderRadius: 1.5,
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 1.5,
+                  },
+                })}
+              />
+              <Button
+                variant="contained"
+                color="secondary"
+                sx={(theme) => ({ p: theme.spacing(0.625, 1.5), borderRadius: 1.5 })}
+                startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
+                onClick={handleOpen}
+                disabled={loading}
+              >
+                <Typography variant="body2">Adicionar</Typography>
+              </Button>
+            </Stack>
           </Stack>
         </Collapse>
       </Paper>
@@ -336,15 +352,6 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
 
       <Card sx={{ maxWidth: '100%', margin: 'auto', mt: 4 }}>
         <CardContent>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
-            <TextField
-              label="Pesquisar Categoria"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              variant="outlined"
-              sx={{ width: { xs: '100%', sm: 300 } }}
-            />
-          </Stack>
           <TableContainer component={Paper}>
             <Table>
               <TableHead>

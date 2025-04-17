@@ -112,10 +112,6 @@ export const routes = [
             element: <Fornecedor open={true} />,
           },
           {
-            path: paths.tarefa,
-            element: <Tarefa />,
-          },
-          {
             path: paths.localProduto,
             element: <LocalProduto open={true} />,
           },
