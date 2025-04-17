@@ -37,6 +37,7 @@ import {
   createDailyActivity,
   updateDailyActivity,
   deleteDailyActivity,
+  createTask,
 } from '../../api/methods';
 import { Tarefa, Funcionario, AtividadeDoDia } from '../../types/models';
 
@@ -69,6 +70,7 @@ const confirmModalStyle = {
 
 const TarefaComponent = () => {
   const [openActivityModal, setOpenActivityModal] = useState(false);
+  const [openTaskModal, setOpenTaskModal] = useState(false);
   const [openConfirmModal, setOpenConfirmModal] = useState(false);
   const [atividadeToDelete, setAtividadeToDelete] = useState<string | null>(null);
   const [editAtividadeId, setEditAtividadeId] = useState<string | null>(null);
@@ -84,36 +86,51 @@ const TarefaComponent = () => {
   const [sortBy, setSortBy] = useState<keyof AtividadeDoDia | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
-  // State for activity form
   const [tasks, setTasks] = useState<Tarefa[]>([]);
   const [employees, setEmployees] = useState<Funcionario[]>([]);
-  const [form, setForm] = useState({
+  const [formActivity, setFormActivity] = useState({
     idTarefa: '',
     idFuncionario: '',
     dataAtividade: '',
     status: 'Pendente' as 'Concluída' | 'Em Andamento' | 'Pendente',
   });
-  const [errors, setErrors] = useState<{
+  const [formTask, setFormTask] = useState({
+    nome: '',
+    descricao: '',
+  });
+  const [errorsActivity, setErrorsActivity] = useState<{
     idTarefa?: string;
     idFuncionario?: string;
     dataAtividade?: string;
     status?: string;
   }>({});
+  const [errorsTask, setErrorsTask] = useState<{
+    nome?: string;
+  }>({});
   const [hasFormChanges, setHasFormChanges] = useState(false);
 
   const handleOpenActivityModal = () => setOpenActivityModal(true);
+  const handleOpenTaskModal = () => setOpenTaskModal(true);
 
   const handleCloseActivityModal = () => {
     if (hasFormChanges && !window.confirm('Deseja descartar as alterações?')) return;
     setOpenActivityModal(false);
     setEditAtividadeId(null);
-    setForm({
+    setFormActivity({
       idTarefa: '',
       idFuncionario: '',
       dataAtividade: '',
       status: 'Pendente',
     });
-    setErrors({});
+    setErrorsActivity({});
+    setHasFormChanges(false);
+  };
+
+  const handleCloseTaskModal = () => {
+    if (hasFormChanges && !window.confirm('Deseja descartar as alterações?')) return;
+    setOpenTaskModal(false);
+    setFormTask({ nome: '', descricao: '' });
+    setErrorsTask({});
     setHasFormChanges(false);
   };
 
@@ -131,15 +148,25 @@ const TarefaComponent = () => {
     setLoading(true);
     try {
       const [tasksData, employeesData, atividadesData] = await Promise.all([
-        getAllTasks(),
-        getAllEmployees(),
-        getAllDailyActivities(),
+        getAllTasks().catch((error) => {
+          console.error('Erro ao buscar tarefas:', error);
+          return [];
+        }),
+        getAllEmployees().catch((error) => {
+          console.error('Erro ao buscar funcionários:', error);
+          return [];
+        }),
+        getAllDailyActivities().catch((error) => {
+          console.error('Erro ao buscar atividades:', error);
+          return [];
+        }),
       ]);
-      setTasks(tasksData);
-      setEmployees(employeesData);
-      setAtividades(atividadesData);
+      setTasks(tasksData || []);
+      setEmployees(employeesData || []);
+      setAtividades(atividadesData || []);
     } catch (error) {
       console.error('Erro ao carregar dados iniciais:', error);
+      setAlert({ severity: 'error', message: 'Erro ao carregar dados.' });
       setTimeout(() => setAlert(null), 3000);
     } finally {
       setLoading(false);
@@ -152,10 +179,10 @@ const TarefaComponent = () => {
 
   const filteredAtividades = useMemo(() => {
     return atividades.filter((atividade) => {
-      const tarefa = tasks.find((t) => t.id === atividade.idTarefa);
-      const funcionario = employees.find((e) => e.numeroBI === atividade.idFuncionario);
+      const tarefa = tasks.find((t) => t.id === atividade.id_tarefa);
+      const funcionario = employees.find((e) => e.numeroBI === atividade.id_funcionario);
       return (
-        tarefa?.nomeTarefa?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        tarefa?.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         funcionario?.nomeFuncionario?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         atividade.status.toLowerCase().includes(searchTerm.toLowerCase())
       );
@@ -164,60 +191,85 @@ const TarefaComponent = () => {
 
   const sortedAtividades = useMemo(() => {
     if (!sortBy) return filteredAtividades;
-    //  return [...filteredAtividades].sort((a, b) => {
-    //   const valueA = sortBy === 'dataAtividade' ? new Date(a[sortBy]) : a[sortBy];
-    // const valueB = sortBy === 'dataAtividade' ? new Date(b[sortBy]) : b[sortBy];
-    // if (valueA < valueB) return sortOrder === 'asc' ? -1 : 1;
-    //if (valueA > valueB) return sortOrder === 'asc' ? 1 : -1;
-    //   return 0;
-    // });
+
+    return [...filteredAtividades].sort((a, b) => {
+      const key = sortBy as keyof AtividadeDoDia;
+      const rawValueA = a[key];
+      const rawValueB = b[key];
+      const valueA = key === 'dataAtividade' ? new Date(rawValueA ?? '') : (rawValueA ?? '');
+      const valueB = key === 'dataAtividade' ? new Date(rawValueB ?? '') : (rawValueB ?? '');
+
+      if (key === 'dataAtividade') {
+        if (isNaN((valueA as Date).getTime()) || isNaN((valueB as Date).getTime())) return 0;
+      }
+
+      if (valueA < valueB) return sortOrder === 'asc' ? -1 : 1;
+      if (valueA > valueB) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
   }, [filteredAtividades, sortBy, sortOrder]);
 
   const paginatedAtividades = useMemo(() => {
-    return sortedAtividades!.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+    return sortedAtividades.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
   }, [sortedAtividades, page, rowsPerPage]);
 
-  const handleChange = (
+  const handleChangeActivity = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | SelectChangeEvent<string>,
-    field: keyof typeof form,
+    field: keyof typeof formActivity,
   ) => {
     const value = e.target.value;
-    setForm((prev) => ({ ...prev, [field]: value }));
-    setErrors((prev) => ({ ...prev, [field]: '' }));
+    setFormActivity((prev) => ({ ...prev, [field]: value }));
+    setErrorsActivity((prev) => ({ ...prev, [field]: '' }));
     setHasFormChanges(true);
   };
 
-  const validateForm = () => {
+  const handleChangeTask = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+    field: keyof typeof formTask,
+  ) => {
+    const value = e.target.value;
+    setFormTask((prev) => ({ ...prev, [field]: value }));
+    setErrorsTask((prev) => ({ ...prev, [field]: '' }));
+    setHasFormChanges(true);
+  };
+
+  const validateActivityForm = () => {
     const newErrors: {
       idTarefa?: string;
       idFuncionario?: string;
       dataAtividade?: string;
       status?: string;
     } = {};
-    if (!form.idTarefa) newErrors.idTarefa = 'Selecione uma tarefa.';
-    if (!form.idFuncionario) newErrors.idFuncionario = 'Selecione um funcionário.';
-    if (!form.dataAtividade) newErrors.dataAtividade = 'Selecione a data da atividade.';
-    else if (!isValid(parseISO(form.dataAtividade))) newErrors.dataAtividade = 'Data inválida.';
-    if (!form.status) newErrors.status = 'Selecione o status da atividade.';
-    setErrors(newErrors);
+    if (!formActivity.idTarefa) newErrors.idTarefa = 'Selecione uma tarefa.';
+    if (!formActivity.idFuncionario) newErrors.idFuncionario = 'Selecione um funcionário.';
+    if (!formActivity.dataAtividade) newErrors.dataAtividade = 'Selecione a data da atividade.';
+    else if (!isValid(parseISO(formActivity.dataAtividade)))
+      newErrors.dataAtividade = 'Data inválida.';
+    if (!formActivity.status) newErrors.status = 'Selecione o status da atividade.';
+    setErrorsActivity(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const validateTaskForm = () => {
+    const newErrors: { nome?: string } = {};
+    if (!formTask.nome) newErrors.nome = 'O nome da tarefa é obrigatório.';
+    setErrorsTask(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const onAddActivitySubmit = async () => {
-    if (!validateForm()) return;
+    if (!validateActivityForm()) return;
 
-    const dataAtividadeISO = form.dataAtividade
-      ? parseISO(form.dataAtividade).toISOString()
+    const dataAtividadeISO = formActivity.dataAtividade
+      ? parseISO(formActivity.dataAtividade).toISOString()
       : new Date().toISOString();
 
     const activityData: AtividadeDoDia = {
       id: editAtividadeId || undefined,
-      idTarefa: form.idTarefa,
-      idFuncionario: form.idFuncionario,
+      id_tarefa: formActivity.idTarefa,
+      id_funcionario: formActivity.idFuncionario,
       dataAtividade: dataAtividadeISO,
-      status: form.status,
-      createdAt: editAtividadeId ? undefined : new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      status: formActivity.status,
     };
 
     setLoading(true);
@@ -234,6 +286,52 @@ const TarefaComponent = () => {
       setTimeout(() => setAlert(null), 3000);
     } catch (error) {
       console.error('Erro ao salvar atividade:', error);
+      setAlert({ severity: 'error', message: 'Erro ao salvar atividade.' });
+      setTimeout(() => setAlert(null), 3000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onAddTaskSubmit = async () => {
+    if (!validateTaskForm()) return;
+
+    const taskData = {
+      nome: formTask.nome.trim(),
+      descricao: formTask.descricao.trim(),
+    };
+
+    setLoading(true);
+    try {
+      console.log('Enviando tarefa para o backend:', taskData);
+      const newTask = await createTask(taskData);
+      console.log('Resposta da API createTask:', newTask);
+      if (!newTask || !newTask.id) {
+        throw new Error('A tarefa criada não contém um ID válido');
+      }
+      setTasks((prev) => [...prev, newTask]); // Atualiza o estado local
+      await fetchInitialData(); // Sincroniza com o backend
+      setAlert({ severity: 'success', message: `Tarefa "${newTask.nome}" criada com sucesso!` });
+      handleCloseTaskModal();
+      setTimeout(() => setAlert(null), 3000);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Erro ao criar tarefa. Por favor, tente novamente.';
+      const responseData =
+        typeof error === 'object' && error !== null && 'response' in error
+          ? (error as { response?: { data?: { message?: string } } }).response?.data
+          : null;
+
+      console.error('Erro ao criar tarefa:', {
+        message: errorMessage,
+        response: responseData,
+      });
+      setAlert({
+        severity: 'error',
+        message: responseData?.message || errorMessage,
+      });
       setTimeout(() => setAlert(null), 3000);
     } finally {
       setLoading(false);
@@ -244,9 +342,9 @@ const TarefaComponent = () => {
     if (!id) return;
     const atividade = atividades.find((a) => a.id === id);
     if (atividade) {
-      setForm({
-        idTarefa: atividade.idTarefa,
-        idFuncionario: atividade.idFuncionario,
+      setFormActivity({
+        idTarefa: atividade.id_tarefa,
+        idFuncionario: atividade.id_funcionario,
         dataAtividade: format(parseISO(atividade.dataAtividade), 'yyyy-MM-dd'),
         status: atividade.status,
       });
@@ -271,6 +369,7 @@ const TarefaComponent = () => {
       }
     } catch (error) {
       console.error('Erro ao excluir atividade:', error);
+      setAlert({ severity: 'error', message: 'Erro ao excluir atividade.' });
       setTimeout(() => setAlert(null), 3000);
     } finally {
       setLoading(false);
@@ -284,8 +383,7 @@ const TarefaComponent = () => {
     setSortBy(column);
   };
 
-  const handleChangePage = (event: unknown, newPage: number) => {
-    console.log(event);
+  const handleChangePage = (_event: unknown, newPage: number) => {
     setPage(newPage);
   };
 
@@ -322,17 +420,38 @@ const TarefaComponent = () => {
                 disabled={loading}
                 inputProps={{ 'aria-label': 'Pesquisar atividades' }}
               />
-              <Button
-                variant="contained"
-                color="secondary"
-                sx={(theme) => ({ p: theme.spacing(0.625, 1.5), borderRadius: 1.5 })}
-                startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
-                onClick={handleOpenActivityModal}
-                disabled={loading}
-                aria-label="Registrar nova atividade"
-              >
-                <Typography variant="body2">Registrar Atividade</Typography>
-              </Button>
+              <Stack direction="row" spacing={2}>
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  sx={(theme) => ({
+                    p: theme.spacing(0.625, 1.5),
+                    borderRadius: 1.5,
+                    minWidth: 140,
+                  })}
+                  startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
+                  onClick={handleOpenTaskModal}
+                  disabled={loading}
+                  aria-label="Criar nova tarefa"
+                >
+                  <Typography variant="body2">Nova Tarefa</Typography>
+                </Button>
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  sx={(theme) => ({
+                    p: theme.spacing(0.625, 1.5),
+                    borderRadius: 1.5,
+                    minWidth: 140,
+                  })}
+                  startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
+                  onClick={handleOpenActivityModal}
+                  disabled={loading}
+                  aria-label="Registrar nova atividade"
+                >
+                  <Typography variant="body2">Registrar Atividade</Typography>
+                </Button>
+              </Stack>
             </Stack>
           </Stack>
         </Collapse>
@@ -341,19 +460,19 @@ const TarefaComponent = () => {
       <Modal
         open={openActivityModal}
         onClose={handleCloseActivityModal}
-        aria-labelledby="modal-title"
+        aria-labelledby="activity-modal-title"
       >
         <Box sx={modalStyle}>
-          <Typography id="modal-title" variant="h6" gutterBottom>
+          <Typography id="activity-modal-title" variant="h6" gutterBottom>
             {editAtividadeId ? 'Editar Atividade' : 'Registrar Atividade do Dia'}
           </Typography>
           <Stack spacing={3} sx={{ width: '100%' }}>
-            <FormControl fullWidth error={Boolean(errors.idTarefa)}>
+            <FormControl fullWidth error={Boolean(errorsActivity.idTarefa)}>
               <InputLabel id="tarefa-label">Tarefa</InputLabel>
               <Select
                 labelId="tarefa-label"
-                value={form.idTarefa}
-                onChange={(e) => handleChange(e, 'idTarefa')}
+                value={formActivity.idTarefa}
+                onChange={(e) => handleChangeActivity(e, 'idTarefa')}
                 label="Tarefa"
                 disabled={loading}
                 aria-describedby="tarefa-error"
@@ -363,23 +482,23 @@ const TarefaComponent = () => {
                 </MenuItem>
                 {tasks.map((tarefa) => (
                   <MenuItem key={tarefa.id} value={tarefa.id}>
-                    {tarefa.nomeTarefa}
+                    {tarefa.nome}
                   </MenuItem>
                 ))}
               </Select>
-              {errors.idTarefa && (
+              {errorsActivity.idTarefa && (
                 <Typography id="tarefa-error" color="error" variant="caption">
-                  {errors.idTarefa}
+                  {errorsActivity.idTarefa}
                 </Typography>
               )}
             </FormControl>
 
-            <FormControl fullWidth error={Boolean(errors.idFuncionario)}>
+            <FormControl fullWidth error={Boolean(errorsActivity.idFuncionario)}>
               <InputLabel id="funcionario-label">Funcionário</InputLabel>
               <Select
                 labelId="funcionario-label"
-                value={form.idFuncionario}
-                onChange={(e) => handleChange(e, 'idFuncionario')}
+                value={formActivity.idFuncionario}
+                onChange={(e) => handleChangeActivity(e, 'idFuncionario')}
                 label="Funcionário"
                 disabled={loading}
                 aria-describedby="funcionario-error"
@@ -393,9 +512,9 @@ const TarefaComponent = () => {
                   </MenuItem>
                 ))}
               </Select>
-              {errors.idFuncionario && (
+              {errorsActivity.idFuncionario && (
                 <Typography id="funcionario-error" color="error" variant="caption">
-                  {errors.idFuncionario}
+                  {errorsActivity.idFuncionario}
                 </Typography>
               )}
             </FormControl>
@@ -403,22 +522,22 @@ const TarefaComponent = () => {
             <TextField
               label="Data da Atividade"
               type="date"
-              value={form.dataAtividade}
-              onChange={(e) => handleChange(e, 'dataAtividade')}
+              value={formActivity.dataAtividade}
+              onChange={(e) => handleChangeActivity(e, 'dataAtividade')}
               fullWidth
               InputLabelProps={{ shrink: true }}
-              error={Boolean(errors.dataAtividade)}
-              helperText={errors.dataAtividade}
+              error={Boolean(errorsActivity.dataAtividade)}
+              helperText={errorsActivity.dataAtividade}
               disabled={loading}
               inputProps={{ 'aria-describedby': 'data-error' }}
             />
 
-            <FormControl fullWidth error={Boolean(errors.status)}>
+            <FormControl fullWidth error={Boolean(errorsActivity.status)}>
               <InputLabel id="status-label">Status</InputLabel>
               <Select
                 labelId="status-label"
-                value={form.status}
-                onChange={(e) => handleChange(e, 'status')}
+                value={formActivity.status}
+                onChange={(e) => handleChangeActivity(e, 'status')}
                 label="Status"
                 disabled={loading}
                 aria-describedby="status-error"
@@ -427,9 +546,9 @@ const TarefaComponent = () => {
                 <MenuItem value="Em Andamento">Em Andamento</MenuItem>
                 <MenuItem value="Pendente">Pendente</MenuItem>
               </Select>
-              {errors.status && (
+              {errorsActivity.status && (
                 <Typography id="status-error" color="error" variant="caption">
-                  {errors.status}
+                  {errorsActivity.status}
                 </Typography>
               )}
             </FormControl>
@@ -452,6 +571,55 @@ const TarefaComponent = () => {
                 aria-label={editAtividadeId ? 'Atualizar atividade' : 'Registrar atividade'}
               >
                 {loading ? 'Salvando...' : editAtividadeId ? 'Atualizar' : 'Registrar'}
+              </Button>
+            </Stack>
+          </Stack>
+        </Box>
+      </Modal>
+
+      <Modal open={openTaskModal} onClose={handleCloseTaskModal} aria-labelledby="task-modal-title">
+        <Box sx={modalStyle}>
+          <Typography id="task-modal-title" variant="h6" gutterBottom>
+            Criar Nova Tarefa
+          </Typography>
+          <Stack spacing={3} sx={{ width: '100%' }}>
+            <TextField
+              label="Nome da Tarefa"
+              value={formTask.nome}
+              onChange={(e) => handleChangeTask(e, 'nome')}
+              fullWidth
+              error={Boolean(errorsTask.nome)}
+              helperText={errorsTask.nome}
+              disabled={loading}
+              inputProps={{ 'aria-describedby': 'nome-tarefa-error' }}
+            />
+            <TextField
+              label="Descrição (Opcional)"
+              value={formTask.descricao}
+              onChange={(e) => handleChangeTask(e, 'descricao')}
+              fullWidth
+              multiline
+              rows={4}
+              disabled={loading}
+            />
+            <Stack direction="row" spacing={2} justifyContent="flex-end">
+              <Button
+                variant="outlined"
+                color="secondary"
+                onClick={handleCloseTaskModal}
+                disabled={loading}
+                aria-label="Cancelar"
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={onAddTaskSubmit}
+                disabled={loading}
+                aria-label="Criar tarefa"
+              >
+                {loading ? 'Salvando...' : 'Criar'}
               </Button>
             </Stack>
           </Stack>
@@ -499,14 +667,17 @@ const TarefaComponent = () => {
             <Table aria-label="Tabela de atividades diárias">
               <TableHead>
                 <TableRow>
-                  <TableCell onClick={() => handleSort('idTarefa')} sx={{ cursor: 'pointer' }}>
+                  <TableCell onClick={() => handleSort('id_tarefa')} sx={{ cursor: 'pointer' }}>
                     <strong>
-                      Tarefa {sortBy === 'idTarefa' && (sortOrder === 'asc' ? '↑' : '↓')}
+                      Tarefa {sortBy === 'id_tarefa' && (sortOrder === 'asc' ? '↑' : '↓')}
                     </strong>
                   </TableCell>
-                  <TableCell onClick={() => handleSort('idFuncionario')} sx={{ cursor: 'pointer' }}>
+                  <TableCell
+                    onClick={() => handleSort('id_funcionario')}
+                    sx={{ cursor: 'pointer' }}
+                  >
                     <strong>
-                      Funcionário {sortBy === 'idFuncionario' && (sortOrder === 'asc' ? '↑' : '↓')}
+                      Funcionário {sortBy === 'id_funcionario' && (sortOrder === 'asc' ? '↑' : '↓')}
                     </strong>
                   </TableCell>
                   <TableCell onClick={() => handleSort('dataAtividade')} sx={{ cursor: 'pointer' }}>
@@ -535,13 +706,13 @@ const TarefaComponent = () => {
                   ))
                 ) : paginatedAtividades.length > 0 ? (
                   paginatedAtividades.map((atividade) => {
-                    const tarefa = tasks.find((t) => t.id === atividade.idTarefa);
+                    const tarefa = tasks.find((t) => t.id === atividade.id_tarefa);
                     const funcionario = employees.find(
-                      (e) => e.numeroBI === atividade.idFuncionario,
+                      (e) => e.numeroBI === atividade.id_funcionario,
                     );
                     return (
                       <TableRow key={atividade.id}>
-                        <TableCell>{tarefa?.nomeTarefa || 'Tarefa não encontrada'}</TableCell>
+                        <TableCell>{tarefa?.nome || 'Tarefa não encontrada'}</TableCell>
                         <TableCell>
                           {funcionario?.nomeFuncionario || 'Funcionário não encontrado'}
                         </TableCell>
@@ -554,7 +725,7 @@ const TarefaComponent = () => {
                             color="primary"
                             onClick={() => handleEditActivity(atividade.id)}
                             disabled={loading}
-                            aria-label={`Editar atividade ${tarefa?.nomeTarefa || 'desconhecida'}`}
+                            aria-label={`Editar atividade ${tarefa?.nome || 'desconhecida'}`}
                           >
                             <Edit />
                           </IconButton>
@@ -562,7 +733,7 @@ const TarefaComponent = () => {
                             color="error"
                             onClick={() => handleOpenConfirmModal(atividade.id!)}
                             disabled={loading}
-                            aria-label={`Excluir atividade ${tarefa?.nomeTarefa || 'desconhecida'}`}
+                            aria-label={`Excluir atividade ${tarefa?.nome || 'desconhecida'}`}
                           >
                             <Delete />
                           </IconButton>

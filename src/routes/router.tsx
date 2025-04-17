@@ -13,7 +13,7 @@ import Loja from 'pages/produt';
 import Corredor from 'pages/corredor/Corredor';
 import Prateleira from 'pages/prateleira/Prateleira';
 import LocalProduto from 'pages/produt/ProdutoLocalizacao';
-import Tarefa from 'pages/tarefa/Tarefa';
+import Tarefa from 'pages/tarefa/tarefa';
 import Secao from 'pages/seccao/Seccao';
 import Caixas from 'pages/caixa/caixa';
 import { StockProvider } from 'pages/stock/StockContext';
