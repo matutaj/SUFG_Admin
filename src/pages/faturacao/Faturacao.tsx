@@ -61,13 +61,13 @@ import {
   updateStock,
   getStockByProduct,
   getAllClients,
-  deleteSale, // Added for deleting invoices
+  deleteSale,
 } from '../../api/methods';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 interface Fatura {
-  id: number;
+  id: string;
   cliente: string;
   nif: string;
   telefone: string;
@@ -116,7 +116,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   const [openCaixaModal, setOpenCaixaModal] = useState(false);
   const [openCaixaListModal, setOpenCaixaListModal] = useState(false);
   const [openConfirmModal, setOpenConfirmModal] = useState(false);
-  const [faturaToDelete, setFaturaToDelete] = useState<number | null>(null);
+  const [faturaToDelete, setFaturaToDelete] = useState<string | null>(null);
   const [faturas, setFaturas] = useState<Fatura[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [productLocations, setProductLocations] = useState<ProdutoLocalizacao[]>([]);
@@ -188,7 +188,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         const mappedFaturas = salesData.map((venda: Venda, index: number) => {
           const cliente = clientsData.find((c: Cliente) => c.id === venda.id_cliente);
           return {
-            id: venda.id ? Number(venda.id) : index + 1,
+            id: venda.id || `temp-${index + 1}`,
             cliente: cliente ? cliente.nomeCliente : venda.id_cliente || 'Desconhecido',
             nif: cliente?.numeroContribuinte || venda.clientes?.numeroContribuinte || '',
             telefone: cliente?.telefoneCliente || venda.clientes?.telefoneCliente || '',
@@ -252,7 +252,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     resetFaturaForm();
   };
 
-  const handleOpenConfirmModal = (faturaId: number) => {
+  const handleOpenConfirmModal = (faturaId: string) => {
     console.log(`Opening confirm modal for fatura id: ${faturaId}`);
     setFaturaToDelete(faturaId);
     setOpenConfirmModal(true);
@@ -374,15 +374,13 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       format: 'a4',
     });
 
-    // Configurações de fonte e cores
     doc.setFont('helvetica', 'normal');
-    const blueColor = '#1E90FF'; // Cor azul do design
+    const blueColor = '#1E90FF';
     const blackColor = '#000000';
     const whiteColor = '#FFFFFF';
 
-    // Cabeçalho
     doc.setFillColor(blueColor);
-    doc.rect(0, 0, 210, 20, 'F'); // Retângulo azul no topo
+    doc.rect(0, 0, 210, 20, 'F');
     doc.setTextColor(whiteColor);
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
@@ -394,21 +392,19 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     doc.text('SUAEMPRESA@EMAIL.COM', 150, 10, { align: 'right' });
     doc.text('(COI) 000 000 000', 150, 15, { align: 'right' });
 
-    // Título e número da fatura
     doc.setTextColor(blackColor);
     doc.setFontSize(40);
     doc.setFont('helvetica', 'bold');
     doc.text('Fatura.', 10, 35);
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Fatura: ${fatura.id.toString().padStart(10, '00-0000')}`, 150, 30, {
+    doc.text(`Fatura: ${fatura.id.padStart(10, '00-0000')}`, 150, 30, {
       align: 'right',
     });
     doc.text(`Data: ${new Date(fatura.data).toLocaleDateString('pt-BR')}`, 150, 35, {
       align: 'right',
     });
 
-    // Emitido Para e Valor Total
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.text('Emitido Para', 10, 50);
@@ -424,7 +420,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     doc.setFont('helvetica', 'normal');
     doc.text('Data de Vencimento: 02.11.2024', 150, 65, { align: 'right' });
 
-    // Tabela de itens
     doc.setFontSize(12);
     doc.setFillColor(blueColor);
     doc.rect(10, 75, 190, 10, 'F');
@@ -467,7 +462,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       finalY = doc.lastAutoTable.finalY;
     }
 
-    // Resumo (Subtotal, Imposto, Total)
     doc.setFontSize(12);
     doc.setTextColor(blackColor);
     doc.setFont('helvetica', 'normal');
@@ -482,7 +476,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     doc.text('Total', 132, finalY + 26);
     doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 170, finalY + 26, { align: 'right' });
 
-    // Informações de pagamento
     doc.setFontSize(12);
     doc.setTextColor(blackColor);
     doc.setFont('helvetica', 'bold');
@@ -495,7 +488,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       finalY + 45,
     );
 
-    // Rodapé
     doc.setFillColor(blueColor);
     doc.rect(0, 270, 210, 27, 'F');
     doc.setTextColor(whiteColor);
@@ -504,7 +496,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     doc.text('NOME@EMAIL.COM', 70, 280);
     doc.text('WWW.WEBSITENOME.COM', 150, 280, { align: 'right' });
 
-    // Forçar download do PDF
     const pdfBlob = doc.output('blob');
     const link = document.createElement('a');
     link.href = window.URL.createObjectURL(pdfBlob);
@@ -513,6 +504,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     link.click();
     document.body.removeChild(link);
   };
+
   const onAddFaturaSubmit = async () => {
     if (!validateFaturaForm()) return;
 
@@ -637,7 +629,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       });
 
       const newFatura: Fatura = {
-        id: createdVenda.id ? Number(createdVenda.id) : faturas.length + 1,
+        id: createdVenda.id || `temp-${faturas.length + 1}`,
         cliente: faturaForm.cliente,
         nif: faturaForm.nif,
         telefone: faturaForm.telefone,
@@ -700,6 +692,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   const excluirFatura = async () => {
     if (faturaToDelete === null) {
       console.warn('No fatura to delete (faturaToDelete is null)');
+      setAlert({ severity: 'error', message: 'Nenhuma fatura selecionada para exclusão!' });
       return;
     }
 
@@ -709,13 +702,11 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       console.log('Deleting fatura...');
       const fatura = faturas.find((f) => f.id === faturaToDelete);
       if (!fatura) {
-        throw new Error('Fatura não encontrada');
+        throw new Error(`Fatura com ID ${faturaToDelete} não encontrada`);
       }
 
-      // Call API to delete the sale
-      await deleteSale(faturaToDelete.toString());
+      await deleteSale(fatura.id);
 
-      // Revert stock changes
       const lojaLocation = locations.find((loc) => isStoreLocation(loc.id, locations));
       if (lojaLocation) {
         for (const produtoFatura of fatura.produtos) {
@@ -746,7 +737,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
 
             const lojaQuantity = Number(produtoLocation.quantidadeProduto) || 0;
             const armazemQuantity = Number(armazemProdutoLocation?.quantidadeProduto) || 0;
-            const estoqueGeral = lojaQuantity + armazemQuantity + produtoFatura.quantidade;
+            const estoqueGeral = lojaQuantity + armazemQuantity;
 
             const existingStock = await getStockByProduct(produtoFatura.produto.id!);
             if (existingStock) {
@@ -771,17 +762,15 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         }
       }
 
-      // Update state
       setFaturas((prev) => prev.filter((f) => f.id !== faturaToDelete));
       setAlert({ severity: 'success', message: 'Fatura excluída com sucesso!' });
 
-      // Adjust pagination if necessary
-      const totalPages = Math.ceil(faturas.length / rowsPerPage);
+      const totalPages = Math.ceil((faturas.length - 1) / rowsPerPage);
       if (page >= totalPages && page > 0) {
         setPage(page - 1);
       }
     } catch (error) {
-      console.error('Error deleting fatura:', error);
+      console.error(' Ero ao excluir fatura:', error);
       setAlert({ severity: 'error', message: 'Erro ao excluir fatura!' });
     } finally {
       setLoading(false);
@@ -791,7 +780,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     }
   };
 
-  const editarFatura = (faturaId: number) => {
+  const editarFatura = (faturaId: string) => {
     const fatura = faturas.find((f) => f.id === faturaId);
     if (fatura) {
       setFaturaForm({
