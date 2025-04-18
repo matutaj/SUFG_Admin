@@ -450,10 +450,6 @@ const TarefaComponent = () => {
 
     setLoading(true);
     try {
-      console.log(editTaskId ? 'Atualizando tarefa:' : 'Criando tarefa:', {
-        id: editTaskId,
-        data: taskData,
-      });
       if (editTaskId) {
         await updateTask(editTaskId, taskData);
         setAlert({
@@ -502,7 +498,6 @@ const TarefaComponent = () => {
     setLoading(true);
     try {
       if (atividadeToDelete) {
-        console.log('Excluindo atividade:', atividadeToDelete);
         await deleteDailyActivity(atividadeToDelete);
         setAlert({ severity: 'success', message: 'Atividade excluída com sucesso!' });
         const totalPages = Math.ceil(filteredTasks.length / rowsPerPage);
@@ -510,7 +505,6 @@ const TarefaComponent = () => {
           setPage(page - 1);
         }
       } else if (taskToDelete) {
-        console.log('Excluindo tarefa:', taskToDelete);
         await deleteTask(taskToDelete);
         setAlert({ severity: 'success', message: 'Tarefa excluída com sucesso!' });
       }
@@ -877,7 +871,7 @@ const TarefaComponent = () => {
           </Typography>
           <Typography variant="body1" mb={3}>
             Tem certeza que deseja excluir {atividadeToDelete ? 'esta atividade' : 'esta tarefa'}?
-            Esta ação não pode ser desfeita.
+            Esta ação não pode be desfeita.
           </Typography>
           <Stack direction="row" spacing={2} justifyContent="flex-end">
             <Button
@@ -1024,11 +1018,12 @@ const TarefaComponent = () => {
                             onClick={() => tarefa.id && handleOpenDetailsModal(tarefa.id)}
                             disabled={loading}
                             aria-label={`Ver detalhes da tarefa ${tarefa.nome}`}
+                            sx={{ mr: 1 }}
                           >
                             Ver Mais Detalhes
                           </Button>
                           <IconButton
-                            color="primary"
+                            color="secondary"
                             onClick={() =>
                               latestAtividade?.id && handleEditActivity(latestAtividade.id)
                             }
@@ -1047,9 +1042,12 @@ const TarefaComponent = () => {
                           </IconButton>
                           <IconButton
                             color="error"
-                            onClick={() => tarefa.id && handleOpenConfirmModal(tarefa.id, 'tarefa')}
-                            disabled={loading}
-                            aria-label={`Excluir tarefa ${tarefa.nome}`}
+                            onClick={() =>
+                              latestAtividade?.id &&
+                              handleOpenConfirmModal(latestAtividade.id, 'atividade')
+                            }
+                            disabled={loading || !latestAtividade}
+                            aria-label={`Excluir atividade da tarefa ${tarefa.nome}`}
                           >
                             <Delete />
                           </IconButton>
