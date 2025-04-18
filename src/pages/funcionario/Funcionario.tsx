@@ -64,6 +64,8 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   });
   const [funcionarios, setFuncionarios] = React.useState<Funcionario[]>([]);
   const [errors, setErrors] = React.useState<{ [key: string]: string }>({});
+  const [currentPage, setCurrentPage] = React.useState<number>(1);
+  const itemsPerPage = 5;
 
   React.useEffect(() => {
     fetchEmployees();
@@ -73,6 +75,7 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     try {
       const data = await getAllEmployees();
       setFuncionarios(data);
+      setCurrentPage(1); // Resetar para a primeira página ao carregar novos dados
     } catch (error) {
       console.error('Error fetching employees:', error);
     }
@@ -138,6 +141,7 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       setOpenModal(false);
       setIsEditing(false);
       setEditId(null);
+      setCurrentPage(1); // Resetar para a primeira página após adicionar/editar
     } catch (error) {
       console.error('Error submitting employee:', error);
       alert('Erro ao salvar funcionário');
@@ -149,6 +153,12 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       try {
         await deleteEmployee(id);
         setFuncionarios((prev) => prev.filter((item) => item.id !== id));
+        // Ajustar a página se necessário após exclusão
+        const totalItems = funcionarios.length - 1;
+        const totalPages = Math.ceil(totalItems / itemsPerPage);
+        if (currentPage > totalPages && totalPages > 0) {
+          setCurrentPage(totalPages);
+        }
       } catch (error) {
         console.error('Error deleting employee:', error);
       }
@@ -157,7 +167,7 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const handleEdit = (funcionario: Funcionario) => {
     setIsEditing(true);
-    setEditId(funcionario.id || null); // Fix applied here
+    setEditId(funcionario.id || null);
     setForm({
       numeroBI: funcionario.numeroBI,
       nomeFuncionario: funcionario.nomeFuncionario,
@@ -167,6 +177,19 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       emailFuncionario: funcionario.emailFuncionario,
     });
     setOpenModal(true);
+  };
+
+  // Lógica de paginação
+  const totalItems = funcionarios.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedFuncionarios = funcionarios.slice(startIndex, endIndex);
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+    }
   };
 
   return (
@@ -308,26 +331,62 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {funcionarios.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell>{item.numeroBI}</TableCell>
-                    <TableCell>{item.nomeFuncionario}</TableCell>
-                    <TableCell>{item.telefoneFuncionario}</TableCell>
-                    <TableCell>{item.emailFuncionario}</TableCell>
-                    <TableCell>{item.moradaFuncionario}</TableCell>
-                    <TableCell align="right">
-                      <IconButton color="primary" onClick={() => handleEdit(item)}>
-                        <Edit />
-                      </IconButton>
-                      <IconButton color="error" onClick={() => handleDelete(item.id!)}>
-                        <Delete />
-                      </IconButton>
+                {paginatedFuncionarios.length > 0 ? (
+                  paginatedFuncionarios.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell>{item.numeroBI}</TableCell>
+                      <TableCell>{item.nomeFuncionario}</TableCell>
+                      <TableCell>{item.telefoneFuncionario}</TableCell>
+                      <TableCell>{item.emailFuncionario}</TableCell>
+                      <TableCell>{item.moradaFuncionario}</TableCell>
+                      <TableCell align="right">
+                        <IconButton color="primary" onClick={() => handleEdit(item)}>
+                          <Edit />
+                        </IconButton>
+                        <IconButton color="error" onClick={() => handleDelete(item.id!)}>
+                          <Delete />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={6} align="center">
+                      Nenhum funcionário encontrado
                     </TableCell>
                   </TableRow>
-                ))}
+                )}
               </TableBody>
             </Table>
           </TableContainer>
+
+          {totalItems > itemsPerPage && (
+            <Stack
+              direction="row"
+              justifyContent="flex-end"
+              alignItems="center"
+              spacing={2}
+              sx={{ mt: 2 }}
+            >
+              <Button
+                variant="outlined"
+                disabled={currentPage === 1}
+                onClick={() => handlePageChange(currentPage - 1)}
+              >
+                Anterior
+              </Button>
+              <Typography>
+                Página {currentPage} de {totalPages}
+              </Typography>
+              <Button
+                variant="outlined"
+                disabled={currentPage === totalPages}
+                onClick={() => handlePageChange(currentPage + 1)}
+              >
+                Próximo
+              </Button>
+            </Stack>
+          )}
         </CardContent>
       </Card>
     </>
