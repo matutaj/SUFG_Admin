@@ -88,7 +88,7 @@ export const routes = [
           },
           {
             path: paths.estoque,
-            element: <Stock open={true} />,
+            element: <Stock />,
           },
           {
             path: paths.corredor,
