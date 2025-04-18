@@ -74,7 +74,6 @@ interface Fatura {
   localizacao: string;
   email: string;
   data: string;
-  status: string;
   produtos: { produto: Produto; quantidade: number }[];
   funcionariosCaixa?: FuncionarioCaixa;
 }
@@ -136,8 +135,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     telefone: '',
     localizacao: '',
     email: '',
-    data: '',
-    status: 'Pendente',
     produtosSelecionados: [] as { id: string; quantidade: number }[],
     funcionariosCaixaId: '',
   });
@@ -195,7 +192,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
             localizacao: cliente?.moradaCliente || venda.clientes?.moradaCliente || '',
             email: cliente?.emailCliente || venda.clientes?.emailCliente || '',
             data: venda.dataEmissao.split('T')[0],
-            status: 'Pendente',
             produtos:
               venda.vendasProdutos?.map((vp) => {
                 const produto = productsData.find((p) => p.id === vp.id_produto);
@@ -253,13 +249,11 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   };
 
   const handleOpenConfirmModal = (faturaId: string) => {
-    console.log(`Opening confirm modal for fatura id: ${faturaId}`);
     setFaturaToDelete(faturaId);
     setOpenConfirmModal(true);
   };
 
   const handleCloseConfirmModal = () => {
-    console.log('Closing confirm modal');
     setOpenConfirmModal(false);
     setFaturaToDelete(null);
   };
@@ -271,8 +265,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       telefone: '',
       localizacao: '',
       email: '',
-      data: '',
-      status: 'Pendente',
       produtosSelecionados: [],
       funcionariosCaixaId: '',
     });
@@ -341,7 +333,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   const validateFaturaForm = () => {
     const newErrors: { [key: string]: string } = {};
     if (!faturaForm.cliente.trim()) newErrors.cliente = 'Nome do cliente é obrigatório';
-    if (!faturaForm.data.trim()) newErrors.data = 'Data é obrigatória';
     if (faturaForm.produtosSelecionados.length === 0) {
       newErrors.produtos = 'Adicione pelo menos um produto';
     }
@@ -509,13 +500,19 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     if (!validateFaturaForm()) return;
 
     try {
+      // Definir a data de emissão como a data atual
+      const dataEmissao = new Date();
+      const dataValidade = new Date(dataEmissao);
+      dataValidade.setDate(dataEmissao.getDate() + 30);
+
+      // Verificar se o cliente já existe
+      const clienteExistente = clientes.find((c) => c.nomeCliente === faturaForm.cliente);
+
       const dadosWrapper: DadosWrapper = {
         Dados: {
           dadosVenda: {
-            dataEmissao: new Date(faturaForm.data),
-            dataValidade: new Date(
-              new Date(faturaForm.data).setDate(new Date(faturaForm.data).getDate() + 30),
-            ),
+            dataEmissao,
+            dataValidade,
             id_funcionarioCaixa: faturaForm.funcionariosCaixaId,
             numeroDocumento: `FAT-${Date.now()}`,
             tipoDocumento: TipoDocumento.FATURA,
@@ -525,15 +522,17 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
               quantidade: p.quantidade,
             })),
           },
-          cliente: [
-            {
-              nomeCliente: faturaForm.cliente,
-              numeroContribuinte: faturaForm.nif || '',
-              telefoneCliente: faturaForm.telefone || '',
-              moradaCliente: faturaForm.localizacao || '',
-              emailCliente: faturaForm.email || '',
-            },
-          ],
+          cliente: clienteExistente
+            ? []
+            : [
+                {
+                  nomeCliente: faturaForm.cliente,
+                  numeroContribuinte: faturaForm.nif || '',
+                  telefoneCliente: faturaForm.telefone || '',
+                  moradaCliente: faturaForm.localizacao || '',
+                  emailCliente: faturaForm.email || '',
+                },
+              ],
         },
       };
 
@@ -635,8 +634,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         telefone: faturaForm.telefone,
         localizacao: faturaForm.localizacao,
         email: faturaForm.email,
-        data: createdVenda.dataEmissao.split('T')[0],
-        status: faturaForm.status,
+        data: dataEmissao.toISOString().split('T')[0],
         produtos: novosProdutosFatura,
         funcionariosCaixa: funcionariosCaixa.find(
           (fc) => fc.id === createdVenda.id_funcionarioCaixa,
@@ -671,7 +669,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       handleCloseFaturaModal();
       await fetchProductsAndLocations();
 
-      const clienteExistente = clientes.find((c) => c.id === createdVenda.id_cliente);
+      // Atualizar a lista de clientes apenas se o cliente não existir
       if (!clienteExistente && createdVenda.id_cliente) {
         const novoCliente: Cliente = {
           id: createdVenda.id_cliente,
@@ -691,15 +689,12 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const excluirFatura = async () => {
     if (faturaToDelete === null) {
-      console.warn('No fatura to delete (faturaToDelete is null)');
       setAlert({ severity: 'error', message: 'Nenhuma fatura selecionada para exclusão!' });
       return;
     }
 
-    console.log(`handleDeleteFatura called for id: ${faturaToDelete}`);
     try {
       setLoading(true);
-      console.log('Deleting fatura...');
       const fatura = faturas.find((f) => f.id === faturaToDelete);
       if (!fatura) {
         throw new Error(`Fatura com ID ${faturaToDelete} não encontrada`);
@@ -770,11 +765,10 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         setPage(page - 1);
       }
     } catch (error) {
-      console.error(' Ero ao excluir fatura:', error);
+      console.error('Erro ao excluir fatura:', error);
       setAlert({ severity: 'error', message: 'Erro ao excluir fatura!' });
     } finally {
       setLoading(false);
-      console.log('handleDeleteFatura completed, loading:', false);
       handleCloseConfirmModal();
       await fetchProductsAndLocations();
     }
@@ -789,8 +783,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         telefone: fatura.telefone,
         localizacao: fatura.localizacao,
         email: fatura.email,
-        data: fatura.data,
-        status: fatura.status,
         produtosSelecionados: fatura.produtos.map((p) => ({
           id: p.produto.id!,
           quantidade: p.quantidade,
@@ -901,9 +893,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         horarioFechamento: new Date(),
       };
 
-      console.log('Enviando para updateEmployeeCashRegister:', updatedCaixa);
       const response = await updateEmployeeCashRegister(caixaId, updatedCaixa);
-      console.log('Resposta da API:', response);
       setFuncionariosCaixa((prev) => prev.map((c) => (c.id === caixaId ? response : c)));
       setAlert({ severity: 'success', message: 'Caixa fechado com sucesso!' });
       handleCloseCaixaListModal();
@@ -954,14 +944,12 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     }
   };
 
-  const handleChangePage = (event: unknown, newPage: number) => {
-    console.log('Changing page to:', event);
+  const handleChangePage = (_event: unknown, newPage: number) => {
     setPage(newPage);
   };
 
   const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
     const newRowsPerPage = parseInt(event.target.value, 10);
-    console.log('Changing rows per page to:', newRowsPerPage);
     setRowsPerPage(newRowsPerPage);
     setPage(0);
   };
@@ -1119,32 +1107,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
               Dados da Venda
             </Typography>
             <Grid container spacing={2}>
-              <Grid item xs={12} sm={6} md={4}>
-                <TextField
-                  fullWidth
-                  variant="outlined"
-                  name="data"
-                  type="date"
-                  label="Data"
-                  value={faturaForm.data}
-                  onChange={handleTextFieldChange}
-                  InputLabelProps={{ shrink: true }}
-                  error={Boolean(faturaErrors.data)}
-                  helperText={faturaErrors.data}
-                  sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6} md={4}>
-                <TextField
-                  fullWidth
-                  variant="outlined"
-                  name="status"
-                  label="Status"
-                  value={faturaForm.status}
-                  onChange={handleTextFieldChange}
-                  sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
-                />
-              </Grid>
               <Grid item xs={12} sm={6} md={4}>
                 <FormControl
                   fullWidth
