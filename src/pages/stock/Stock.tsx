@@ -92,6 +92,7 @@ const Stock: React.FC = () => {
   const [editEntryId, setEditEntryId] = useState<string | null>(null);
   const [editStockId, setEditStockId] = useState<string | null>(null);
   const [selectedStock, setSelectedStock] = useState<DadosEstoque | null>(null);
+  const [lastEntry, setLastEntry] = useState<DadosEntradaEstoque | null>(null);
   const [form, setForm] = useState<Partial<DadosEntradaEstoque>>({
     id_fornecedor: '',
     id_produto: '',
@@ -115,6 +116,7 @@ const Stock: React.FC = () => {
     id_seccao: '',
     id_prateleira: '',
     id_corredor: '',
+    quantidadeMinimaProduto: 0,
   });
   const [stockEntries, setStockEntries] = useState<DadosEntradaEstoque[]>([]);
   const [filteredStockEntries, setFilteredStockEntries] = useState<DadosEntradaEstoque[]>([]);
@@ -196,6 +198,7 @@ const Stock: React.FC = () => {
     setOpenModal(false);
     setErrors({});
     setSuccessMessage(null);
+    setLastEntry(null);
   }, []);
 
   const handleEditStockClose = useCallback(() => {
@@ -211,19 +214,23 @@ const Stock: React.FC = () => {
     setSuccessMessage(null);
   }, []);
 
-  const handleOpenLocationModal = useCallback((stock: DadosEstoque) => {
-    setSelectedStock(stock);
-    setLocationForm({
-      id_produto: stock.id_produto,
-      id_localizacao: '',
-      quantidadeProduto: 0,
-      id_seccao: '',
-      id_prateleira: '',
-      id_corredor: '',
-    });
-    setErrors({});
-    setOpenLocationModal(true);
-  }, []);
+  const handleOpenLocationModal = useCallback(
+    (stock: DadosEstoque, entry?: DadosEntradaEstoque) => {
+      setSelectedStock(stock);
+      setLocationForm({
+        id_produto: stock.id_produto,
+        id_localizacao: '',
+        quantidadeProduto: entry?.quantidadeRecebida || stock.quantidadeAtual,
+        id_seccao: '',
+        id_prateleira: '',
+        id_corredor: '',
+        quantidadeMinimaProduto: 0,
+      });
+      setErrors({});
+      setOpenLocationModal(true);
+    },
+    [],
+  );
 
   const handleCloseLocationModal = useCallback(() => {
     setOpenLocationModal(false);
@@ -235,9 +242,11 @@ const Stock: React.FC = () => {
       id_seccao: '',
       id_prateleira: '',
       id_corredor: '',
+      quantidadeMinimaProduto: 0,
     });
     setErrors({});
     setSuccessMessage(null);
+    setLastEntry(null);
   }, []);
 
   const handleOpenConfirmDelete = (id: string) => {
@@ -283,7 +292,10 @@ const Stock: React.FC = () => {
     const { name, value } = e.target;
     setLocationForm((prev) => ({
       ...prev,
-      [name]: name === 'quantidadeProduto' ? Number(value) || 0 : value,
+      [name]:
+        name === 'quantidadeProduto' || name === 'quantidadeMinimaProduto'
+          ? Number(value) || 0
+          : value,
     }));
     setErrors((prev) => ({ ...prev, [name]: '' }));
   }, []);
@@ -361,14 +373,23 @@ const Stock: React.FC = () => {
     if (!locationForm.id_localizacao) newErrors.id_localizacao = 'Localização é obrigatória';
     if (locationForm.quantidadeProduto === undefined || locationForm.quantidadeProduto <= 0)
       newErrors.quantidadeProduto = 'Quantidade deve ser maior que 0';
-    if (selectedStock && locationForm.quantidadeProduto! > selectedStock.quantidadeAtual)
+    if (lastEntry && locationForm.quantidadeProduto! > lastEntry.quantidadeRecebida) {
+      newErrors.quantidadeProduto = `Quantidade não pode exceder a entrada (${lastEntry.quantidadeRecebida})`;
+    } else if (selectedStock && locationForm.quantidadeProduto! > selectedStock.quantidadeAtual) {
       newErrors.quantidadeProduto = `Quantidade não pode exceder o estoque atual (${selectedStock.quantidadeAtual})`;
+    }
     if (!locationForm.id_seccao?.trim()) newErrors.id_seccao = 'Seção é obrigatória';
     if (!locationForm.id_prateleira?.trim()) newErrors.id_prateleira = 'Prateleira é obrigatória';
     if (!locationForm.id_corredor?.trim()) newErrors.id_corredor = 'Corredor é obrigatório';
+    if (
+      locationForm.quantidadeMinimaProduto === undefined ||
+      locationForm.quantidadeMinimaProduto < 0
+    ) {
+      newErrors.quantidadeMinimaProduto = 'Quantidade mínima deve ser não negativa';
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [locationForm, selectedStock]);
+  }, [locationForm, selectedStock, lastEntry]);
 
   const onSubmit = useCallback(async () => {
     if (!validateForm()) return;
@@ -398,10 +419,12 @@ const Stock: React.FC = () => {
           prev.map((item) => (item.id === editEntryId ? updatedEntry : item)),
         );
         setSuccessMessage('Entrada atualizada com sucesso!');
+        handleClose();
       } else {
         const newEntry = await createStockEntry(entryData);
         setStockEntries((prev) => [...prev, newEntry]);
         setFilteredStockEntries((prev) => [...prev, newEntry]);
+        setLastEntry(newEntry);
 
         const existingStock = currentStock.find(
           (item) =>
@@ -411,20 +434,21 @@ const Stock: React.FC = () => {
               newEntry.dataValidadeLote,
         );
 
+        let newStock: DadosEstoque;
         if (existingStock) {
           const updatedQuantity = existingStock.quantidadeAtual + newEntry.quantidadeRecebida;
           const stockData: DadosEstoque = {
             id_produto: existingStock.id_produto,
             quantidadeAtual: updatedQuantity,
             lote: existingStock.lote,
-            dataValidadeLote: new Date(existingStock.dataValidadeLote),
+            dataValidadeLote: existingStock.dataValidadeLote,
           };
-          const updatedStock = await updateStock(existingStock.lote!, stockData);
+          newStock = await updateStock(existingStock.lote, stockData);
           setCurrentStock((prev) =>
-            prev.map((item) => (item.lote === existingStock.lote ? updatedStock : item)),
+            prev.map((item) => (item.lote === newStock.lote ? newStock : item)),
           );
           setFilteredStock((prev) =>
-            prev.map((item) => (item.lote === existingStock.lote ? updatedStock : item)),
+            prev.map((item) => (item.lote === newStock.lote ? newStock : item)),
           );
         } else {
           const stockData: DadosEstoque = {
@@ -433,21 +457,30 @@ const Stock: React.FC = () => {
             lote: newEntry.lote,
             dataValidadeLote: new Date(newEntry.dataValidadeLote),
           };
-          const newStock = await createStock(stockData);
+          newStock = await createStock(stockData);
           setCurrentStock((prev) => [...prev, newStock]);
           setFilteredStock((prev) => [...prev, newStock]);
         }
 
-        setSuccessMessage('Entrada criada e adicionada ao estoque com sucesso!');
+        handleClose();
+        handleOpenLocationModal(newStock, newEntry);
+        setSuccessMessage('Entrada adicionada ao estoque. Agora selecione a localização.');
       }
-      handleClose();
-    } catch (error) {
-      console.error('Erro ao salvar entrada de estoque:', error);
-      setFetchError('Erro ao salvar entrada de estoque. Tente novamente.');
+    } catch (error: any) {
+      console.error('Erro ao salvar entrada de estoque:', error.message);
+      setFetchError('Erro ao salvar entrada de estoque.');
     } finally {
       setLoading(false);
     }
-  }, [form, isEditing, editEntryId, validateForm, handleClose, currentStock]);
+  }, [
+    form,
+    isEditing,
+    editEntryId,
+    validateForm,
+    handleClose,
+    currentStock,
+    handleOpenLocationModal,
+  ]);
 
   const onStockSubmit = useCallback(async () => {
     if (!validateStockForm()) return;
@@ -478,9 +511,9 @@ const Stock: React.FC = () => {
         setSuccessMessage('Estoque criado com sucesso!');
       }
       handleEditStockClose();
-    } catch (error) {
-      console.error('Erro ao atualizar estoque:', error);
-      setFetchError('Erro ao atualizar estoque. Tente novamente.');
+    } catch (error: any) {
+      console.error('Erro ao atualizar estoque:', error.message);
+      setFetchError('Erro ao atualizar estoque.');
     } finally {
       setLoading(false);
     }
@@ -504,15 +537,19 @@ const Stock: React.FC = () => {
       };
 
       await createProductLocation(locationData);
-      setSuccessMessage('Produto adicionado ao armazém com sucesso!');
+      setSuccessMessage(
+        lastEntry
+          ? 'Entrada adicionada ao estoque e ao armazém com sucesso!'
+          : 'Produto adicionado ao armazém com sucesso!',
+      );
       handleCloseLocationModal();
-    } catch (error) {
-      console.error('Erro ao adicionar produto ao armazém:', error);
-      setFetchError('Erro ao adicionar produto ao armazém. Tente novamente.');
+    } catch (error: any) {
+      console.error('Erro ao adicionar produto ao armazém:', error.message);
+      setFetchError('Erro ao adicionar produto ao armazém.');
     } finally {
       setLoading(false);
     }
-  }, [locationForm, validateLocationForm, handleCloseLocationModal]);
+  }, [locationForm, validateLocationForm, handleCloseLocationModal, lastEntry]);
 
   const handleEditStock = useCallback((stock: DadosEstoque) => {
     setEditStockId(stock.lote!);
@@ -536,9 +573,9 @@ const Stock: React.FC = () => {
         setFilteredStock((prev) => prev.filter((item) => item.lote !== deleteStockId));
         setSuccessMessage('Estoque excluído com sucesso!');
         handleCloseConfirmDelete();
-      } catch (error) {
-        console.error('Erro ao excluir estoque:', error);
-        setFetchError('Erro ao excluir estoque. Tente novamente.');
+      } catch (error: any) {
+        console.error('Erro ao excluir estoque:', error.message);
+        setFetchError('Erro ao excluir estoque.');
       } finally {
         setLoading(false);
       }
@@ -555,9 +592,9 @@ const Stock: React.FC = () => {
         setFilteredStockEntries((prev) => prev.filter((item) => item.id !== deleteEntryId));
         setSuccessMessage('Entrada de estoque excluída com sucesso!');
         handleCloseConfirmDeleteEntry();
-      } catch (error) {
-        console.error('Erro ao excluir entrada de estoque:', error);
-        setFetchError('Erro ao excluir entrada de estoque. Tente novamente.');
+      } catch (error: any) {
+        console.error('Erro ao excluir entrada de estoque:', error.message);
+        setFetchError('Erro ao excluir entrada de estoque.');
       } finally {
         setLoading(false);
       }
@@ -1021,10 +1058,17 @@ const Stock: React.FC = () => {
                 error={!!errors.quantidadeProduto}
                 helperText={
                   errors.quantidadeProduto ||
-                  (selectedStock && `Máximo: ${selectedStock.quantidadeAtual} unidades disponíveis`)
+                  (lastEntry
+                    ? `Máximo: ${lastEntry.quantidadeRecebida} unidades (entrada)`
+                    : selectedStock
+                      ? `Máximo: ${selectedStock.quantidadeAtual} unidades disponíveis`
+                      : '')
                 }
                 disabled={loading}
-                inputProps={{ min: 1, max: selectedStock?.quantidadeAtual }}
+                inputProps={{
+                  min: 1,
+                  max: lastEntry?.quantidadeRecebida ?? selectedStock?.quantidadeAtual,
+                }}
                 aria-label="Quantidade"
               />
             </Grid>
@@ -1065,6 +1109,21 @@ const Stock: React.FC = () => {
                 helperText={errors.id_corredor}
                 disabled={loading}
                 aria-label="Corredor"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                name="quantidadeMinimaProduto"
+                label="Quantidade Mínima"
+                type="number"
+                fullWidth
+                value={locationForm.quantidadeMinimaProduto}
+                onChange={handleLocationTextFieldChange}
+                error={!!errors.quantidadeMinimaProduto}
+                helperText={errors.quantidadeMinimaProduto}
+                disabled={loading}
+                inputProps={{ min: 0 }}
+                aria-label="Quantidade mínima"
               />
             </Grid>
             <Grid item xs={12}>
