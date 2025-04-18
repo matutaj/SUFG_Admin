@@ -212,28 +212,6 @@ export interface DadosEstoque {
   updatedAt?: string;
 }
 
-export interface Tarefa {
-  id?: string;
-  nomeTarefa: string;
-  descricao: string;
-  createdAt?: string;
-  updatedAt?: string;
-  funcionarios?: Funcionario[];
-  funcoes?: Funcao[];
-}
-
-export interface TarefaFuncionarioFuncao {
-  id?: string;
-  id_tarefa: string;
-  id_funcionario?: string;
-  id_funcao?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  tarefas?: Tarefa;
-  funcionarios?: Funcionario;
-  funcoes?: Funcao;
-}
-
 export interface Alerta {
   id?: string;
   id_caixa: string;
@@ -376,4 +354,17 @@ export interface PeriodoMaisVendidoPorProduto {
   periodo: string;
   quantidadeVendida: number;
   valorTotal: number;
+}
+export interface Tarefa {
+  id?: string;
+  nome: string;
+  descricao: string;
+}
+
+export interface AtividadeDoDia {
+  id?: string;
+  id_funcionario: string;
+  id_tarefa: string;
+  dataAtividade: string;
+  status: 'Concluída' | 'Em Andamento' | 'Pendente';
 }
