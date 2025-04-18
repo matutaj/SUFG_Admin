@@ -34,6 +34,7 @@ import {
   DadosEstoque,
   Tarefa,
   DadosWrapper,
+  AtividadeDoDia,
 } from '../types/models';
 
 class ApiError extends Error {
@@ -245,7 +246,8 @@ export const updateEmployee = async (
 
 export const deleteEmployee = async (numeroBI: string): Promise<void> => {
   try {
-    await api.delete(`/funcionario/${numeroBI}`);
+    const response = await api.delete(`/funcionario/${numeroBI}`);
+    return response.data;
   } catch (error) {
     throw new ApiError(`Failed to delete employee with BI ${numeroBI}`);
   }
@@ -532,7 +534,7 @@ export const createCorridor = async (data: Corredor): Promise<Corredor> => {
 
 export const updateCorridor = async (id: string, data: Partial<Corredor>): Promise<Corredor> => {
   try {
-    const response = await api.put('/corredor/${id}', data);
+    const response = await api.put(`/corredor/${id}`, data);
     return response.data;
   } catch (error) {
     throw new ApiError(`Failed to update corridor with id ${id}`);
@@ -954,6 +956,44 @@ export const deleteTask = async (id: string): Promise<void> => {
   }
 };
 
+export const getAllDailyActivities = async (): Promise<AtividadeDoDia[]> => {
+  try {
+    const response = await api.get('/funcionarioTarefa');
+    return response.data;
+  } catch (error) {
+    throw new ApiError('Failed to fetch daily activities');
+  }
+};
+
+export const createDailyActivity = async (data: AtividadeDoDia): Promise<AtividadeDoDia> => {
+  try {
+    const response = await api.post('/funcionarioTarefa', data);
+    return response.data;
+  } catch (error) {
+    throw new ApiError('Failed to create daily activity');
+  }
+};
+
+export const updateDailyActivity = async (
+  id: string,
+  data: Partial<AtividadeDoDia>,
+): Promise<AtividadeDoDia> => {
+  try {
+    const response = await api.put(`/funcionarioTarefa/${id}`, data);
+    return response.data;
+  } catch (error) {
+    throw new ApiError(`Failed to update daily activity with id ${id}`);
+  }
+};
+
+export const deleteDailyActivity = async (id: string): Promise<void> => {
+  try {
+    await api.delete(`/funcionarioTarefa/${id}`);
+  } catch (error) {
+    throw new ApiError(`Failed to delete daily activity with id ${id}`);
+  }
+};
+
 export const assignTaskToEmployees = async (
   tarefaId: string,
   funcionarioIds: string[],
@@ -1133,13 +1173,5 @@ export const getTopSellingPeriodByProduct = async (
     return response.data;
   } catch (error) {
     throw new ApiError(`Failed to fetch top-selling period for product ${referenciaProduto}`);
-  }
-};
-
-export const deleteDailyActivity = async (id: string): Promise<void> => {
-  try {
-    await api.delete(`/atividadeDoDia/${id}`);
-  } catch (error) {
-    throw new ApiError(`Failed to delete daily activity with id ${id}`);
   }
 };

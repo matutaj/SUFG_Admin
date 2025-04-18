@@ -365,6 +365,6 @@ export interface AtividadeDoDia {
   id?: string;
   id_funcionario: string;
   id_tarefa: string;
-  dataAtividade: string;
   status: 'Concluída' | 'Em Andamento' | 'Pendente';
+  createdAt?: Date;
 }

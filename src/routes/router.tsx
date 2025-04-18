@@ -23,7 +23,7 @@ const MainLayout = lazy(() => import('layouts/main-layout'));
 const Categoria = lazy(() => import('pages/categoria/Categoria'));
 const AuthLayout = lazy(() => import('layouts/auth-layout'));
 const Dashboard = lazy(() => import('pages/dashboard/Dashboard'));
-const Armanzem = lazy(() => import('pages/localizacao/Localizacao'));
+const Armazem = lazy(() => import('pages/localizacao/Localizacao'));
 const Login = lazy(() => import('pages/authentication/Login'));
 const Signup = lazy(() => import('pages/authentication/Signup'));
 const ErrorPage = lazy(() => import('pages/errors/ErrorPage'));
@@ -71,13 +71,18 @@ export const routes = [
             element: <Dashboard />,
           },
           {
+            path: paths.tarefa,
+            element: <Tarefa />,
+          },
+
+          {
             path: paths.loja,
             element: <Loja open={true} />,
           },
 
           {
             path: paths.localizacao,
-            element: <Armanzem open={true} />,
+            element: <Armazem open={true} />,
           },
           {
             path: paths.categorias,
