@@ -603,6 +603,7 @@ const Stock: React.FC = () => {
 
   const handleDeleteStockEntry = useCallback(async () => {
     if (deleteEntryId) {
+      console.log('id', deleteEntryId);
       try {
         setLoading(true);
         setFetchError(null);

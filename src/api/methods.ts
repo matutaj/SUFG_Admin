@@ -74,11 +74,11 @@ export const updateStockEntry = async (
   }
 };
 
-export const deleteStockEntry = async (lote: string): Promise<void> => {
+export const deleteStockEntry = async (id: string): Promise<void> => {
   try {
-    await api.delete(`/entradaEstoque/${lote}`);
+    await api.delete(`/entradaEstoque/${id}`);
   } catch (error) {
-    throw new ApiError(`Failed to delete stock entry with lote ${lote}`);
+    throw new ApiError(`Failed to delete stock entry with id ${id}`);
   }
 };
 
