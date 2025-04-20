@@ -159,7 +159,7 @@ const Stock: React.FC = () => {
         getAllLocations(),
       ]);
 
-      console.log('Stock Entries Data:', stockEntriesData); // Debug log
+      console.log('Stock Entries Data:', stockEntriesData);
 
       setStockEntries(stockEntriesData || []);
       setFilteredStockEntries(stockEntriesData || []);
@@ -283,7 +283,12 @@ const Stock: React.FC = () => {
     const { name, value } = e.target;
     setStockForm((prev) => ({
       ...prev,
-      [name]: name === 'quantidadeAtual' ? Number(value) || 0 : value,
+      [name as keyof Partial<DadosEstoque>]:
+        name === 'quantidadeAtual' || name === 'lote' || name === 'dataValidadeLote'
+          ? name === 'quantidadeAtual'
+            ? Number(value) || 0
+            : value
+          : prev[name as keyof Partial<DadosEstoque>],
     }));
     setErrors((prev) => ({ ...prev, [name]: '' }));
   }, []);
@@ -438,6 +443,7 @@ const Stock: React.FC = () => {
         if (existingStock) {
           const updatedQuantity = existingStock.quantidadeAtual + newEntry.quantidadeRecebida;
           const stockData: DadosEstoque = {
+            id: existingStock.id,
             id_produto: existingStock.id_produto,
             quantidadeAtual: updatedQuantity,
             lote: existingStock.lote,
@@ -466,8 +472,8 @@ const Stock: React.FC = () => {
         handleOpenLocationModal(newStock, newEntry);
         setSuccessMessage('Entrada adicionada ao estoque. Agora selecione a localização.');
       }
-    } catch (error: any) {
-      console.error('Erro ao salvar entrada de estoque:', error.message);
+    } catch (error: unknown) {
+      console.error('Erro ao salvar entrada de estoque:', error);
       setFetchError('Erro ao salvar entrada de estoque.');
     } finally {
       setLoading(false);
@@ -511,8 +517,8 @@ const Stock: React.FC = () => {
         setSuccessMessage('Estoque criado com sucesso!');
       }
       handleEditStockClose();
-    } catch (error: any) {
-      console.error('Erro ao atualizar estoque:', error.message);
+    } catch (error: unknown) {
+      console.error('Erro ao atualizar estoque:', error);
       setFetchError('Erro ao atualizar estoque.');
     } finally {
       setLoading(false);
@@ -543,8 +549,8 @@ const Stock: React.FC = () => {
           : 'Produto adicionado ao armazém com sucesso!',
       );
       handleCloseLocationModal();
-    } catch (error: any) {
-      console.error('Erro ao adicionar produto ao armazém:', error.message);
+    } catch (error: unknown) {
+      console.error('Erro ao adicionar produto ao armazém:', error);
       setFetchError('Erro ao adicionar produto ao armazém.');
     } finally {
       setLoading(false);
@@ -557,10 +563,27 @@ const Stock: React.FC = () => {
       id_produto: stock.id_produto,
       quantidadeAtual: stock.quantidadeAtual,
       lote: stock.lote,
-      dataValidadeLote: stock.dataValidadeLote,
+      dataValidadeLote: new Date(stock.dataValidadeLote),
     });
     setEditStockModal(true);
     setErrors({});
+  }, []);
+
+  const handleEditStockEntry = useCallback((entry: DadosEntradaEstoque) => {
+    setIsEditing(true);
+    setEditEntryId(entry.id!);
+    setForm({
+      id_fornecedor: entry.id_fornecedor,
+      id_produto: entry.id_produto,
+      id_funcionario: entry.id_funcionario,
+      quantidadeRecebida: entry.quantidadeRecebida,
+      dataEntrada: entry.dataEntrada,
+      custoUnitario: entry.custoUnitario,
+      lote: entry.lote,
+      dataValidadeLote: entry.dataValidadeLote,
+    });
+    setErrors({});
+    setOpenModal(true);
   }, []);
 
   const handleDeleteStock = useCallback(async () => {
@@ -573,8 +596,8 @@ const Stock: React.FC = () => {
         setFilteredStock((prev) => prev.filter((item) => item.lote !== deleteStockId));
         setSuccessMessage('Estoque excluído com sucesso!');
         handleCloseConfirmDelete();
-      } catch (error: any) {
-        console.error('Erro ao excluir estoque:', error.message);
+      } catch (error: unknown) {
+        console.error('Erro ao excluir estoque:', error);
         setFetchError('Erro ao excluir estoque.');
       } finally {
         setLoading(false);
@@ -592,8 +615,8 @@ const Stock: React.FC = () => {
         setFilteredStockEntries((prev) => prev.filter((item) => item.id !== deleteEntryId));
         setSuccessMessage('Entrada de estoque excluída com sucesso!');
         handleCloseConfirmDeleteEntry();
-      } catch (error: any) {
-        console.error('Erro ao excluir entrada de estoque:', error.message);
+      } catch (error: unknown) {
+        console.error('Erro ao excluir entrada de estoque:', error);
         setFetchError('Erro ao excluir entrada de estoque.');
       } finally {
         setLoading(false);
@@ -894,7 +917,7 @@ const Stock: React.FC = () => {
           </Stack>
           <Grid container spacing={2}>
             <Grid item xs={12} sm={6}>
-              <FormControl fullWidth error={!!errors.id_produto} disabled>
+              <FormControl fullWidth error={!!errors.id_produto} disabled={loading}>
                 <InputLabel>Produto</InputLabel>
                 <Select
                   name="id_produto"
@@ -1267,6 +1290,14 @@ const Stock: React.FC = () => {
                           {new Date(entry.dataValidadeLote).toLocaleDateString('pt-BR')}
                         </TableCell>
                         <TableCell align="right">
+                          <IconButton
+                            color="primary"
+                            onClick={() => handleEditStockEntry(entry)}
+                            disabled={loading}
+                            aria-label={`Editar entrada ${entry.id}`}
+                          >
+                            <Edit />
+                          </IconButton>
                           <IconButton
                             color="error"
                             onClick={() => handleOpenConfirmDeleteEntry(entry.id!)}
