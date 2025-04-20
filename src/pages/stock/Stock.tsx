@@ -466,8 +466,7 @@ const Stock: React.FC = () => {
         handleOpenLocationModal(newStock, newEntry);
         setSuccessMessage('Entrada adicionada ao estoque. Agora selecione a localização.');
       }
-    } catch (error: any) {
-      console.error('Erro ao salvar entrada de estoque:', error.message);
+    } catch (error) {
       setFetchError('Erro ao salvar entrada de estoque.');
     } finally {
       setLoading(false);
@@ -511,8 +510,7 @@ const Stock: React.FC = () => {
         setSuccessMessage('Estoque criado com sucesso!');
       }
       handleEditStockClose();
-    } catch (error: any) {
-      console.error('Erro ao atualizar estoque:', error.message);
+    } catch (error) {
       setFetchError('Erro ao atualizar estoque.');
     } finally {
       setLoading(false);
@@ -543,8 +541,7 @@ const Stock: React.FC = () => {
           : 'Produto adicionado ao armazém com sucesso!',
       );
       handleCloseLocationModal();
-    } catch (error: any) {
-      console.error('Erro ao adicionar produto ao armazém:', error.message);
+    } catch (error) {
       setFetchError('Erro ao adicionar produto ao armazém.');
     } finally {
       setLoading(false);
@@ -573,8 +570,7 @@ const Stock: React.FC = () => {
         setFilteredStock((prev) => prev.filter((item) => item.lote !== deleteStockId));
         setSuccessMessage('Estoque excluído com sucesso!');
         handleCloseConfirmDelete();
-      } catch (error: any) {
-        console.error('Erro ao excluir estoque:', error.message);
+      } catch (error) {
         setFetchError('Erro ao excluir estoque.');
       } finally {
         setLoading(false);
@@ -592,8 +588,7 @@ const Stock: React.FC = () => {
         setFilteredStockEntries((prev) => prev.filter((item) => item.id !== deleteEntryId));
         setSuccessMessage('Entrada de estoque excluída com sucesso!');
         handleCloseConfirmDeleteEntry();
-      } catch (error: any) {
-        console.error('Erro ao excluir entrada de estoque:', error.message);
+      } catch (error) {
         setFetchError('Erro ao excluir entrada de estoque.');
       } finally {
         setLoading(false);
