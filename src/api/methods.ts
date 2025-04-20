@@ -642,9 +642,11 @@ export const createSection = async (data: Seccao): Promise<Seccao> => {
 
 export const updateSection = async (id: string, data: Partial<Seccao>): Promise<Seccao> => {
   try {
+    console.log('Enviando para updateSection:', data);
     const response = await api.put(`/seccao/${id}`, data);
     return response.data;
   } catch (error) {
+    console.error('Erro ao atualizar seção:', error);
     throw new ApiError(`Failed to update section with id ${id}`);
   }
 };

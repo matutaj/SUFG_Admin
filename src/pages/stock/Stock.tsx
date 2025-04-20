@@ -159,7 +159,7 @@ const Stock: React.FC = () => {
         getAllLocations(),
       ]);
 
-      console.log('Stock Entries Data:', stockEntriesData); // Debug log
+      console.log('Stock Entries Data:', stockEntriesData);
 
       setStockEntries(stockEntriesData || []);
       setFilteredStockEntries(stockEntriesData || []);
@@ -283,7 +283,12 @@ const Stock: React.FC = () => {
     const { name, value } = e.target;
     setStockForm((prev) => ({
       ...prev,
-      [name]: name === 'quantidadeAtual' ? Number(value) || 0 : value,
+      [name as keyof Partial<DadosEstoque>]:
+        name === 'quantidadeAtual' || name === 'lote' || name === 'dataValidadeLote'
+          ? name === 'quantidadeAtual'
+            ? Number(value) || 0
+            : value
+          : prev[name as keyof Partial<DadosEstoque>],
     }));
     setErrors((prev) => ({ ...prev, [name]: '' }));
   }, []);
@@ -438,6 +443,7 @@ const Stock: React.FC = () => {
         if (existingStock) {
           const updatedQuantity = existingStock.quantidadeAtual + newEntry.quantidadeRecebida;
           const stockData: DadosEstoque = {
+            id: existingStock.id,
             id_produto: existingStock.id_produto,
             quantidadeAtual: updatedQuantity,
             lote: existingStock.lote,
@@ -549,15 +555,32 @@ const Stock: React.FC = () => {
   }, [locationForm, validateLocationForm, handleCloseLocationModal, lastEntry]);
 
   const handleEditStock = useCallback((stock: DadosEstoque) => {
-    setEditStockId(stock.lote!);
+    setEditStockId(stock.id!);
     setStockForm({
       id_produto: stock.id_produto,
       quantidadeAtual: stock.quantidadeAtual,
       lote: stock.lote,
-      dataValidadeLote: stock.dataValidadeLote,
+      dataValidadeLote: new Date(stock.dataValidadeLote),
     });
     setEditStockModal(true);
     setErrors({});
+  }, []);
+
+  const handleEditStockEntry = useCallback((entry: DadosEntradaEstoque) => {
+    setIsEditing(true);
+    setEditEntryId(entry.id!);
+    setForm({
+      id_fornecedor: entry.id_fornecedor,
+      id_produto: entry.id_produto,
+      id_funcionario: entry.id_funcionario,
+      quantidadeRecebida: entry.quantidadeRecebida,
+      dataEntrada: entry.dataEntrada,
+      custoUnitario: entry.custoUnitario,
+      lote: entry.lote,
+      dataValidadeLote: entry.dataValidadeLote,
+    });
+    setErrors({});
+    setOpenModal(true);
   }, []);
 
   const handleDeleteStock = useCallback(async () => {
@@ -566,8 +589,8 @@ const Stock: React.FC = () => {
         setLoading(true);
         setFetchError(null);
         await deleteStock(deleteStockId);
-        setCurrentStock((prev) => prev.filter((item) => item.lote !== deleteStockId));
-        setFilteredStock((prev) => prev.filter((item) => item.lote !== deleteStockId));
+        setCurrentStock((prev) => prev.filter((item) => item.id !== deleteStockId));
+        setFilteredStock((prev) => prev.filter((item) => item.id !== deleteStockId));
         setSuccessMessage('Estoque excluído com sucesso!');
         handleCloseConfirmDelete();
       } catch (error) {
@@ -889,7 +912,7 @@ const Stock: React.FC = () => {
           </Stack>
           <Grid container spacing={2}>
             <Grid item xs={12} sm={6}>
-              <FormControl fullWidth error={!!errors.id_produto} disabled>
+              <FormControl fullWidth error={!!errors.id_produto} disabled={loading}>
                 <InputLabel>Produto</InputLabel>
                 <Select
                   name="id_produto"
@@ -1263,6 +1286,14 @@ const Stock: React.FC = () => {
                         </TableCell>
                         <TableCell align="right">
                           <IconButton
+                            color="primary"
+                            onClick={() => handleEditStockEntry(entry)}
+                            disabled={loading}
+                            aria-label={`Editar entrada ${entry.id}`}
+                          >
+                            <Edit />
+                          </IconButton>
+                          <IconButton
                             color="error"
                             onClick={() => handleOpenConfirmDeleteEntry(entry.id!)}
                             disabled={loading}
@@ -1334,7 +1365,7 @@ const Stock: React.FC = () => {
                   paginatedStock.map((item) => {
                     const product = products.find((p) => p.id === item.id_produto);
                     return (
-                      <TableRow key={item.lote}>
+                      <TableRow key={item.id}>
                         <TableCell>{product?.nomeProduto || item.id_produto}</TableCell>
                         <TableCell>{item.quantidadeAtual}</TableCell>
                         <TableCell>{item.lote}</TableCell>
@@ -1346,15 +1377,15 @@ const Stock: React.FC = () => {
                             color="primary"
                             onClick={() => handleEditStock(item)}
                             disabled={loading}
-                            aria-label={`Editar estoque ${item.lote}`}
+                            aria-label={`Editar estoque ${item.id}`}
                           >
                             <Edit />
                           </IconButton>
                           <IconButton
                             color="error"
-                            onClick={() => handleOpenConfirmDelete(item.lote!)}
+                            onClick={() => handleOpenConfirmDelete(item.id!)}
                             disabled={loading}
-                            aria-label={`Excluir estoque ${item.lote}`}
+                            aria-label={`Excluir estoque ${item.id}`}
                           >
                             <Delete />
                           </IconButton>
@@ -1362,7 +1393,7 @@ const Stock: React.FC = () => {
                             color="secondary"
                             onClick={() => handleOpenLocationModal(item)}
                             disabled={loading || item.quantidadeAtual === 0}
-                            aria-label={`Adicionar ao armazém ${item.lote}`}
+                            aria-label={`Adicionar ao armazém ${item.id}`}
                           >
                             <IconifyIcon icon="material-symbols:warehouse" />
                           </IconButton>
