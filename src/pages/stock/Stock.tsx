@@ -504,10 +504,10 @@ const Stock: React.FC = () => {
       if (editStockId) {
         const updatedStock = await updateStock(editStockId, stockData);
         setCurrentStock((prev) =>
-          prev.map((item) => (item.lote === editStockId ? updatedStock : item)),
+          prev.map((item) => (item.id === editStockId ? updatedStock : item)),
         );
         setFilteredStock((prev) =>
-          prev.map((item) => (item.lote === editStockId ? updatedStock : item)),
+          prev.map((item) => (item.id === editStockId ? updatedStock : item)),
         );
         setSuccessMessage('Estoque atualizado com sucesso!');
       } else {
@@ -592,8 +592,8 @@ const Stock: React.FC = () => {
         setLoading(true);
         setFetchError(null);
         await deleteStock(deleteStockId);
-        setCurrentStock((prev) => prev.filter((item) => item.lote !== deleteStockId));
-        setFilteredStock((prev) => prev.filter((item) => item.lote !== deleteStockId));
+        setCurrentStock((prev) => prev.filter((item) => item.id !== deleteStockId));
+        setFilteredStock((prev) => prev.filter((item) => item.id !== deleteStockId));
         setSuccessMessage('Estoque excluído com sucesso!');
         handleCloseConfirmDelete();
       } catch (error: unknown) {
