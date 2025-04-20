@@ -503,10 +503,10 @@ const Stock: React.FC = () => {
       if (editStockId) {
         const updatedStock = await updateStock(editStockId, stockData);
         setCurrentStock((prev) =>
-          prev.map((item) => (item.lote === editStockId ? updatedStock : item)),
+          prev.map((item) => (item.id === editStockId ? updatedStock : item)),
         );
         setFilteredStock((prev) =>
-          prev.map((item) => (item.lote === editStockId ? updatedStock : item)),
+          prev.map((item) => (item.id === editStockId ? updatedStock : item)),
         );
         setSuccessMessage('Estoque atualizado com sucesso!');
       } else {
