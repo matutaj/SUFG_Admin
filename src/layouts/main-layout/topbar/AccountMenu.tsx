@@ -1,30 +1,64 @@
 import { Avatar, IconButton, ListItemIcon, Menu, MenuItem, Typography } from '@mui/material';
 import avatar from 'assets/avatar.webp';
 import IconifyIcon from 'components/base/IconifyIcon';
-import { MouseEvent, useState } from 'react';
-import { MenuItem as SingleMenuItem } from 'types/types';
+import { MouseEvent, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import paths from 'routes/paths';
+import { logout } from '../../../api/methods';
 
-const menuItems: SingleMenuItem[] = [
-  {
-    id: 0,
-    label: 'Profile',
-    icon: 'material-symbols:person',
-  },
-  {
-    id: 1,
-    label: 'My Account',
-    icon: 'material-symbols:account-box-sharp',
-  },
-  {
-    id: 2,
-    label: 'Logout',
-    icon: 'uiw:logout',
-  },
-];
+// Função para decodificar o JWT
+const decodeToken = (token: string) => {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join(''),
+    );
+    return JSON.parse(jsonPayload);
+  } catch (error) {
+    console.error('Erro ao decodificar o token:', error);
+    return null;
+  }
+};
 
 const AccountMenu = () => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [userData, setUserData] = useState<{ nome?: string; email?: string } | null>(null);
   const open = Boolean(anchorEl);
+  const navigate = useNavigate();
+
+  // Carrega os dados do token ao montar o componente
+  useEffect(() => {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (token) {
+      const decoded = decodeToken(token);
+      if (decoded) {
+        setUserData({ nome: decoded.nome, email: decoded.email });
+      }
+    }
+  }, []);
+
+  // Itens do menu, atualizados dinamicamente com os dados do usuário
+  const menuItems = [
+    {
+      id: 0,
+      label: userData?.nome ? `Olá, ${userData.nome}` : 'Profile',
+      icon: 'material-symbols:person',
+    },
+    {
+      id: 1,
+      label: userData?.email || 'My Account',
+      icon: 'material-symbols:account-box-sharp',
+    },
+    {
+      id: 2,
+      label: 'Logout',
+      icon: 'uiw:logout',
+    },
+  ];
 
   const handleClick = (event: MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -32,6 +66,21 @@ const AccountMenu = () => {
 
   const handleClose = () => {
     setAnchorEl(null);
+  };
+
+  const handleMenuItemClick = async (itemId: number) => {
+    if (itemId === 2) {
+      // Logout
+      try {
+        await logout();
+        localStorage.removeItem('token');
+        sessionStorage.removeItem('token');
+        navigate(paths.login);
+      } catch (error) {
+        console.error('Erro ao fazer logout:');
+      }
+    }
+    handleClose();
   };
 
   return (
@@ -57,7 +106,7 @@ const AccountMenu = () => {
         anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
       >
         {menuItems.map((menuItem) => (
-          <MenuItem key={menuItem.id} onClick={handleClose}>
+          <MenuItem key={menuItem.id} onClick={() => handleMenuItemClick(menuItem.id)}>
             <ListItemIcon>
               <IconifyIcon icon={menuItem.icon} />
             </ListItemIcon>

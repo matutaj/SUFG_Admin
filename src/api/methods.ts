@@ -43,6 +43,40 @@ class ApiError extends Error {
     this.name = 'ApiError';
   }
 }
+export interface LoginCredentials {
+  email: string;
+  senha: string;
+}
+
+export interface LoginResponse {
+  message: string;
+  result: {
+    token: string;
+    nome: string;
+    email: string;
+    telefone: string;
+    numeroBI: string;
+    roles: string[];
+    permissoes: string[];
+  };
+}
+export const login = async (credentials: LoginCredentials): Promise<LoginResponse> => {
+  try {
+    const response = await api.post('/login', credentials);
+    return response.data;
+  } catch (error) {
+    throw new ApiError('Failed to login');
+  }
+};
+
+// Função para realizar logout
+export const logout = async (): Promise<void> => {
+  try {
+    await api.post('/logout');
+  } catch (error) {
+    throw new ApiError('Failed to logout');
+  }
+};
 
 export const getAllStockEntries = async (): Promise<DadosEntradaEstoque[]> => {
   try {

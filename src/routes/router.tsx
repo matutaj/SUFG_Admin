@@ -37,8 +37,8 @@ export const routes = [
     ),
     children: [
       {
-        path: '/',
-        element: <Login />, // Redireciona "/" para o login
+        path: '/login',
+        element: <Login />,
       },
       {
         path: rootPaths.authRoot,

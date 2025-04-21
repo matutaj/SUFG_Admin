@@ -1,4 +1,3 @@
-typescript
 import {
   Paper,
   Button,
@@ -50,15 +49,26 @@ import {
   createStock,
   updateStock,
   deleteStock,
+  getAllSections,
+  getAllShelves,
+  getAllCorridors,
   getAllLocations,
   createProductLocation,
 } from '../../api/methods';
-
-// Interface temporária para seções, prateleiras e corredores (ajuste conforme a API real)
-interface Section { id: string; nome: string; }
-interface Shelf { id: string; nome: string; }
-interface Aisle { id: string; nome: string; }
-
+/* 
+interface Section {
+  id: string;
+  nomeSeccao: string;
+}
+interface Shelf {
+  id: string;
+  nomePrateleira: string;
+}
+interface Aisle {
+  id: string;
+  nomeCorredor: string;
+}
+ */
 const modalStyle = {
   position: 'absolute' as const,
   top: '50%',
@@ -124,13 +134,13 @@ const Stock: React.FC = () => {
     dataEntrada: formatDateToInput(new Date()),
     custoUnitario: 0,
     lote: '',
-    dataValidadeLote: '',
+    dataValidadeLote: new Date(),
   });
   const [stockForm, setStockForm] = useState<Partial<DadosEstoque>>({
     id_produto: '',
     quantidadeAtual: 0,
     lote: '',
-    dataValidadeLote: '',
+    dataValidadeLote: new Date(),
   });
   const [locationForm, setLocationForm] = useState<Partial<ProdutoLocalizacao>>({
     id_produto: '',
@@ -149,10 +159,6 @@ const Stock: React.FC = () => {
   const [suppliers, setSuppliers] = useState<Fornecedor[]>([]);
   const [employees, setEmployees] = useState<Funcionario[]>([]);
   const [locations, setLocations] = useState<Localizacao[]>([]);
-  // Placeholders para seções, prateleiras e corredores (substitua pelas APIs reais)
-  const [sections, setSections] = useState<Section[]>([]);
-  const [shelves, setShelves] = useState<Shelf[]>([]);
-  const [aisles, setAisles] = useState<Aisle[]>([]);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -176,7 +182,10 @@ const Stock: React.FC = () => {
         productsData,
         suppliersData,
         employeesData,
-        locationsData,
+        locationsData /* 
+        sectionsData,
+        shelvesData,
+        corridorsData, */,
       ] = await Promise.all([
         getAllStockEntries(),
         getAllStock(),
@@ -184,6 +193,9 @@ const Stock: React.FC = () => {
         getAllSuppliers(),
         getAllEmployees(),
         getAllLocations(),
+        getAllSections(),
+        getAllShelves(),
+        getAllCorridors(),
       ]);
 
       setStockEntries(stockEntriesData ?? []);
@@ -193,16 +205,10 @@ const Stock: React.FC = () => {
       setProducts(productsData ?? []);
       setSuppliers(suppliersData ?? []);
       setEmployees(employeesData ?? []);
-      setLocations(locationsData ?? []);
-
-      // TODO: Substitua pelas APIs reais para seções, prateleiras e corredores
-      // Exemplo fictício:
-      // const sectionsData = await getAllSections();
-      // const shelvesData = await getAllShelves();
-      // const aislesData = await getAllAisles();
-      setSections([{ id: 'S1', nome: 'Seção 1' }, { id: 'S2', nome: 'Seção 2' }]); // Placeholder
-      setShelves([{ id: 'P1', nome: 'Prateleira 1' }, { id: 'P2', nome: 'Prateleira 2' }]); // Placeholder
-      setAisles([{ id: 'C1', nome: 'Corredor 1' }, { id: 'C2', nome: 'Corredor 2' }]); // Placeholder
+      setLocations(locationsData ?? []); /* 
+      setSections(sectionsData ?? []);
+      setShelves(shelvesData ?? []);
+      setAisles(corridorsData ?? []); */
     } catch (error) {
       console.error('Erro ao buscar dados:', error);
       setFetchError('Erro ao carregar os dados. Tente novamente.');
@@ -222,7 +228,7 @@ const Stock: React.FC = () => {
       dataEntrada: formatDateToInput(new Date()),
       custoUnitario: 0,
       lote: '',
-      dataValidadeLote: '',
+      dataValidadeLote: new Date(),
     });
     setErrors({});
     setOpenModal(true);
@@ -242,7 +248,7 @@ const Stock: React.FC = () => {
       id_produto: '',
       quantidadeAtual: 0,
       lote: '',
-      dataValidadeLote: '',
+      dataValidadeLote: new Date(),
     });
     setErrors({});
     setSuccessMessage(null);
@@ -464,7 +470,7 @@ const Stock: React.FC = () => {
           (item) =>
             item.id_produto === newEntry.id_produto &&
             item.lote === newEntry.lote &&
-            formatDateToInput(item.dataValidadeLote) === newEntry.dataValidadeLote,
+            item.dataValidadeLote === newEntry.dataValidadeLote,
         );
 
         let newStock: DadosEstoque;
@@ -595,7 +601,7 @@ const Stock: React.FC = () => {
       id_produto: stock.id_produto,
       quantidadeAtual: stock.quantidadeAtual,
       lote: stock.lote,
-      dataValidadeLote: formatDateToInput(stock.dataValidadeLote),
+      dataValidadeLote: stock.dataValidadeLote,
     });
     setEditStockModal(true);
     setErrors({});
@@ -612,7 +618,7 @@ const Stock: React.FC = () => {
       dataEntrada: formatDateToInput(entry.dataEntrada),
       custoUnitario: entry.custoUnitario,
       lote: entry.lote,
-      dataValidadeLote: formatDateToInput(entry.dataValidadeLote),
+      dataValidadeLote: entry.dataValidadeLote,
     });
     setErrors({});
     setOpenModal(true);
@@ -628,7 +634,7 @@ const Stock: React.FC = () => {
         setFilteredStock((prev) => prev.filter((item) => item.id !== deleteStockId));
         setSuccessMessage('Estoque excluído com sucesso!');
         handleCloseConfirmDelete();
-        await fetchData(); // Recarregar dados do backend
+        await fetchData();
       } catch (error) {
         console.error('Erro ao excluir estoque:', error);
         setFetchError('Erro ao excluir estoque.');
@@ -920,7 +926,9 @@ const Stock: React.FC = () => {
                 fullWidth
                 onClick={onSubmit}
                 disabled={loading}
-                aria-label={isEditing ? 'Salvar entrada de estoque' : 'Cadastrar entrada de estoque'}
+                aria-label={
+                  isEditing ? 'Salvar entrada de estoque' : 'Cadastrar entrada de estoque'
+                }
               >
                 {loading ? 'Salvando...' : isEditing ? 'Salvar' : 'Cadastrar'}
               </Button>
@@ -1119,8 +1127,8 @@ const Stock: React.FC = () => {
                   (lastEntry
                     ? `Máximo: ${lastEntry.quantidadeRecebida} unidades (entrada)`
                     : selectedStock
-                    ? `Máximo: ${selectedStock.quantidadeAtual} unidades disponíveis`
-                    : '')
+                      ? `Máximo: ${selectedStock.quantidadeAtual} unidades disponíveis`
+                      : '')
                 }
                 disabled={loading}
                 inputProps={{
@@ -1142,11 +1150,11 @@ const Stock: React.FC = () => {
                   <MenuItem value="" disabled>
                     Selecione uma seção
                   </MenuItem>
-                  {sections.map((section) => (
+                  {/*  {sections.map((section) => (
                     <MenuItem key={section.id} value={section.id}>
-                      {section.nome}
+                      {section.nomeSeccao}
                     </MenuItem>
-                  ))}
+                  ))} */}
                 </Select>
                 {errors.id_seccao && <Typography color="error">{errors.id_seccao}</Typography>}
               </FormControl>
@@ -1163,11 +1171,11 @@ const Stock: React.FC = () => {
                   <MenuItem value="" disabled>
                     Selecione uma prateleira
                   </MenuItem>
-                  {shelves.map((shelf) => (
+                  {/*    {shelves.map((shelf) => (
                     <MenuItem key={shelf.id} value={shelf.id}>
-                      {shelf.nome}
+                      {shelf.nomePrateleira}
                     </MenuItem>
-                  ))}
+                  ))} */}
                 </Select>
                 {errors.id_prateleira && (
                   <Typography color="error">{errors.id_prateleira}</Typography>
@@ -1186,11 +1194,11 @@ const Stock: React.FC = () => {
                   <MenuItem value="" disabled>
                     Selecione um corredor
                   </MenuItem>
-                  {aisles.map((aisle) => (
+                  {/*  {aisles.map((aisle) => (
                     <MenuItem key={aisle.id} value={aisle.id}>
-                      {aisle.nome}
+                      {aisle.nomeCorredor}
                     </MenuItem>
-                  ))}
+                  ))} */}
                 </Select>
                 {errors.id_corredor && <Typography color="error">{errors.id_corredor}</Typography>}
               </FormControl>
@@ -1313,7 +1321,9 @@ const Stock: React.FC = () => {
               color="primary"
               onClick={toggleStockEntries}
               disabled={loading}
-              aria-label={showStockEntries ? 'Ocultar entradas de estoque' : 'Ver entradas de estoque'}
+              aria-label={
+                showStockEntries ? 'Ocultar entradas de estoque' : 'Ver entradas de estoque'
+              }
             >
               {showStockEntries ? 'Ocultar Entradas' : 'Ver Entradas'}
             </Button>

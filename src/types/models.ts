@@ -78,7 +78,7 @@ export interface DadosEntradaEstoque {
   adicionado: boolean;
   custoUnitario: number;
   lote: string;
-  dataValidadeLote: Date | string;
+  dataValidadeLote: Date;
 }
 
 export interface Caixa {

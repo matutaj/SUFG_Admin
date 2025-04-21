@@ -18,8 +18,11 @@ import { useForm, SubmitHandler } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import paths from 'routes/paths';
+import { login } from '../../api/methods';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-// Definição do esquema de validação
+// Esquema de validação
 const schema = yup.object().shape({
   email: yup.string().email('Email inválido').required('Email é obrigatório'),
   password: yup
@@ -30,7 +33,7 @@ const schema = yup.object().shape({
 
 interface LoginFormValues {
   email: string;
-  password: string;
+  password: string; // Alterado de senha para password
 }
 
 const checkBoxLabel = { inputProps: { 'aria-label': 'Checkbox' } };
@@ -41,10 +44,37 @@ const Login = () => {
     handleSubmit,
     formState: { errors },
   } = useForm<LoginFormValues>({
-    resolver: yupResolver(schema), // Aplicando validação
+    resolver: yupResolver(schema),
   });
 
-  const onSubmit: SubmitHandler<LoginFormValues> = (data) => console.log(data);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (token) {
+      navigate(paths.dashboard);
+    }
+  }, [navigate]);
+
+  const onSubmit: SubmitHandler<LoginFormValues> = async (data) => {
+    setIsLoading(true);
+    setErrorMessage(null);
+    try {
+      const response = await login({ email: data.email, senha: data.password });
+
+      const storage = rememberMe ? localStorage : sessionStorage;
+      storage.setItem('token', response.result.token);
+
+      navigate(paths.dashboard);
+    } catch (error) {
+      setErrorMessage('Credenciais inválidas. Tente novamente.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <Box
@@ -52,40 +82,15 @@ const Login = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: '100vh', // 🔥 Centraliza verticalmente
+        minHeight: '100vh',
         width: '100%',
         bgcolor: 'background.default',
       }}
     >
       <Box sx={{ width: { xs: 1, sm: 506 }, px: { xs: 2, sm: 0 }, py: 10 }}>
-        <Typography variant="h1">Bem-Vindo Ao SUFG</Typography>
-        <Typography
-          variant="subtitle1"
-          component="p"
-          sx={{
-            color: 'neutral.main',
-            mt: 2,
-            mb: 6.75,
-          }}
-        >
-          Não tenho conta?{' '}
-          <Typography variant="button" component={Link} href={paths.signup} color="secondary">
-            Criar Conta
-          </Typography>
-        </Typography>
+        <Typography variant="h1">S . U . F . G</Typography>
 
-        <Stack gap={1.75} mb={3} direction={{ xs: 'column', sm: 'row' }}>
-          <Button
-            variant="outlined"
-            size="large"
-            startIcon={<IconifyIcon icon="flat-color-icons:google" />}
-            sx={{ width: { sm: 1 / 1 }, py: 2.375, px: 4.375 }}
-          >
-            Entra com Google
-          </Button>
-        </Stack>
-
-        <Divider>or</Divider>
+        <Divider></Divider>
 
         <Box component="form" onSubmit={handleSubmit(onSubmit)}>
           <Paper sx={(theme) => ({ padding: theme.spacing(2.5), my: 3, boxShadow: 1 })}>
@@ -101,6 +106,7 @@ const Login = () => {
                   {...register('email')}
                   error={!!errors.email}
                   helperText={errors.email?.message}
+                  disabled={isLoading}
                 />
               </Grid>
 
@@ -114,21 +120,29 @@ const Login = () => {
                   {...register('password')}
                   error={!!errors.password}
                   helperText={errors.password?.message}
+                  disabled={isLoading}
                 />
               </Grid>
             </Grid>
           </Paper>
+
+          {errorMessage && (
+            <Typography color="error" variant="body2" sx={{ mb: 2 }}>
+              {errorMessage}
+            </Typography>
+          )}
 
           <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3.75}>
             <FormControlLabel
               control={
                 <Checkbox
                   {...checkBoxLabel}
-                  sx={{
-                    color: 'neutral.light',
-                  }}
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  sx={{ color: 'neutral.light' }}
                   icon={<IconifyIcon icon="fluent:checkbox-unchecked-24-regular" />}
                   checkedIcon={<IconifyIcon icon="fluent:checkbox-checked-24-regular" />}
+                  disabled={isLoading}
                 />
               }
               label={
@@ -149,15 +163,10 @@ const Login = () => {
             fullWidth
             color="secondary"
             sx={{ py: 2.25 }}
-            disabled={!!errors.email || !!errors.password} // Desabilita se houver erros
+            disabled={!!errors.email || !!errors.password || isLoading}
           >
-            <Typography
-              variant="h4"
-              component={Link}
-              href={paths.dashboard}
-              sx={{ color: 'HighlightText' }}
-            >
-              Sign in
+            <Typography variant="h4" sx={{ color: 'HighlightText' }}>
+              {isLoading ? 'Signing in...' : 'Sign in'}
             </Typography>
           </Button>
         </Box>
