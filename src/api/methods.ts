@@ -36,6 +36,7 @@ import {
   DadosWrapper,
   AtividadeDoDia,
 } from '../types/models';
+import { hasPermission, hasAnyRole } from './authUtils';
 
 class ApiError extends Error {
   constructor(message: string) {
@@ -43,6 +44,7 @@ class ApiError extends Error {
     this.name = 'ApiError';
   }
 }
+
 export interface LoginCredentials {
   email: string;
   senha: string;
@@ -60,39 +62,57 @@ export interface LoginResponse {
     permissoes: string[];
   };
 }
+
 export const login = async (credentials: LoginCredentials): Promise<LoginResponse> => {
   try {
     const response = await api.post('/login', credentials);
+    const { token, nome, email, telefone, numeroBI, roles, permissoes } = response.data.result;
+
+    // Armazenar token e dados do usuário
+    localStorage.setItem('auth_token', token);
+    localStorage.setItem(
+      'user',
+      JSON.stringify({ nome, email, telefone, numeroBI, roles, permissoes }),
+    );
+
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to login');
+    throw new ApiError('Falha ao fazer login');
   }
 };
 
-// Função para realizar logout
 export const logout = async (): Promise<void> => {
   try {
     await api.post('/logout');
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('user');
+    window.location.href = '/login';
   } catch (error) {
-    throw new ApiError('Failed to logout');
+    throw new ApiError('Falha ao fazer logout');
   }
 };
 
 export const getAllStockEntries = async (): Promise<DadosEntradaEstoque[]> => {
+  if (!hasPermission('listar_entradas_estoque')) {
+    throw new ApiError('Você não tem permissão para listar entradas de estoque.');
+  }
   try {
     const response = await api.get('/entradaEstoque');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch stock entries');
+    throw new ApiError('Falha ao buscar entradas de estoque');
   }
 };
 
 export const createStockEntry = async (data: DadosEntradaEstoque): Promise<DadosEntradaEstoque> => {
+  if (!hasPermission('criar_entrada_estoque')) {
+    throw new ApiError('Você não tem permissão para criar entradas de estoque.');
+  }
   try {
     const response = await api.post('/entradaEstoque', data);
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to create stock entry');
+    throw new ApiError('Falha ao criar entrada de estoque');
   }
 };
 
@@ -100,32 +120,44 @@ export const updateStockEntry = async (
   id: string,
   data: Partial<DadosEntradaEstoque>,
 ): Promise<DadosEntradaEstoque> => {
+  if (!hasPermission('atualizar_entrada_estoque')) {
+    throw new ApiError('Você não tem permissão para atualizar entradas de estoque.');
+  }
   try {
     const response = await api.put(`/entradaEstoque/${id}`, data);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to update stock entry with lote ${id}`);
+    throw new ApiError(`Falha ao atualizar entrada de estoque com lote ${id}`);
   }
 };
 
 export const deleteStockEntry = async (id: string): Promise<void> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para deletar entradas de estoque.');
+  }
   try {
     await api.delete(`/entradaEstoque/${id}`);
   } catch (error) {
-    throw new ApiError(`Failed to delete stock entry with id ${id}`);
+    throw new ApiError(`Falha ao deletar entrada de estoque com id ${id}`);
   }
 };
 
 export const getAllStock = async (): Promise<DadosEstoque[]> => {
+  if (!hasPermission('listar_estoque')) {
+    throw new ApiError('Você não tem permissão para listar registros de estoque.');
+  }
   try {
     const response = await api.get('/estoque');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch stock records');
+    throw new ApiError('Falha ao buscar registros de estoque');
   }
 };
 
 export const createStock = async (data: DadosEstoque): Promise<DadosEstoque> => {
+  if (!hasPermission('criar_estoque')) {
+    throw new ApiError('Você não tem permissão para criar registros de estoque.');
+  }
   try {
     const response = await api.post('/estoque', {
       ...data,
@@ -136,7 +168,7 @@ export const createStock = async (data: DadosEstoque): Promise<DadosEstoque> => 
     });
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to create stock record');
+    throw new ApiError('Falha ao criar registro de estoque');
   }
 };
 
@@ -144,6 +176,9 @@ export const updateStock = async (
   lote: string,
   data: Partial<DadosEstoque>,
 ): Promise<DadosEstoque> => {
+  if (!hasPermission('atualizar_estoque')) {
+    throw new ApiError('Você não tem permissão para atualizar registros de estoque.');
+  }
   try {
     const response = await api.put(`/estoque/${lote}`, {
       ...data,
@@ -154,77 +189,101 @@ export const updateStock = async (
     });
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to update stock record with lote ${lote}`);
+    throw new ApiError(`Falha ao atualizar registro de estoque com lote ${lote}`);
   }
 };
 
 export const deleteStock = async (lote: string): Promise<void> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para deletar registros de estoque.');
+  }
   try {
     await api.delete(`/estoque/${lote}`);
   } catch (error) {
-    throw new ApiError(`Failed to delete stock record with lote ${lote}`);
+    throw new ApiError(`Falha ao deletar registro de estoque com lote ${lote}`);
   }
 };
 
 export const getStockByProduct = async (referenciaProduto: string): Promise<DadosEstoque> => {
+  if (!hasPermission('listar_estoque_por_produto')) {
+    throw new ApiError('Você não tem permissão para listar estoque por produto.');
+  }
   try {
     const response = await api.get(`/estoque/produto/${referenciaProduto}`);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to fetch stock for product ${referenciaProduto}`);
+    throw new ApiError(`Falha ao buscar estoque para produto ${referenciaProduto}`);
   }
 };
 
 export const getAllProducts = async (): Promise<Produto[]> => {
+  if (!hasPermission('listar_produtos')) {
+    throw new ApiError('Você não tem permissão para listar produtos.');
+  }
   try {
     const response = await api.get('/produto');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch products');
+    throw new ApiError('Falha ao buscar produtos');
   }
 };
 
 export const createProduct = async (data: Produto): Promise<Produto> => {
+  if (!hasPermission('criar_produto')) {
+    throw new ApiError('Você não tem permissão para criar produtos.');
+  }
   try {
     const response = await api.post('/produto', data);
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to create product');
+    throw new ApiError('Falha ao criar produto');
   }
 };
 
 export const updateProduct = async (id: string, data: Partial<Produto>): Promise<Produto> => {
+  if (!hasPermission('atualizar_produto')) {
+    throw new ApiError('Você não tem permissão para atualizar produtos.');
+  }
   try {
     const response = await api.put(`/produto/${id}`, data);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to update product with referencia ${id}`);
+    throw new ApiError(`Falha ao atualizar produto com referência ${id}`);
   }
 };
 
 export const deleteProduct = async (id: string): Promise<void> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para deletar produtos.');
+  }
   try {
     await api.delete(`/produto/${id}`);
   } catch (error) {
-    throw new ApiError(`Failed to delete product with referencia ${id}`);
+    throw new ApiError(`Falha ao deletar produto com referência ${id}`);
   }
 };
 
 export const getAllSuppliers = async (): Promise<Fornecedor[]> => {
+  if (!hasPermission('listar_fornecedores')) {
+    throw new ApiError('Você não tem permissão para listar fornecedores.');
+  }
   try {
     const response = await api.get('/fornecedor');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch suppliers');
+    throw new ApiError('Falha ao buscar fornecedores');
   }
 };
 
 export const createSupplier = async (data: Fornecedor): Promise<Fornecedor> => {
+  if (!hasPermission('criar_fornecedor')) {
+    throw new ApiError('Você não tem permissão para criar fornecedores.');
+  }
   try {
     const response = await api.post('/fornecedor', data);
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to create supplier');
+    throw new ApiError('Falha ao criar fornecedor');
   }
 };
 
@@ -232,37 +291,49 @@ export const updateSupplier = async (
   nif: string,
   data: Partial<Fornecedor>,
 ): Promise<Fornecedor> => {
+  if (!hasPermission('atualizar_fornecedor')) {
+    throw new ApiError('Você não tem permissão para atualizar fornecedores.');
+  }
   try {
     const response = await api.put(`/fornecedor/${nif}`, data);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to update supplier with NIF ${nif}`);
+    throw new ApiError(`Falha ao atualizar fornecedor com NIF ${nif}`);
   }
 };
 
 export const deleteSupplier = async (nif: string): Promise<void> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para deletar fornecedores.');
+  }
   try {
     await api.delete(`/fornecedor/${nif}`);
   } catch (error) {
-    throw new ApiError(`Failed to delete supplier with NIF ${nif}`);
+    throw new ApiError(`Falha ao deletar fornecedor com NIF ${nif}`);
   }
 };
 
 export const getAllEmployees = async (): Promise<Funcionario[]> => {
+  if (!hasPermission('listar_funcionarios')) {
+    throw new ApiError('Você não tem permissão para listar funcionários.');
+  }
   try {
     const response = await api.get('/funcionario');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch employees');
+    throw new ApiError('Falha ao buscar funcionários');
   }
 };
 
 export const createEmployee = async (data: Funcionario): Promise<Funcionario> => {
+  if (!hasAnyRole(['Gerente', 'RH'])) {
+    throw new ApiError('Você não tem a função necessária para criar funcionários.');
+  }
   try {
     const response = await api.post('/funcionario', data);
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to create employee');
+    throw new ApiError('Falha ao criar funcionário');
   }
 };
 
@@ -270,38 +341,49 @@ export const updateEmployee = async (
   numeroBI: string,
   data: Partial<Funcionario>,
 ): Promise<Funcionario> => {
+  if (!hasAnyRole(['Gerente', 'RH'])) {
+    throw new ApiError('Você não tem a função necessária para atualizar funcionários.');
+  }
   try {
     const response = await api.put(`/funcionario/${numeroBI}`, data);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to update employee with BI ${numeroBI}`);
+    throw new ApiError(`Falha ao atualizar funcionário com BI ${numeroBI}`);
   }
 };
 
 export const deleteEmployee = async (numeroBI: string): Promise<void> => {
+  if (!hasAnyRole(['Gerente', 'RH'])) {
+    throw new ApiError('Você não tem a função necessária para deletar funcionários.');
+  }
   try {
-    const response = await api.delete(`/funcionario/${numeroBI}`);
-    return response.data;
+    await api.delete(`/funcionario/${numeroBI}`);
   } catch (error) {
-    throw new ApiError(`Failed to delete employee with BI ${numeroBI}`);
+    throw new ApiError(`Falha ao deletar funcionário com BI ${numeroBI}`);
   }
 };
 
 export const getAllFunctionPermissions = async (): Promise<FuncaoPermissao[]> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para listar permissões de funções.');
+  }
   try {
     const response = await api.get('/funcaoPermissao');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch function permissions');
+    throw new ApiError('Falha ao buscar permissões de funções');
   }
 };
 
 export const createFunctionPermission = async (data: FuncaoPermissao): Promise<FuncaoPermissao> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para criar permissões de funções.');
+  }
   try {
     const response = await api.post('/funcaoPermissao', data);
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to create function permission');
+    throw new ApiError('Falha ao criar permissão de função');
   }
 };
 
@@ -309,39 +391,51 @@ export const updateFunctionPermission = async (
   id: string,
   data: Partial<FuncaoPermissao>,
 ): Promise<FuncaoPermissao> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para atualizar permissões de funções.');
+  }
   try {
     const response = await api.put(`/funcaoPermissao/${id}`, data);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to update function permission with id ${id}`);
+    throw new ApiError(`Falha ao atualizar permissão de função com id ${id}`);
   }
 };
 
 export const deleteFunctionPermission = async (id: string): Promise<void> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para deletar permissões de funções.');
+  }
   try {
     await api.delete(`/funcaoPermissao/${id}`);
   } catch (error) {
-    throw new ApiError(`Failed to delete function permission with id ${id}`);
+    throw new ApiError(`Falha ao deletar permissão de função com id ${id}`);
   }
 };
 
 export const getAllEmployeeFunctions = async (): Promise<FuncionarioFuncao[]> => {
+  if (!hasAnyRole(['Gerente', 'RH'])) {
+    throw new ApiError('Você não tem a função necessária para listar funções de funcionários.');
+  }
   try {
     const response = await api.get('/funcionarioFuncao');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch employee functions');
+    throw new ApiError('Falha ao buscar funções de funcionários');
   }
 };
 
 export const createEmployeeFunction = async (
   data: FuncionarioFuncao,
 ): Promise<FuncionarioFuncao> => {
+  if (!hasAnyRole(['Gerente', 'RH'])) {
+    throw new ApiError('Você não tem a função necessária para criar funções de funcionários.');
+  }
   try {
     const response = await api.post('/funcionarioFuncao', data);
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to create employee function');
+    throw new ApiError('Falha ao criar função de funcionário');
   }
 };
 
@@ -349,39 +443,51 @@ export const updateEmployeeFunction = async (
   id: string,
   data: Partial<FuncionarioFuncao>,
 ): Promise<FuncionarioFuncao> => {
+  if (!hasAnyRole(['Gerente', 'RH'])) {
+    throw new ApiError('Você não tem a função necessária para atualizar funções de funcionários.');
+  }
   try {
     const response = await api.put(`/funcionarioFuncao/${id}`, data);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to update employee function with id ${id}`);
+    throw new ApiError(`Falha ao atualizar função de funcionário com id ${id}`);
   }
 };
 
 export const deleteEmployeeFunction = async (id: string): Promise<void> => {
+  if (!hasAnyRole(['Gerente', 'RH'])) {
+    throw new ApiError('Você não tem a função necessária para deletar funções de funcionários.');
+  }
   try {
     await api.delete(`/funcionarioFuncao/${id}`);
   } catch (error) {
-    throw new ApiError(`Failed to delete employee function with id ${id}`);
+    throw new ApiError(`Falha ao deletar função de funcionário com id ${id}`);
   }
 };
 
 export const getAllEmployeePermissions = async (): Promise<FuncionarioPermissao[]> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para listar permissões de funcionários.');
+  }
   try {
     const response = await api.get('/funcionarioPermissao');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch employee permissions');
+    throw new ApiError('Falha ao buscar permissões de funcionários');
   }
 };
 
 export const createEmployeePermission = async (
   data: FuncionarioPermissao,
 ): Promise<FuncionarioPermissao> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para criar permissões de funcionários.');
+  }
   try {
     const response = await api.post('/funcionarioPermissao', data);
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to create employee permission');
+    throw new ApiError('Falha ao criar permissão de funcionário');
   }
 };
 
@@ -389,72 +495,98 @@ export const updateEmployeePermission = async (
   id: string,
   data: Partial<FuncionarioPermissao>,
 ): Promise<FuncionarioPermissao> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError(
+      'Você não tem a função necessária para atualizar permissões de funcionários.',
+    );
+  }
   try {
     const response = await api.put(`/funcionarioPermissao/${id}`, data);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to update employee permission with id ${id}`);
+    throw new ApiError(`Falha ao atualizar permissão de funcionário com id ${id}`);
   }
 };
 
 export const deleteEmployeePermission = async (id: string): Promise<void> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para deletar permissões de funcionários.');
+  }
   try {
     await api.delete(`/funcionarioPermissao/${id}`);
   } catch (error) {
-    throw new ApiError(`Failed to delete employee permission with id ${id}`);
+    throw new ApiError(`Falha ao deletar permissão de funcionário com id ${id}`);
   }
 };
 
 export const getAllFunctions = async (): Promise<Funcao[]> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para listar funções.');
+  }
   try {
     const response = await api.get('/funcao');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch functions');
+    throw new ApiError('Falha ao buscar funções');
   }
 };
 
 export const createFunction = async (data: Funcao): Promise<Funcao> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para criar funções.');
+  }
   try {
     const response = await api.post('/funcao', data);
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to create function');
+    throw new ApiError('Falha ao criar função');
   }
 };
 
 export const updateFunction = async (id: string, data: Partial<Funcao>): Promise<Funcao> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para atualizar funções.');
+  }
   try {
     const response = await api.put(`/funcao/${id}`, data);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to update function with id ${id}`);
+    throw new ApiError(`Falha ao atualizar função com id ${id}`);
   }
 };
 
 export const deleteFunction = async (id: string): Promise<void> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para deletar funções.');
+  }
   try {
     await api.delete(`/funcao/${id}`);
   } catch (error) {
-    throw new ApiError(`Failed to delete function with id ${id}`);
+    throw new ApiError(`Falha ao deletar função com id ${id}`);
   }
 };
 
 export const getAllTransfers = async (): Promise<Transferencia[]> => {
+  if (!hasPermission('listar_transferencias')) {
+    throw new ApiError('Você não tem permissão para listar transferências.');
+  }
   try {
     const response = await api.get('/transferencia');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch transfers');
+    throw new ApiError('Falha ao buscar transferências');
   }
 };
 
 export const createTransfer = async (data: Transferencia): Promise<Transferencia> => {
+  if (!hasPermission('criar_transferencia')) {
+    throw new ApiError('Você não tem permissão para criar transferências.');
+  }
   try {
     const response = await api.post('/transferencia', data);
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to create transfer');
+    throw new ApiError('Falha ao criar transferência');
   }
 };
 
@@ -462,142 +594,190 @@ export const updateTransfer = async (
   id: string,
   data: Partial<Transferencia>,
 ): Promise<Transferencia> => {
+  if (!hasPermission('atualizar_transferencia')) {
+    throw new ApiError('Você não tem permissão para atualizar transferências.');
+  }
   try {
     const response = await api.put(`/transferencia/${id}`, data);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to update transfer with id ${id}`);
+    throw new ApiError(`Falha ao atualizar transferência com id ${id}`);
   }
 };
 
 export const deleteTransfer = async (id: string): Promise<void> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para deletar transferências.');
+  }
   try {
     await api.delete(`/transferencia/${id}`);
   } catch (error) {
-    throw new ApiError(`Failed to delete transfer with id ${id}`);
+    throw new ApiError(`Falha ao deletar transferência com id ${id}`);
   }
 };
 
 export const getAllSales = async (): Promise<Venda[]> => {
+  if (!hasPermission('listar_vendas')) {
+    throw new ApiError('Você não tem permissão para listar vendas.');
+  }
   try {
     const response = await api.get('/venda');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch sales');
+    throw new ApiError('Falha ao buscar vendas');
   }
 };
 
 export const createSale = async (data: DadosWrapper): Promise<Venda> => {
+  if (!hasPermission('criar_venda')) {
+    throw new ApiError('Você não tem permissão para criar vendas.');
+  }
   try {
     const response = await api.post('/venda', data);
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to create sale');
+    throw new ApiError('Falha ao criar venda');
   }
 };
 
 export const updateSale = async (id: string, data: Partial<Venda>): Promise<Venda> => {
+  if (!hasPermission('atualizar_venda')) {
+    throw new ApiError('Você não tem permissão para atualizar vendas.');
+  }
   try {
     const response = await api.put(`/venda/${id}`, data);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to update sale with id ${id}`);
+    throw new ApiError(`Falha ao atualizar venda com id ${id}`);
   }
 };
 
 export const deleteSale = async (id: string): Promise<void> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para deletar vendas.');
+  }
   try {
     await api.delete(`/venda/${id}`);
   } catch (error) {
-    throw new ApiError(`Failed to delete sale with id ${id}`);
+    throw new ApiError(`Falha ao deletar venda com id ${id}`);
   }
 };
 
 export const getAllClients = async (): Promise<Cliente[]> => {
+  if (!hasPermission('listar_clientes')) {
+    throw new ApiError('Você não tem permissão para listar clientes.');
+  }
   try {
     const response = await api.get('/cliente');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch clients');
+    throw new ApiError('Falha ao buscar clientes');
   }
 };
 
 export const createClient = async (data: Cliente): Promise<Cliente> => {
+  if (!hasPermission('criar_cliente')) {
+    throw new ApiError('Você não tem permissão para criar clientes.');
+  }
   try {
     const response = await api.post('/cliente', data);
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to create client');
+    throw new ApiError('Falha ao criar cliente');
   }
 };
 
 export const updateClient = async (id: string, data: Partial<Cliente>): Promise<Cliente> => {
+  if (!hasPermission('atualizar_cliente')) {
+    throw new ApiError('Você não tem permissão para atualizar clientes.');
+  }
   try {
     const response = await api.put(`/cliente/${id}`, data);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to update client with id ${id}`);
+    throw new ApiError(`Falha ao atualizar cliente com id ${id}`);
   }
 };
 
 export const deleteClient = async (id: string): Promise<void> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para deletar clientes.');
+  }
   try {
     await api.delete(`/cliente/${id}`);
   } catch (error) {
-    throw new ApiError(`Failed to delete client with id ${id}`);
+    throw new ApiError(`Falha ao deletar cliente com id ${id}`);
   }
 };
 
 export const getAllCorridors = async (): Promise<Corredor[]> => {
+  if (!hasPermission('listar_corredores')) {
+    throw new ApiError('Você não tem permissão para listar corredores.');
+  }
   try {
     const response = await api.get('/corredor');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch corridors');
+    throw new ApiError('Falha ao buscar corredores');
   }
 };
 
 export const createCorridor = async (data: Corredor): Promise<Corredor> => {
+  if (!hasPermission('criar_corredor')) {
+    throw new ApiError('Você não tem permissão para criar corredores.');
+  }
   try {
     const response = await api.post('/corredor', data);
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to create corridor');
+    throw new ApiError('Falha ao criar corredor');
   }
 };
 
 export const updateCorridor = async (id: string, data: Partial<Corredor>): Promise<Corredor> => {
+  if (!hasPermission('atualizar_corredor')) {
+    throw new ApiError('Você não tem permissão para atualizar corredores.');
+  }
   try {
     const response = await api.put(`/corredor/${id}`, data);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to update corridor with id ${id}`);
+    throw new ApiError(`Falha ao atualizar corredor com id ${id}`);
   }
 };
 
 export const deleteCorridor = async (id: string): Promise<void> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para deletar corredores.');
+  }
   try {
     await api.delete(`/corredor/${id}`);
   } catch (error) {
-    throw new ApiError(`Failed to delete corridor with id ${id}`);
+    throw new ApiError(`Falha ao deletar corredor com id ${id}`);
   }
 };
 
 export const getAllProductCategories = async (): Promise<CategoriaProduto[]> => {
+  if (!hasPermission('listar_categorias_produto')) {
+    throw new ApiError('Você não tem permissão para listar categorias de produtos.');
+  }
   try {
     const response = await api.get('/categoriaProduto');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch product categories');
+    throw new ApiError('Falha ao buscar categorias de produtos');
   }
 };
 
 export const createProductCategory = async (data: CategoriaProduto): Promise<CategoriaProduto> => {
+  if (!hasPermission('criar_categoria_produto')) {
+    throw new ApiError('Você não tem permissão para criar categorias de produtos.');
+  }
   try {
     const response = await api.post('/categoriaProduto', data);
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to create product category');
+    throw new ApiError('Falha ao criar categoria de produto');
   }
 };
 
@@ -605,146 +785,194 @@ export const updateProductCategory = async (
   id: string,
   data: Partial<CategoriaProduto>,
 ): Promise<CategoriaProduto> => {
+  if (!hasPermission('atualizar_categoria_produto')) {
+    throw new ApiError('Você não tem permissão para atualizar categorias de produtos.');
+  }
   try {
     const response = await api.put(`/categoriaProduto/${id}`, data);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to update product category with id ${id}`);
+    throw new ApiError(`Falha ao atualizar categoria de produto com id ${id}`);
   }
 };
 
 export const deleteProductCategory = async (id: string): Promise<void> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para deletar categorias de produtos.');
+  }
   try {
     await api.delete(`/categoriaProduto/${id}`);
   } catch (error) {
-    throw new ApiError(`Failed to delete product category with id ${id}`);
+    throw new ApiError(`Falha ao deletar categoria de produto com id ${id}`);
   }
 };
 
 export const getAllShelves = async (): Promise<Prateleira[]> => {
+  if (!hasPermission('listar_prateleiras')) {
+    throw new ApiError('Você não tem permissão para listar prateleiras.');
+  }
   try {
     const response = await api.get('/prateleira');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch shelves');
+    throw new ApiError('Falha ao buscar prateleiras');
   }
 };
 
 export const createShelf = async (data: Prateleira): Promise<Prateleira> => {
+  if (!hasPermission('criar_prateleira')) {
+    throw new ApiError('Você não tem permissão para criar prateleiras.');
+  }
   try {
     const response = await api.post('/prateleira', data);
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to create shelf');
+    throw new ApiError('Falha ao criar prateleira');
   }
 };
 
 export const updateShelf = async (id: string, data: Partial<Prateleira>): Promise<Prateleira> => {
+  if (!hasPermission('atualizar_prateleira')) {
+    throw new ApiError('Você não tem permissão para atualizar prateleiras.');
+  }
   try {
     const response = await api.put(`/prateleira/${id}`, data);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to update shelf with id ${id}`);
+    throw new ApiError(`Falha ao atualizar prateleira com id ${id}`);
   }
 };
 
 export const deleteShelf = async (id: string): Promise<void> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para deletar prateleiras.');
+  }
   try {
     await api.delete(`/prateleira/${id}`);
   } catch (error) {
-    throw new ApiError(`Failed to delete shelf with id ${id}`);
+    throw new ApiError(`Falha ao deletar prateleira com id ${id}`);
   }
 };
 
 export const getAllSections = async (): Promise<Seccao[]> => {
+  if (!hasPermission('listar_seccoes')) {
+    throw new ApiError('Você não tem permissão para listar seções.');
+  }
   try {
     const response = await api.get('/seccao');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch sections');
+    throw new ApiError('Falha ao buscar seções');
   }
 };
 
 export const createSection = async (data: Seccao): Promise<Seccao> => {
+  if (!hasPermission('criar_seccao')) {
+    throw new ApiError('Você não tem permissão para criar seções.');
+  }
   try {
     const response = await api.post('/seccao', data);
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to create section');
+    throw new ApiError('Falha ao criar seção');
   }
 };
 
 export const updateSection = async (id: string, data: Partial<Seccao>): Promise<Seccao> => {
+  if (!hasPermission('atualizar_seccao')) {
+    throw new ApiError('Você não tem permissão para atualizar seções.');
+  }
   try {
     console.log('Enviando para updateSection:', data);
     const response = await api.put(`/seccao/${id}`, data);
     return response.data;
   } catch (error) {
     console.error('Erro ao atualizar seção:', error);
-    throw new ApiError(`Failed to update section with id ${id}`);
+    throw new ApiError(`Falha ao atualizar seção com id ${id}`);
   }
 };
 
 export const deleteSection = async (id: string): Promise<void> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para deletar seções.');
+  }
   try {
     await api.delete(`/seccao/${id}`);
   } catch (error) {
-    throw new ApiError(`Failed to delete section with id ${id}`);
+    throw new ApiError(`Falha ao deletar seção com id ${id}`);
   }
 };
 
 export const getAllCashRegisters = async (): Promise<Caixa[]> => {
+  if (!hasPermission('listar_caixas')) {
+    throw new ApiError('Você não tem permissão para listar caixas.');
+  }
   try {
     const response = await api.get('/caixa');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch cash registers');
+    throw new ApiError('Falha ao buscar caixas');
   }
 };
 
 export const createCashRegister = async (data: Caixa): Promise<Caixa> => {
+  if (!hasPermission('criar_caixa')) {
+    throw new ApiError('Você não tem permissão para criar caixas.');
+  }
   try {
     const response = await api.post('/caixa', data);
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to create cash register');
+    throw new ApiError('Falha ao criar caixa');
   }
 };
 
 export const updateCashRegister = async (id: string, data: Partial<Caixa>): Promise<Caixa> => {
+  if (!hasPermission('atualizar_caixa')) {
+    throw new ApiError('Você não tem permissão para atualizar caixas.');
+  }
   try {
     const response = await api.put(`/caixa/${id}`, data);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to update cash register with id ${id}`);
+    throw new ApiError(`Falha ao atualizar caixa com id ${id}`);
   }
 };
 
 export const deleteCashRegister = async (id: string): Promise<void> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para deletar caixas.');
+  }
   try {
     await api.delete(`/caixa/${id}`);
   } catch (error) {
-    throw new ApiError(`Failed to delete cash register with id ${id}`);
+    throw new ApiError(`Falha ao deletar caixa com id ${id}`);
   }
 };
 
 export const getAllEmployeeCashRegisters = async (): Promise<FuncionarioCaixa[]> => {
+  if (!hasPermission('listar_funcionarios_caixa')) {
+    throw new ApiError('Você não tem permissão para listar relações funcionário-caixa.');
+  }
   try {
     const response = await api.get('/funcionarioCaixa');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch employee-cash register relations');
+    throw new ApiError('Falha ao buscar relações funcionário-caixa');
   }
 };
 
 export const createEmployeeCashRegister = async (
   data: FuncionarioCaixa,
 ): Promise<FuncionarioCaixa> => {
+  if (!hasPermission('criar_funcionario_caixa')) {
+    throw new ApiError('Você não tem permissão para criar relações funcionário-caixa.');
+  }
   try {
     const response = await api.post('/funcionarioCaixa', data);
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to create employee-cash register relation');
+    throw new ApiError('Falha ao criar relação funcionário-caixa');
   }
 };
 
@@ -752,37 +980,49 @@ export const updateEmployeeCashRegister = async (
   id: string,
   data: Partial<FuncionarioCaixa>,
 ): Promise<FuncionarioCaixa> => {
+  if (!hasPermission('atualizar_funcionario_caixa')) {
+    throw new ApiError('Você não tem permissão para atualizar relações funcionário-caixa.');
+  }
   try {
     const response = await api.put(`/funcionarioCaixa/${id}`, data);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to update employee-cash register relation with id ${id}`);
+    throw new ApiError(`Falha ao atualizar relação funcionário-caixa com id ${id}`);
   }
 };
 
 export const deleteEmployeeCashRegister = async (id: string): Promise<void> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para deletar relações funcionário-caixa.');
+  }
   try {
     await api.delete(`/funcionarioCaixa/${id}`);
   } catch (error) {
-    throw new ApiError(`Failed to delete employee-cash register relation with id ${id}`);
+    throw new ApiError(`Falha ao deletar relação funcionário-caixa com id ${id}`);
   }
 };
 
 export const getAllLocations = async (): Promise<Localizacao[]> => {
+  if (!hasPermission('listar_localizacoes')) {
+    throw new ApiError('Você não tem permissão para listar localizações.');
+  }
   try {
     const response = await api.get('/localizacao');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch locations');
+    throw new ApiError('Falha ao buscar localizações');
   }
 };
 
 export const createLocation = async (data: Localizacao): Promise<Localizacao> => {
+  if (!hasPermission('criar_localizacao')) {
+    throw new ApiError('Você não tem permissão para criar localizações.');
+  }
   try {
     const response = await api.post('/localizacao', data);
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to create location');
+    throw new ApiError('Falha ao criar localização');
   }
 };
 
@@ -790,37 +1030,49 @@ export const updateLocation = async (
   id: string,
   data: Partial<Localizacao>,
 ): Promise<Localizacao> => {
+  if (!hasPermission('atualizar_localizacao')) {
+    throw new ApiError('Você não tem permissão para atualizar localizações.');
+  }
   try {
     const response = await api.put(`/localizacao/${id}`, data);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to update location with id ${id}`);
+    throw new ApiError(`Falha ao atualizar localização com id ${id}`);
   }
 };
 
 export const deleteLocation = async (id: string): Promise<void> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para deletar localizações.');
+  }
   try {
     await api.delete(`/localizacao/${id}`);
   } catch (error) {
-    throw new ApiError(`Failed to delete location with id ${id}`);
+    throw new ApiError(`Falha ao deletar localização com id ${id}`);
   }
 };
 
 export const getAllPermissions = async (): Promise<Permissao[]> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para listar permissões.');
+  }
   try {
     const response = await api.get('/permissao');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch permissions');
+    throw new ApiError('Falha ao buscar permissões');
   }
 };
 
 export const createPermission = async (data: Permissao): Promise<Permissao> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para criar permissões.');
+  }
   try {
     const response = await api.post('/permissao', data);
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to create permission');
+    throw new ApiError('Falha ao criar permissão');
   }
 };
 
@@ -828,39 +1080,51 @@ export const updatePermission = async (
   id: string,
   data: Partial<Permissao>,
 ): Promise<Permissao> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para atualizar permissões.');
+  }
   try {
     const response = await api.put(`/permissao/${id}`, data);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to update permission with id ${id}`);
+    throw new ApiError(`Falha ao atualizar permissão com id ${id}`);
   }
 };
 
 export const deletePermission = async (id: string): Promise<void> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para deletar permissões.');
+  }
   try {
     await api.delete(`/permissao/${id}`);
   } catch (error) {
-    throw new ApiError(`Failed to delete permission with id ${id}`);
+    throw new ApiError(`Falha ao deletar permissão com id ${id}`);
   }
 };
 
 export const getAllProductLocations = async (): Promise<ProdutoLocalizacao[]> => {
+  if (!hasPermission('listar_produto_localizacoes')) {
+    throw new ApiError('Você não tem permissão para listar localizações de produtos.');
+  }
   try {
     const response = await api.get('/produtoLocalizacao');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch product locations');
+    throw new ApiError('Falha ao buscar localizações de produtos');
   }
 };
 
 export const createProductLocation = async (
   data: ProdutoLocalizacao,
 ): Promise<ProdutoLocalizacao> => {
+  if (!hasPermission('criar_produto_localizacao')) {
+    throw new ApiError('Você não tem permissão para criar localizações de produtos.');
+  }
   try {
     const response = await api.post('/produtoLocalizacao', data);
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to create product location');
+    throw new ApiError('Falha ao criar localização de produto');
   }
 };
 
@@ -868,37 +1132,49 @@ export const updateProductLocation = async (
   id: string,
   data: Partial<ProdutoLocalizacao>,
 ): Promise<ProdutoLocalizacao> => {
+  if (!hasPermission('atualizar_produto_localizacao')) {
+    throw new ApiError('Você não tem permissão para atualizar localizações de produtos.');
+  }
   try {
     const response = await api.put(`/produtoLocalizacao/${id}`, data);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to update product location with id ${id}`);
+    throw new ApiError(`Falha ao atualizar localização de produto com id ${id}`);
   }
 };
 
 export const deleteProductLocation = async (id: string): Promise<void> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para deletar localizações de produtos.');
+  }
   try {
     await api.delete(`/produtoLocalizacao/${id}`);
   } catch (error) {
-    throw new ApiError(`Failed to delete product location with id ${id}`);
+    throw new ApiError(`Falha ao deletar localização de produto com id ${id}`);
   }
 };
 
 export const getAllSaleProducts = async (): Promise<VendaProduto[]> => {
+  if (!hasPermission('listar_venda_produtos')) {
+    throw new ApiError('Você não tem permissão para listar produtos de vendas.');
+  }
   try {
     const response = await api.get('/vendaProduto');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch sale products');
+    throw new ApiError('Falha ao buscar produtos de vendas');
   }
 };
 
 export const createSaleProduct = async (data: VendaProduto): Promise<VendaProduto> => {
+  if (!hasPermission('criar_venda_produto')) {
+    throw new ApiError('Você não tem permissão para criar produtos de vendas.');
+  }
   try {
     const response = await api.post('/vendaProduto', data);
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to create sale product');
+    throw new ApiError('Falha ao criar produto de venda');
   }
 };
 
@@ -906,107 +1182,143 @@ export const updateSaleProduct = async (
   id: string,
   data: Partial<VendaProduto>,
 ): Promise<VendaProduto> => {
+  if (!hasPermission('atualizar_venda_produto')) {
+    throw new ApiError('Você não tem permissão para atualizar produtos de vendas.');
+  }
   try {
     const response = await api.put(`/vendaProduto/${id}`, data);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to update sale product with id ${id}`);
+    throw new ApiError(`Falha ao atualizar produto de venda com id ${id}`);
   }
 };
 
 export const deleteSaleProduct = async (id: string): Promise<void> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para deletar produtos de vendas.');
+  }
   try {
     await api.delete(`/vendaProduto/${id}`);
   } catch (error) {
-    throw new ApiError(`Failed to delete sale product with id ${id}`);
+    throw new ApiError(`Falha ao deletar produto de venda com id ${id}`);
   }
 };
 
 export const getAllAlerts = async (): Promise<Alerta[]> => {
+  if (!hasPermission('listar_alertas')) {
+    throw new ApiError('Você não tem permissão para listar alertas.');
+  }
   try {
     const response = await api.get('/alertas');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch alerts');
+    throw new ApiError('Falha ao buscar alertas');
   }
 };
 
 export const createAlert = async (data: Alerta): Promise<Alerta> => {
+  if (!hasPermission('criar_alerta')) {
+    throw new ApiError('Você não tem permissão para criar alertas.');
+  }
   try {
     const response = await api.post('/alertas', data);
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to create alert');
+    throw new ApiError('Falha ao criar alerta');
   }
 };
 
 export const updateAlert = async (id: string, data: Partial<Alerta>): Promise<Alerta> => {
+  if (!hasPermission('atualizar_alerta')) {
+    throw new ApiError('Você não tem permissão para atualizar alertas.');
+  }
   try {
     const response = await api.put(`/alertas/${id}`, data);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to update alert with id ${id}`);
+    throw new ApiError(`Falha ao atualizar alerta com id ${id}`);
   }
 };
 
 export const deleteAlert = async (id: string): Promise<void> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para deletar alertas.');
+  }
   try {
     await api.delete(`/alertas/${id}`);
   } catch (error) {
-    throw new ApiError(`Failed to delete alert with id ${id}`);
+    throw new ApiError(`Falha ao deletar alerta com id ${id}`);
   }
 };
 
 export const getAllTasks = async (): Promise<Tarefa[]> => {
+  if (!hasPermission('listar_tarefas')) {
+    throw new ApiError('Você não tem permissão para listar tarefas.');
+  }
   try {
     const response = await api.get('/tarefa');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch tasks');
+    throw new ApiError('Falha ao buscar tarefas');
   }
 };
 
 export const createTask = async (data: Tarefa): Promise<Tarefa> => {
+  if (!hasPermission('criar_tarefa')) {
+    throw new ApiError('Você não tem permissão para criar tarefas.');
+  }
   try {
     const response = await api.post('/tarefa', data);
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to create task');
+    throw new ApiError('Falha ao criar tarefa');
   }
 };
 
 export const updateTask = async (id: string, data: Partial<Tarefa>): Promise<Tarefa> => {
+  if (!hasPermission('atualizar_tarefa')) {
+    throw new ApiError('Você não tem permissão para atualizar tarefas.');
+  }
   try {
     const response = await api.put(`/tarefa/${id}`, data);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to update task with id ${id}`);
+    throw new ApiError(`Falha ao atualizar tarefa com id ${id}`);
   }
 };
 
 export const deleteTask = async (id: string): Promise<void> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para deletar tarefas.');
+  }
   try {
     await api.delete(`/tarefa/${id}`);
   } catch (error) {
-    throw new ApiError(`Failed to delete task with id ${id}`);
+    throw new ApiError(`Falha ao deletar tarefa com id ${id}`);
   }
 };
 
 export const getAllDailyActivities = async (): Promise<AtividadeDoDia[]> => {
+  if (!hasPermission('listar_atividades_dia')) {
+    throw new ApiError('Você não tem permissão para listar atividades do dia.');
+  }
   try {
     const response = await api.get('/funcionarioTarefa');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch daily activities');
+    throw new ApiError('Falha ao buscar atividades do dia');
   }
 };
 
 export const createDailyActivity = async (data: AtividadeDoDia): Promise<AtividadeDoDia> => {
+  if (!hasPermission('criar_atividade_dia')) {
+    throw new ApiError('Você não tem permissão para criar atividades do dia.');
+  }
   try {
     const response = await api.post('/funcionarioTarefa', data);
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to create daily activity');
+    throw new ApiError('Falha ao criar atividade do dia');
   }
 };
 
@@ -1014,19 +1326,25 @@ export const updateDailyActivity = async (
   id: string,
   data: Partial<AtividadeDoDia>,
 ): Promise<AtividadeDoDia> => {
+  if (!hasPermission('atualizar_atividade_dia')) {
+    throw new ApiError('Você não tem permissão para atualizar atividades do dia.');
+  }
   try {
     const response = await api.put(`/funcionarioTarefa/${id}`, data);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to update daily activity with id ${id}`);
+    throw new ApiError(`Falha ao atualizar atividade do dia com id ${id}`);
   }
 };
 
 export const deleteDailyActivity = async (id: string): Promise<void> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para deletar atividades do dia.');
+  }
   try {
     await api.delete(`/funcionarioTarefa/${id}`);
   } catch (error) {
-    throw new ApiError(`Failed to delete daily activity with id ${id}`);
+    throw new ApiError(`Falha ao deletar atividade do dia com id ${id}`);
   }
 };
 
@@ -1035,24 +1353,30 @@ export const assignTaskToEmployees = async (
   funcionarioIds: string[],
   funcaoIds: string[],
 ): Promise<void> => {
+  if (!hasPermission('atribuir_tarefa')) {
+    throw new ApiError('Você não tem permissão para atribuir tarefas.');
+  }
   try {
     await api.post(`/funcionarioTarefa`, {
       funcionarioIds,
       funcaoIds,
     });
   } catch (error) {
-    throw new ApiError(`Failed to assign task ${tarefaId}`);
+    throw new ApiError(`Falha ao atribuir tarefa ${tarefaId}`);
   }
 };
 
 export const getTaskAssignments = async (
   tarefaId: string,
 ): Promise<{ funcionarios: Funcionario[]; funcoes: Funcao[] }> => {
+  if (!hasPermission('listar_atribuicoes_tarefa')) {
+    throw new ApiError('Você não tem permissão para listar atribuições de tarefas.');
+  }
   try {
     const response = await api.get(`/funcionarioTarefa/${tarefaId}`);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to fetch assignments for task ${tarefaId}`);
+    throw new ApiError(`Falha ao buscar atribuições para tarefa ${tarefaId}`);
   }
 };
 
@@ -1061,12 +1385,15 @@ export const removeTaskAssignment = async (
   funcionarioId: string,
   funcaoId: string,
 ): Promise<void> => {
+  if (!hasPermission('remover_atribuicao_tarefa')) {
+    throw new ApiError('Você não tem permissão para remover atribuições de tarefas.');
+  }
   try {
     await api.delete(`funcionarioTarefa/${tarefaId}`, {
       data: { funcionarioId, funcaoId },
     });
   } catch (error) {
-    throw new ApiError(`Failed to remove assignment for task ${tarefaId}`);
+    throw new ApiError(`Falha ao remover atribuição para tarefa ${tarefaId}`);
   }
 };
 
@@ -1074,13 +1401,16 @@ export const getSalesByPeriod = async (
   startDate: string,
   endDate: string,
 ): Promise<VendaComFuncionario[]> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para acessar relatórios de vendas.');
+  }
   try {
     const response = await api.get('/relatorio/vendas-periodo', {
       params: { dataInicio: startDate, dataFim: endDate },
     });
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch sales by period');
+    throw new ApiError('Falha ao buscar vendas por período');
   }
 };
 
@@ -1089,13 +1419,18 @@ export const getSalesByClient = async (
   startDate: string,
   endDate: string,
 ): Promise<VendaComFuncionario[]> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError(
+      'Você não tem a função necessária para acessar relatórios de vendas por cliente.',
+    );
+  }
   try {
     const response = await api.get(`/relatorio/vendas-cliente/${idCliente}`, {
       params: { dataInicio: startDate, dataFim: endDate },
     });
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to fetch sales for client ${idCliente}`);
+    throw new ApiError(`Falha ao buscar vendas para cliente ${idCliente}`);
   }
 };
 
@@ -1103,13 +1438,18 @@ export const getTopSellingProducts = async (
   startDate: string,
   endDate: string,
 ): Promise<ProdutoMaisVendido[]> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError(
+      'Você não tem a função necessária para acessar relatórios de produtos mais vendidos.',
+    );
+  }
   try {
     const response = await api.get('/relatorio/produtos-mais-vendidos', {
       params: { dataInicio: startDate, dataFim: endDate },
     });
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch top-selling products');
+    throw new ApiError('Falha ao buscar produtos mais vendidos');
   }
 };
 
@@ -1117,13 +1457,16 @@ export const getRevenueByPeriod = async (
   startDate: string,
   endDate: string,
 ): Promise<FaturamentoPorPeriodo> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError('Você não tem a função necessária para acessar relatórios de faturamento.');
+  }
   try {
     const response = await api.get('/relatorio/faturamento-periodo', {
       params: { dataInicio: startDate, dataFim: endDate },
     });
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch revenue by period');
+    throw new ApiError('Falha ao buscar faturamento por período');
   }
 };
 
@@ -1131,22 +1474,30 @@ export const getRevenueByCashRegister = async (
   startDate: string,
   endDate: string,
 ): Promise<QuantidadeFaturadaPorCaixa[]> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError(
+      'Você não tem a função necessária para acessar relatórios de faturamento por caixa.',
+    );
+  }
   try {
     const response = await api.get('/relatorio/faturamento-caixa', {
       params: { dataInicio: startDate, dataFim: endDate },
     });
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch revenue by cash register');
+    throw new ApiError('Falha ao buscar faturamento por caixa');
   }
 };
 
 export const getCurrentStock = async (): Promise<DadosEstoque[]> => {
+  if (!hasPermission('listar_estoque_atual')) {
+    throw new ApiError('Você não tem permissão para listar estoque atual.');
+  }
   try {
     const response = await api.get('/relatorio/estoque-atual');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch current stock');
+    throw new ApiError('Falha ao buscar estoque atual');
   }
 };
 
@@ -1154,13 +1505,18 @@ export const getStockEntriesByPeriod = async (
   startDate: string,
   endDate: string,
 ): Promise<EntradaEstoqueComFuncionario[]> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError(
+      'Você não tem a função necessária para acessar relatórios de entradas de estoque.',
+    );
+  }
   try {
     const response = await api.get('/relatorio/entradas-estoque', {
       params: { dataInicio: startDate, dataFim: endDate },
     });
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch stock entries by period');
+    throw new ApiError('Falha ao buscar entradas de estoque por período');
   }
 };
 
@@ -1168,22 +1524,30 @@ export const getTransfersByPeriod = async (
   startDate: string,
   endDate: string,
 ): Promise<TransferenciaComFuncionario[]> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError(
+      'Você não tem a função necessária para acessar relatórios de transferências.',
+    );
+  }
   try {
     const response = await api.get('/relatorio/transferencias', {
       params: { dataInicio: startDate, dataFim: endDate },
     });
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch transfers by period');
+    throw new ApiError('Falha ao buscar transferências por período');
   }
 };
 
 export const getProductsBelowMinimum = async (): Promise<ProdutoAbaixoMinimo[]> => {
+  if (!hasPermission('listar_produtos_abaixo_minimo')) {
+    throw new ApiError('Você não tem permissão para listar produtos abaixo do mínimo.');
+  }
   try {
     const response = await api.get('/relatorio/produtos-abaixo-minimo');
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch products below minimum stock');
+    throw new ApiError('Falha ao buscar produtos abaixo do mínimo');
   }
 };
 
@@ -1191,23 +1555,33 @@ export const getCashierActivity = async (
   startDate: string,
   endDate: string,
 ): Promise<FuncionarioCaixaComNome[]> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError(
+      'Você não tem a função necessária para acessar relatórios de atividade de caixa.',
+    );
+  }
   try {
     const response = await api.get('/relatorio/atividade-caixa', {
       params: { dataInicio: startDate, dataFim: endDate },
     });
     return response.data;
   } catch (error) {
-    throw new ApiError('Failed to fetch cashier activity');
+    throw new ApiError('Falha ao buscar atividade de caixa');
   }
 };
 
 export const getTopSellingPeriodByProduct = async (
   referenciaProduto: string,
 ): Promise<PeriodoMaisVendidoPorProduto> => {
+  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+    throw new ApiError(
+      'Você não tem a função necessária para acessar relatórios de período mais vendido.',
+    );
+  }
   try {
     const response = await api.get(`/relatorio/periodo-mais-vendido/${referenciaProduto}`);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Failed to fetch top-selling period for product ${referenciaProduto}`);
+    throw new ApiError(`Falha ao buscar período mais vendido para produto ${referenciaProduto}`);
   }
 };

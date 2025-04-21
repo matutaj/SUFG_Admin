@@ -1,12 +1,11 @@
 import { Avatar, IconButton, ListItemIcon, Menu, MenuItem, Typography } from '@mui/material';
-import avatar from 'assets/avatar.webp';
+import avatar from 'assets/9706583.png';
 import IconifyIcon from 'components/base/IconifyIcon';
 import { MouseEvent, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import paths from 'routes/paths';
 import { logout } from '../../../api/methods';
 
-// Função para decodificar o JWT
 const decodeToken = (token: string) => {
   try {
     const base64Url = token.split('.')[1];
@@ -30,7 +29,6 @@ const AccountMenu = () => {
   const open = Boolean(anchorEl);
   const navigate = useNavigate();
 
-  // Carrega os dados do token ao montar o componente
   useEffect(() => {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (token) {
@@ -41,7 +39,6 @@ const AccountMenu = () => {
     }
   }, []);
 
-  // Itens do menu, atualizados dinamicamente com os dados do usuário
   const menuItems = [
     {
       id: 0,
@@ -70,7 +67,6 @@ const AccountMenu = () => {
 
   const handleMenuItemClick = async (itemId: number) => {
     if (itemId === 2) {
-      // Logout
       try {
         await logout();
         localStorage.removeItem('token');
