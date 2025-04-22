@@ -69,7 +69,7 @@ export const login = async (credentials: LoginCredentials): Promise<LoginRespons
     const { token, nome, email, telefone, numeroBI, roles, permissoes } = response.data.result;
 
     // Armazenar token e dados do usuário
-    localStorage.setItem('auth_token', token);
+    localStorage.setItem('token', token);
     localStorage.setItem(
       'user',
       JSON.stringify({ nome, email, telefone, numeroBI, roles, permissoes }),
@@ -758,7 +758,7 @@ export const deleteCorridor = async (id: string): Promise<void> => {
 };
 
 export const getAllProductCategories = async (): Promise<CategoriaProduto[]> => {
-  if (!hasPermission('listar_categorias_produto')) {
+  if (!hasPermission('listar_categoria_produto')) {
     throw new ApiError('Você não tem permissão para listar categorias de produtos.');
   }
   try {
@@ -770,7 +770,7 @@ export const getAllProductCategories = async (): Promise<CategoriaProduto[]> => 
 };
 
 export const createProductCategory = async (data: CategoriaProduto): Promise<CategoriaProduto> => {
-  if (!hasPermission('criar_categoria_produto')) {
+  if (!hasPermission('criar_categoria_produto') && !hasAnyRole(['Gerente', 'Administrador'])) {
     throw new ApiError('Você não tem permissão para criar categorias de produtos.');
   }
   try {
@@ -785,7 +785,7 @@ export const updateProductCategory = async (
   id: string,
   data: Partial<CategoriaProduto>,
 ): Promise<CategoriaProduto> => {
-  if (!hasPermission('atualizar_categoria_produto')) {
+  if (!hasPermission('atualizar_categoria_produto') && !hasAnyRole(['Gerente', 'Administrador'])) {
     throw new ApiError('Você não tem permissão para atualizar categorias de produtos.');
   }
   try {

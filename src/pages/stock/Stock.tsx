@@ -474,7 +474,7 @@ const Stock: React.FC = () => {
         );
 
         let newStock: DadosEstoque;
-        if (existingStock) {
+        if (existingStock?.lote === newEntry.lote) {
           const updatedQuantity = existingStock.quantidadeAtual + newEntry.quantidadeRecebida;
           const stockData: DadosEstoque = {
             id: existingStock.id,
@@ -506,7 +506,7 @@ const Stock: React.FC = () => {
         handleOpenLocationModal(newStock, newEntry);
         setSuccessMessage('Entrada adicionada ao estoque. Agora selecione a localização.');
       }
-      await fetchData(); // Recarregar dados do backend
+      await fetchData();
     } catch (error) {
       console.error('Erro ao salvar entrada de estoque:', error);
       setFetchError('Erro ao salvar entrada de estoque.');
