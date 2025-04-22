@@ -111,13 +111,6 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
     try {
       setLoading(true);
       const data = await getAllProductCategories();
-      console.log('Dados retornados por getProductCategories:', JSON.stringify(data, null, 2));
-
-      const idSet = new Set(data.map((cat: CategoriaProduto) => cat.id));
-      if (idSet.size !== data.length) {
-        console.warn('IDs duplicados encontrados nos dados de categorias:', data);
-      }
-
       setCategorias(data);
       setFilteredCategorias(data);
     } catch (error) {
@@ -128,7 +121,6 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     fetchCategories();
   }, []);
@@ -142,31 +134,17 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
   }, [searchTerm, categorias]);
 
   const handleAddCategoria = async () => {
-    const newErrors: { nomeCategoria?: string; descricao?: string } = {};
-    if (!nomeCategoria.trim()) newErrors.nomeCategoria = 'O nome da categoria é obrigatório.';
-    if (!descricao.trim()) newErrors.descricao = 'A descrição é obrigatória.';
-
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
-
     try {
       setLoading(true);
-      const categoriaData = {
-        nomeCategoria: nomeCategoria,
-        descricao: descricao,
-      };
-
+      const categoriaData = { nomeCategoria: nomeCategoria, descricao: descricao };
       if (editCategoriaId) {
         await updateProductCategory(editCategoriaId, categoriaData);
-        setAlert({ severity: 'success', message: 'Categoria atualizada com sucesso!' });
       } else {
         await createProductCategory(categoriaData);
-        setAlert({ severity: 'success', message: 'Categoria cadastrada com sucesso!' });
       }
       await fetchCategories();
       handleClose();
+      setAlert({ severity: 'success', message: 'Categoria cadastrada com sucesso!' });
       setTimeout(() => setAlert(null), 3000);
     } catch (error) {
       console.error('Erro ao salvar categoria:', error);

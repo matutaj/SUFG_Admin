@@ -132,7 +132,7 @@ export const updateStockEntry = async (
 };
 
 export const deleteStockEntry = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para deletar entradas de estoque.');
   }
   try {
@@ -194,7 +194,7 @@ export const updateStock = async (
 };
 
 export const deleteStock = async (lote: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para deletar registros de estoque.');
   }
   try {
@@ -229,7 +229,7 @@ export const getAllProducts = async (): Promise<Produto[]> => {
 };
 
 export const createProduct = async (data: Produto): Promise<Produto> => {
-  if (!hasPermission('criar_produto')) {
+  if (!hasPermission('criar_produto') && !hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem permissão para criar produtos.');
   }
   try {
@@ -253,7 +253,7 @@ export const updateProduct = async (id: string, data: Partial<Produto>): Promise
 };
 
 export const deleteProduct = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para deletar produtos.');
   }
   try {
@@ -303,7 +303,7 @@ export const updateSupplier = async (
 };
 
 export const deleteSupplier = async (nif: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para deletar fornecedores.');
   }
   try {
@@ -364,7 +364,7 @@ export const deleteEmployee = async (numeroBI: string): Promise<void> => {
 };
 
 export const getAllFunctionPermissions = async (): Promise<FuncaoPermissao[]> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para listar permissões de funções.');
   }
   try {
@@ -376,7 +376,7 @@ export const getAllFunctionPermissions = async (): Promise<FuncaoPermissao[]> =>
 };
 
 export const createFunctionPermission = async (data: FuncaoPermissao): Promise<FuncaoPermissao> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para criar permissões de funções.');
   }
   try {
@@ -391,7 +391,7 @@ export const updateFunctionPermission = async (
   id: string,
   data: Partial<FuncaoPermissao>,
 ): Promise<FuncaoPermissao> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para atualizar permissões de funções.');
   }
   try {
@@ -403,7 +403,7 @@ export const updateFunctionPermission = async (
 };
 
 export const deleteFunctionPermission = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para deletar permissões de funções.');
   }
   try {
@@ -466,7 +466,7 @@ export const deleteEmployeeFunction = async (id: string): Promise<void> => {
 };
 
 export const getAllEmployeePermissions = async (): Promise<FuncionarioPermissao[]> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para listar permissões de funcionários.');
   }
   try {
@@ -480,7 +480,7 @@ export const getAllEmployeePermissions = async (): Promise<FuncionarioPermissao[
 export const createEmployeePermission = async (
   data: FuncionarioPermissao,
 ): Promise<FuncionarioPermissao> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para criar permissões de funcionários.');
   }
   try {
@@ -495,7 +495,7 @@ export const updateEmployeePermission = async (
   id: string,
   data: Partial<FuncionarioPermissao>,
 ): Promise<FuncionarioPermissao> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError(
       'Você não tem a função necessária para atualizar permissões de funcionários.',
     );
@@ -509,7 +509,7 @@ export const updateEmployeePermission = async (
 };
 
 export const deleteEmployeePermission = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para deletar permissões de funcionários.');
   }
   try {
@@ -520,7 +520,7 @@ export const deleteEmployeePermission = async (id: string): Promise<void> => {
 };
 
 export const getAllFunctions = async (): Promise<Funcao[]> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para listar funções.');
   }
   try {
@@ -532,7 +532,7 @@ export const getAllFunctions = async (): Promise<Funcao[]> => {
 };
 
 export const createFunction = async (data: Funcao): Promise<Funcao> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para criar funções.');
   }
   try {
@@ -544,7 +544,7 @@ export const createFunction = async (data: Funcao): Promise<Funcao> => {
 };
 
 export const updateFunction = async (id: string, data: Partial<Funcao>): Promise<Funcao> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para atualizar funções.');
   }
   try {
@@ -556,7 +556,7 @@ export const updateFunction = async (id: string, data: Partial<Funcao>): Promise
 };
 
 export const deleteFunction = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para deletar funções.');
   }
   try {
@@ -606,7 +606,7 @@ export const updateTransfer = async (
 };
 
 export const deleteTransfer = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para deletar transferências.');
   }
   try {
@@ -653,7 +653,7 @@ export const updateSale = async (id: string, data: Partial<Venda>): Promise<Vend
 };
 
 export const deleteSale = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para deletar vendas.');
   }
   try {
@@ -700,7 +700,7 @@ export const updateClient = async (id: string, data: Partial<Cliente>): Promise<
 };
 
 export const deleteClient = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para deletar clientes.');
   }
   try {
@@ -747,7 +747,7 @@ export const updateCorridor = async (id: string, data: Partial<Corredor>): Promi
 };
 
 export const deleteCorridor = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para deletar corredores.');
   }
   try {
@@ -758,7 +758,7 @@ export const deleteCorridor = async (id: string): Promise<void> => {
 };
 
 export const getAllProductCategories = async (): Promise<CategoriaProduto[]> => {
-  if (!hasPermission('listar_categoria_produto')) {
+  if (!hasPermission('listar_categoria_produto') && !hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem permissão para listar categorias de produtos.');
   }
   try {
@@ -770,7 +770,7 @@ export const getAllProductCategories = async (): Promise<CategoriaProduto[]> => 
 };
 
 export const createProductCategory = async (data: CategoriaProduto): Promise<CategoriaProduto> => {
-  if (!hasPermission('criar_categoria_produto') && !hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasPermission('criar_categoria_produto') && !hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem permissão para criar categorias de produtos.');
   }
   try {
@@ -785,7 +785,7 @@ export const updateProductCategory = async (
   id: string,
   data: Partial<CategoriaProduto>,
 ): Promise<CategoriaProduto> => {
-  if (!hasPermission('atualizar_categoria_produto') && !hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasPermission('atualizar_categoria_produto') && !hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem permissão para atualizar categorias de produtos.');
   }
   try {
@@ -797,7 +797,7 @@ export const updateProductCategory = async (
 };
 
 export const deleteProductCategory = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para deletar categorias de produtos.');
   }
   try {
@@ -844,7 +844,7 @@ export const updateShelf = async (id: string, data: Partial<Prateleira>): Promis
 };
 
 export const deleteShelf = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para deletar prateleiras.');
   }
   try {
@@ -855,7 +855,7 @@ export const deleteShelf = async (id: string): Promise<void> => {
 };
 
 export const getAllSections = async (): Promise<Seccao[]> => {
-  if (!hasPermission('listar_seccoes')) {
+  if (!hasPermission('listar_seccoes') && !hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem permissão para listar seções.');
   }
   try {
@@ -893,7 +893,7 @@ export const updateSection = async (id: string, data: Partial<Seccao>): Promise<
 };
 
 export const deleteSection = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para deletar seções.');
   }
   try {
@@ -940,7 +940,7 @@ export const updateCashRegister = async (id: string, data: Partial<Caixa>): Prom
 };
 
 export const deleteCashRegister = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para deletar caixas.');
   }
   try {
@@ -992,7 +992,7 @@ export const updateEmployeeCashRegister = async (
 };
 
 export const deleteEmployeeCashRegister = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para deletar relações funcionário-caixa.');
   }
   try {
@@ -1042,7 +1042,7 @@ export const updateLocation = async (
 };
 
 export const deleteLocation = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para deletar localizações.');
   }
   try {
@@ -1053,7 +1053,7 @@ export const deleteLocation = async (id: string): Promise<void> => {
 };
 
 export const getAllPermissions = async (): Promise<Permissao[]> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para listar permissões.');
   }
   try {
@@ -1065,7 +1065,7 @@ export const getAllPermissions = async (): Promise<Permissao[]> => {
 };
 
 export const createPermission = async (data: Permissao): Promise<Permissao> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para criar permissões.');
   }
   try {
@@ -1080,7 +1080,7 @@ export const updatePermission = async (
   id: string,
   data: Partial<Permissao>,
 ): Promise<Permissao> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para atualizar permissões.');
   }
   try {
@@ -1092,7 +1092,7 @@ export const updatePermission = async (
 };
 
 export const deletePermission = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para deletar permissões.');
   }
   try {
@@ -1144,7 +1144,7 @@ export const updateProductLocation = async (
 };
 
 export const deleteProductLocation = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para deletar localizações de produtos.');
   }
   try {
@@ -1194,7 +1194,7 @@ export const updateSaleProduct = async (
 };
 
 export const deleteSaleProduct = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para deletar produtos de vendas.');
   }
   try {
@@ -1241,7 +1241,7 @@ export const updateAlert = async (id: string, data: Partial<Alerta>): Promise<Al
 };
 
 export const deleteAlert = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para deletar alertas.');
   }
   try {
@@ -1288,7 +1288,7 @@ export const updateTask = async (id: string, data: Partial<Tarefa>): Promise<Tar
 };
 
 export const deleteTask = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para deletar tarefas.');
   }
   try {
@@ -1338,7 +1338,7 @@ export const updateDailyActivity = async (
 };
 
 export const deleteDailyActivity = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para deletar atividades do dia.');
   }
   try {
@@ -1401,7 +1401,7 @@ export const getSalesByPeriod = async (
   startDate: string,
   endDate: string,
 ): Promise<VendaComFuncionario[]> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para acessar relatórios de vendas.');
   }
   try {
@@ -1419,7 +1419,7 @@ export const getSalesByClient = async (
   startDate: string,
   endDate: string,
 ): Promise<VendaComFuncionario[]> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError(
       'Você não tem a função necessária para acessar relatórios de vendas por cliente.',
     );
@@ -1438,7 +1438,7 @@ export const getTopSellingProducts = async (
   startDate: string,
   endDate: string,
 ): Promise<ProdutoMaisVendido[]> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError(
       'Você não tem a função necessária para acessar relatórios de produtos mais vendidos.',
     );
@@ -1457,7 +1457,7 @@ export const getRevenueByPeriod = async (
   startDate: string,
   endDate: string,
 ): Promise<FaturamentoPorPeriodo> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem a função necessária para acessar relatórios de faturamento.');
   }
   try {
@@ -1474,7 +1474,7 @@ export const getRevenueByCashRegister = async (
   startDate: string,
   endDate: string,
 ): Promise<QuantidadeFaturadaPorCaixa[]> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError(
       'Você não tem a função necessária para acessar relatórios de faturamento por caixa.',
     );
@@ -1505,7 +1505,7 @@ export const getStockEntriesByPeriod = async (
   startDate: string,
   endDate: string,
 ): Promise<EntradaEstoqueComFuncionario[]> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError(
       'Você não tem a função necessária para acessar relatórios de entradas de estoque.',
     );
@@ -1524,7 +1524,7 @@ export const getTransfersByPeriod = async (
   startDate: string,
   endDate: string,
 ): Promise<TransferenciaComFuncionario[]> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError(
       'Você não tem a função necessária para acessar relatórios de transferências.',
     );
@@ -1555,7 +1555,7 @@ export const getCashierActivity = async (
   startDate: string,
   endDate: string,
 ): Promise<FuncionarioCaixaComNome[]> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError(
       'Você não tem a função necessária para acessar relatórios de atividade de caixa.',
     );
@@ -1573,7 +1573,7 @@ export const getCashierActivity = async (
 export const getTopSellingPeriodByProduct = async (
   referenciaProduto: string,
 ): Promise<PeriodoMaisVendidoPorProduto> => {
-  if (!hasAnyRole(['Gerente', 'Administrador'])) {
+  if (!hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError(
       'Você não tem a função necessária para acessar relatórios de período mais vendido.',
     );
