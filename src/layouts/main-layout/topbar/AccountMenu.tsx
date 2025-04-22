@@ -4,7 +4,6 @@ import IconifyIcon from 'components/base/IconifyIcon';
 import { MouseEvent, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import paths from 'routes/paths';
-import { logout } from '../../../api/methods';
 
 const decodeToken = (token: string) => {
   try {
@@ -69,7 +68,7 @@ const AccountMenu = () => {
   const handleMenuItemClick = async (itemId: number) => {
     if (itemId === 2) {
       try {
-        await logout();
+        //await logout();
         localStorage.removeItem('token');
         sessionStorage.removeItem('token');
         navigate(paths.login);
