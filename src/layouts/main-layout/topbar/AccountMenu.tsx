@@ -35,6 +35,7 @@ const AccountMenu = () => {
       const decoded = decodeToken(token);
       if (decoded) {
         setUserData({ nome: decoded.nome, email: decoded.email });
+        console.log('Decoded token:', decoded);
       }
     }
   }, []);
