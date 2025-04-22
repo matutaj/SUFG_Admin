@@ -119,7 +119,6 @@ const PrateleiraComponent = ({ open }: CollapsedItemProps) => {
       setLoading(false);
     }
   };
-
   React.useEffect(() => {
     fetchShelves();
   }, []);
@@ -128,12 +127,10 @@ const PrateleiraComponent = ({ open }: CollapsedItemProps) => {
     const newErrors: { nomePrateleira?: string; descricao?: string } = {};
     if (!nomePrateleira.trim()) newErrors.nomePrateleira = 'O nome da prateleira é obrigatório.';
     if (!descricao.trim()) newErrors.descricao = 'A descrição é obrigatória.';
-
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     }
-
     try {
       setLoading(true);
       if (editPrateleiraId) {
