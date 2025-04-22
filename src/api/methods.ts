@@ -93,7 +93,7 @@ export const logout = async (): Promise<void> => {
 };
 
 export const getAllStockEntries = async (): Promise<DadosEntradaEstoque[]> => {
-  if (!hasPermission('listar_entradas_estoque')) {
+  if (!hasPermission('listar_entrada_estoque')) {
     throw new ApiError('Você não tem permissão para listar entradas de estoque.');
   }
   try {
@@ -132,8 +132,10 @@ export const updateStockEntry = async (
 };
 
 export const deleteStockEntry = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para deletar entradas de estoque.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('eliminar_entrada_estoque')) {
+    throw new ApiError(
+      'Você não tem a função ou permissão necessária para deletar entradas de estoque.',
+    );
   }
   try {
     await api.delete(`/entradaEstoque/${id}`);
@@ -194,8 +196,10 @@ export const updateStock = async (
 };
 
 export const deleteStock = async (lote: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para deletar registros de estoque.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('eliminar_estoque')) {
+    throw new ApiError(
+      'Você não tem a função ou permissão necessária para deletar registros de estoque.',
+    );
   }
   try {
     await api.delete(`/estoque/${lote}`);
@@ -205,7 +209,7 @@ export const deleteStock = async (lote: string): Promise<void> => {
 };
 
 export const getStockByProduct = async (referenciaProduto: string): Promise<DadosEstoque> => {
-  if (!hasPermission('listar_estoque_por_produto')) {
+  if (!hasPermission('listar_estoque')) {
     throw new ApiError('Você não tem permissão para listar estoque por produto.');
   }
   try {
@@ -229,7 +233,7 @@ export const getAllProducts = async (): Promise<Produto[]> => {
 };
 
 export const createProduct = async (data: Produto): Promise<Produto> => {
-  if (!hasPermission('criar_produto') && !hasAnyRole(['Gerente', 'Admin'])) {
+  if (!hasPermission('criar_produtos') && !hasAnyRole(['Gerente', 'Admin'])) {
     throw new ApiError('Você não tem permissão para criar produtos.');
   }
   try {
@@ -241,7 +245,7 @@ export const createProduct = async (data: Produto): Promise<Produto> => {
 };
 
 export const updateProduct = async (id: string, data: Partial<Produto>): Promise<Produto> => {
-  if (!hasPermission('atualizar_produto')) {
+  if (!hasPermission('atualizar_produtos')) {
     throw new ApiError('Você não tem permissão para atualizar produtos.');
   }
   try {
@@ -253,8 +257,8 @@ export const updateProduct = async (id: string, data: Partial<Produto>): Promise
 };
 
 export const deleteProduct = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para deletar produtos.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('eliminar_produtos')) {
+    throw new ApiError('Você não tem a função ou permissão necessária para deletar produtos.');
   }
   try {
     await api.delete(`/produto/${id}`);
@@ -276,7 +280,7 @@ export const getAllSuppliers = async (): Promise<Fornecedor[]> => {
 };
 
 export const createSupplier = async (data: Fornecedor): Promise<Fornecedor> => {
-  if (!hasPermission('criar_fornecedor')) {
+  if (!hasPermission('criar_fornecedores')) {
     throw new ApiError('Você não tem permissão para criar fornecedores.');
   }
   try {
@@ -291,7 +295,7 @@ export const updateSupplier = async (
   nif: string,
   data: Partial<Fornecedor>,
 ): Promise<Fornecedor> => {
-  if (!hasPermission('atualizar_fornecedor')) {
+  if (!hasPermission('atualizar_fornecedores')) {
     throw new ApiError('Você não tem permissão para atualizar fornecedores.');
   }
   try {
@@ -303,8 +307,8 @@ export const updateSupplier = async (
 };
 
 export const deleteSupplier = async (nif: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para deletar fornecedores.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('eliminar_fornecedores')) {
+    throw new ApiError('Você não tem a função ou permissão necessária para deletar fornecedores.');
   }
   try {
     await api.delete(`/fornecedor/${nif}`);
@@ -326,8 +330,8 @@ export const getAllEmployees = async (): Promise<Funcionario[]> => {
 };
 
 export const createEmployee = async (data: Funcionario): Promise<Funcionario> => {
-  if (!hasAnyRole(['Gerente', 'RH'])) {
-    throw new ApiError('Você não tem a função necessária para criar funcionários.');
+  if (!hasAnyRole(['Gerente', 'RH']) || !hasPermission('criar_funcionarios')) {
+    throw new ApiError('Você não tem a função ou permissão necessária para criar funcionários.');
   }
   try {
     const response = await api.post('/funcionario', data);
@@ -341,8 +345,10 @@ export const updateEmployee = async (
   numeroBI: string,
   data: Partial<Funcionario>,
 ): Promise<Funcionario> => {
-  if (!hasAnyRole(['Gerente', 'RH'])) {
-    throw new ApiError('Você não tem a função necessária para atualizar funcionários.');
+  if (!hasAnyRole(['Gerente', 'RH']) || !hasPermission('atualizar_funcionarios')) {
+    throw new ApiError(
+      'Você não tem a função ou permissão necessária para atualizar funcionários.',
+    );
   }
   try {
     const response = await api.put(`/funcionario/${numeroBI}`, data);
@@ -353,8 +359,8 @@ export const updateEmployee = async (
 };
 
 export const deleteEmployee = async (numeroBI: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'RH'])) {
-    throw new ApiError('Você não tem a função necessária para deletar funcionários.');
+  if (!hasAnyRole(['Gerente', 'RH']) || !hasPermission('eliminar_funcionarios')) {
+    throw new ApiError('Você não tem a função ou permissão necessária para deletar funcionários.');
   }
   try {
     await api.delete(`/funcionario/${numeroBI}`);
@@ -376,8 +382,10 @@ export const getAllFunctionPermissions = async (): Promise<FuncaoPermissao[]> =>
 };
 
 export const createFunctionPermission = async (data: FuncaoPermissao): Promise<FuncaoPermissao> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para criar permissões de funções.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('criar_funcionario_permissao')) {
+    throw new ApiError(
+      'Você não tem a função ou permissão necessária para criar permissões de funções.',
+    );
   }
   try {
     const response = await api.post('/funcaoPermissao', data);
@@ -414,8 +422,10 @@ export const deleteFunctionPermission = async (id: string): Promise<void> => {
 };
 
 export const getAllEmployeeFunctions = async (): Promise<FuncionarioFuncao[]> => {
-  if (!hasAnyRole(['Gerente', 'RH'])) {
-    throw new ApiError('Você não tem a função necessária para listar funções de funcionários.');
+  if (!hasAnyRole(['Gerente', 'RH']) || !hasPermission('listar_funcionario_funcao')) {
+    throw new ApiError(
+      'Você não tem a função ou permissão necessária para listar funções de funcionários.',
+    );
   }
   try {
     const response = await api.get('/funcionarioFuncao');
@@ -428,8 +438,10 @@ export const getAllEmployeeFunctions = async (): Promise<FuncionarioFuncao[]> =>
 export const createEmployeeFunction = async (
   data: FuncionarioFuncao,
 ): Promise<FuncionarioFuncao> => {
-  if (!hasAnyRole(['Gerente', 'RH'])) {
-    throw new ApiError('Você não tem a função necessária para criar funções de funcionários.');
+  if (!hasAnyRole(['Gerente', 'RH']) || !hasPermission('criar_funcionario_funcao')) {
+    throw new ApiError(
+      'Você não tem a função ou permissão necessária para criar funções de funcionários.',
+    );
   }
   try {
     const response = await api.post('/funcionarioFuncao', data);
@@ -466,8 +478,10 @@ export const deleteEmployeeFunction = async (id: string): Promise<void> => {
 };
 
 export const getAllEmployeePermissions = async (): Promise<FuncionarioPermissao[]> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para listar permissões de funcionários.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('listar_funcionario_permissao')) {
+    throw new ApiError(
+      'Você não tem a função ou permissão necessária para listar permissões de funcionários.',
+    );
   }
   try {
     const response = await api.get('/funcionarioPermissao');
@@ -480,8 +494,10 @@ export const getAllEmployeePermissions = async (): Promise<FuncionarioPermissao[
 export const createEmployeePermission = async (
   data: FuncionarioPermissao,
 ): Promise<FuncionarioPermissao> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para criar permissões de funcionários.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('criar_funcionario_permissao')) {
+    throw new ApiError(
+      'Você não tem a função ou permissão necessária para criar permissões de funcionários.',
+    );
   }
   try {
     const response = await api.post('/funcionarioPermissao', data);
@@ -520,8 +536,8 @@ export const deleteEmployeePermission = async (id: string): Promise<void> => {
 };
 
 export const getAllFunctions = async (): Promise<Funcao[]> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para listar funções.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('listar_funcoes')) {
+    throw new ApiError('Você não tem a função ou permissão necessária para listar funções.');
   }
   try {
     const response = await api.get('/funcao');
@@ -532,8 +548,8 @@ export const getAllFunctions = async (): Promise<Funcao[]> => {
 };
 
 export const createFunction = async (data: Funcao): Promise<Funcao> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para criar funções.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('criar_funcoes')) {
+    throw new ApiError('Você não tem a função ou permissão necessária para criar funções.');
   }
   try {
     const response = await api.post('/funcao', data);
@@ -579,7 +595,7 @@ export const getAllTransfers = async (): Promise<Transferencia[]> => {
 };
 
 export const createTransfer = async (data: Transferencia): Promise<Transferencia> => {
-  if (!hasPermission('criar_transferencia')) {
+  if (!hasPermission('criar_transferencias')) {
     throw new ApiError('Você não tem permissão para criar transferências.');
   }
   try {
@@ -594,7 +610,7 @@ export const updateTransfer = async (
   id: string,
   data: Partial<Transferencia>,
 ): Promise<Transferencia> => {
-  if (!hasPermission('atualizar_transferencia')) {
+  if (!hasPermission('atualizar_transferencias')) {
     throw new ApiError('Você não tem permissão para atualizar transferências.');
   }
   try {
@@ -606,8 +622,10 @@ export const updateTransfer = async (
 };
 
 export const deleteTransfer = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para deletar transferências.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('eliminar_transferencias')) {
+    throw new ApiError(
+      'Você não tem a função ou permissão necessária para deletar transferências.',
+    );
   }
   try {
     await api.delete(`/transferencia/${id}`);
@@ -629,19 +647,19 @@ export const getAllSales = async (): Promise<Venda[]> => {
 };
 
 export const createSale = async (data: DadosWrapper): Promise<Venda> => {
-  if (!hasPermission('criar_venda')) {
-    throw new ApiError('Você não tem permissão para criar vendas.');
+  if (!hasPermission('criar_fatura')) {
+    throw new ApiError('Você não tem permissão para criar faturas.');
   }
   try {
     const response = await api.post('/venda', data);
     return response.data;
   } catch (error) {
-    throw new ApiError('Falha ao criar venda');
+    throw new ApiError('Falha ao criar fatura');
   }
 };
 
 export const updateSale = async (id: string, data: Partial<Venda>): Promise<Venda> => {
-  if (!hasPermission('atualizar_venda')) {
+  if (!hasPermission('atualizar_vendas')) {
     throw new ApiError('Você não tem permissão para atualizar vendas.');
   }
   try {
@@ -653,8 +671,8 @@ export const updateSale = async (id: string, data: Partial<Venda>): Promise<Vend
 };
 
 export const deleteSale = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para deletar vendas.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('eliminar_vendas')) {
+    throw new ApiError('Você não tem a função ou permissão necessária para deletar vendas.');
   }
   try {
     await api.delete(`/venda/${id}`);
@@ -676,7 +694,7 @@ export const getAllClients = async (): Promise<Cliente[]> => {
 };
 
 export const createClient = async (data: Cliente): Promise<Cliente> => {
-  if (!hasPermission('criar_cliente')) {
+  if (!hasPermission('criar_clientes')) {
     throw new ApiError('Você não tem permissão para criar clientes.');
   }
   try {
@@ -688,7 +706,7 @@ export const createClient = async (data: Cliente): Promise<Cliente> => {
 };
 
 export const updateClient = async (id: string, data: Partial<Cliente>): Promise<Cliente> => {
-  if (!hasPermission('atualizar_cliente')) {
+  if (!hasPermission('atualizar_clientes')) {
     throw new ApiError('Você não tem permissão para atualizar clientes.');
   }
   try {
@@ -700,8 +718,8 @@ export const updateClient = async (id: string, data: Partial<Cliente>): Promise<
 };
 
 export const deleteClient = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para deletar clientes.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('eliminar_clientes')) {
+    throw new ApiError('Você não tem a função ou permissão necessária para deletar clientes.');
   }
   try {
     await api.delete(`/cliente/${id}`);
@@ -723,7 +741,7 @@ export const getAllCorridors = async (): Promise<Corredor[]> => {
 };
 
 export const createCorridor = async (data: Corredor): Promise<Corredor> => {
-  if (!hasPermission('criar_corredor')) {
+  if (!hasPermission('criar_corredores')) {
     throw new ApiError('Você não tem permissão para criar corredores.');
   }
   try {
@@ -735,7 +753,7 @@ export const createCorridor = async (data: Corredor): Promise<Corredor> => {
 };
 
 export const updateCorridor = async (id: string, data: Partial<Corredor>): Promise<Corredor> => {
-  if (!hasPermission('atualizar_corredor')) {
+  if (!hasPermission('atualizar_corredores')) {
     throw new ApiError('Você não tem permissão para atualizar corredores.');
   }
   try {
@@ -747,8 +765,8 @@ export const updateCorridor = async (id: string, data: Partial<Corredor>): Promi
 };
 
 export const deleteCorridor = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para deletar corredores.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('eliminar_corredores')) {
+    throw new ApiError('Você não tem a função ou permissão necessária para deletar corredores.');
   }
   try {
     await api.delete(`/corredor/${id}`);
@@ -797,8 +815,10 @@ export const updateProductCategory = async (
 };
 
 export const deleteProductCategory = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para deletar categorias de produtos.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('eliminar_categoria_produto')) {
+    throw new ApiError(
+      'Você não tem a função ou permissão necessária para deletar categorias de produtos.',
+    );
   }
   try {
     await api.delete(`/categoriaProduto/${id}`);
@@ -832,7 +852,7 @@ export const createShelf = async (data: Prateleira): Promise<Prateleira> => {
 };
 
 export const updateShelf = async (id: string, data: Partial<Prateleira>): Promise<Prateleira> => {
-  if (!hasPermission('atualizar_prateleira')) {
+  if (!hasPermission('atualizar_prateleiras')) {
     throw new ApiError('Você não tem permissão para atualizar prateleiras.');
   }
   try {
@@ -844,8 +864,8 @@ export const updateShelf = async (id: string, data: Partial<Prateleira>): Promis
 };
 
 export const deleteShelf = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para deletar prateleiras.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('eliminar_prateleiras')) {
+    throw new ApiError('Você não tem a função ou permissão necessária para deletar prateleiras.');
   }
   try {
     await api.delete(`/prateleira/${id}`);
@@ -879,7 +899,7 @@ export const createSection = async (data: Seccao): Promise<Seccao> => {
 };
 
 export const updateSection = async (id: string, data: Partial<Seccao>): Promise<Seccao> => {
-  if (!hasPermission('atualizar_seccao')) {
+  if (!hasPermission('atualizar_seccoes')) {
     throw new ApiError('Você não tem permissão para atualizar seções.');
   }
   try {
@@ -893,8 +913,8 @@ export const updateSection = async (id: string, data: Partial<Seccao>): Promise<
 };
 
 export const deleteSection = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para deletar seções.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('eliminar_seccoes')) {
+    throw new ApiError('Você não tem a função ou permissão necessária para deletar seções.');
   }
   try {
     await api.delete(`/seccao/${id}`);
@@ -916,7 +936,7 @@ export const getAllCashRegisters = async (): Promise<Caixa[]> => {
 };
 
 export const createCashRegister = async (data: Caixa): Promise<Caixa> => {
-  if (!hasPermission('criar_caixa')) {
+  if (!hasPermission('criar_caixas')) {
     throw new ApiError('Você não tem permissão para criar caixas.');
   }
   try {
@@ -928,7 +948,7 @@ export const createCashRegister = async (data: Caixa): Promise<Caixa> => {
 };
 
 export const updateCashRegister = async (id: string, data: Partial<Caixa>): Promise<Caixa> => {
-  if (!hasPermission('atualizar_caixa')) {
+  if (!hasPermission('atualizar_caixas')) {
     throw new ApiError('Você não tem permissão para atualizar caixas.');
   }
   try {
@@ -940,8 +960,8 @@ export const updateCashRegister = async (id: string, data: Partial<Caixa>): Prom
 };
 
 export const deleteCashRegister = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para deletar caixas.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('eliminar_caixas')) {
+    throw new ApiError('Você não tem a função ou permissão necessária para deletar caixas.');
   }
   try {
     await api.delete(`/caixa/${id}`);
@@ -951,7 +971,7 @@ export const deleteCashRegister = async (id: string): Promise<void> => {
 };
 
 export const getAllEmployeeCashRegisters = async (): Promise<FuncionarioCaixa[]> => {
-  if (!hasPermission('listar_funcionarios_caixa')) {
+  if (!hasPermission('listar_funcionario_caixa')) {
     throw new ApiError('Você não tem permissão para listar relações funcionário-caixa.');
   }
   try {
@@ -965,14 +985,14 @@ export const getAllEmployeeCashRegisters = async (): Promise<FuncionarioCaixa[]>
 export const createEmployeeCashRegister = async (
   data: FuncionarioCaixa,
 ): Promise<FuncionarioCaixa> => {
-  if (!hasPermission('criar_funcionario_caixa')) {
-    throw new ApiError('Você não tem permissão para criar relações funcionário-caixa.');
+  if (!hasPermission('abrir_caixa')) {
+    throw new ApiError('Você não tem permissão para abrir caixas.');
   }
   try {
     const response = await api.post('/funcionarioCaixa', data);
     return response.data;
   } catch (error) {
-    throw new ApiError('Falha ao criar relação funcionário-caixa');
+    throw new ApiError('Falha ao abrir caixa');
   }
 };
 
@@ -992,8 +1012,10 @@ export const updateEmployeeCashRegister = async (
 };
 
 export const deleteEmployeeCashRegister = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para deletar relações funcionário-caixa.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('eliminar_funcionario_caixa')) {
+    throw new ApiError(
+      'Você não tem a função ou permissão necessária para deletar relações funcionário-caixa.',
+    );
   }
   try {
     await api.delete(`/funcionarioCaixa/${id}`);
@@ -1015,7 +1037,7 @@ export const getAllLocations = async (): Promise<Localizacao[]> => {
 };
 
 export const createLocation = async (data: Localizacao): Promise<Localizacao> => {
-  if (!hasPermission('criar_localizacao')) {
+  if (!hasPermission('criar_localizacoes')) {
     throw new ApiError('Você não tem permissão para criar localizações.');
   }
   try {
@@ -1030,7 +1052,7 @@ export const updateLocation = async (
   id: string,
   data: Partial<Localizacao>,
 ): Promise<Localizacao> => {
-  if (!hasPermission('atualizar_localizacao')) {
+  if (!hasPermission('atualizar_localizacoes')) {
     throw new ApiError('Você não tem permissão para atualizar localizações.');
   }
   try {
@@ -1042,8 +1064,8 @@ export const updateLocation = async (
 };
 
 export const deleteLocation = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para deletar localizações.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('eliminar_localizacoes')) {
+    throw new ApiError('Você não tem a função ou permissão necessária para deletar localizações.');
   }
   try {
     await api.delete(`/localizacao/${id}`);
@@ -1053,8 +1075,8 @@ export const deleteLocation = async (id: string): Promise<void> => {
 };
 
 export const getAllPermissions = async (): Promise<Permissao[]> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para listar permissões.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('listar_permissoes')) {
+    throw new ApiError('Você não tem a função ou permissão necessária para listar permissões.');
   }
   try {
     const response = await api.get('/permissao');
@@ -1065,8 +1087,8 @@ export const getAllPermissions = async (): Promise<Permissao[]> => {
 };
 
 export const createPermission = async (data: Permissao): Promise<Permissao> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para criar permissões.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('criar_permissoes')) {
+    throw new ApiError('Você não tem a função ou permissão necessária para criar permissões.');
   }
   try {
     const response = await api.post('/permissao', data);
@@ -1103,7 +1125,7 @@ export const deletePermission = async (id: string): Promise<void> => {
 };
 
 export const getAllProductLocations = async (): Promise<ProdutoLocalizacao[]> => {
-  if (!hasPermission('listar_produto_localizacoes')) {
+  if (!hasPermission('listar_produto_localizacao')) {
     throw new ApiError('Você não tem permissão para listar localizações de produtos.');
   }
   try {
@@ -1144,8 +1166,10 @@ export const updateProductLocation = async (
 };
 
 export const deleteProductLocation = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para deletar localizações de produtos.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('eliminar_produto_localizacao')) {
+    throw new ApiError(
+      'Você não tem a função ou permissão necessária para deletar localizações de produtos.',
+    );
   }
   try {
     await api.delete(`/produtoLocalizacao/${id}`);
@@ -1155,7 +1179,7 @@ export const deleteProductLocation = async (id: string): Promise<void> => {
 };
 
 export const getAllSaleProducts = async (): Promise<VendaProduto[]> => {
-  if (!hasPermission('listar_venda_produtos')) {
+  if (!hasPermission('listar_venda_produto')) {
     throw new ApiError('Você não tem permissão para listar produtos de vendas.');
   }
   try {
@@ -1167,7 +1191,7 @@ export const getAllSaleProducts = async (): Promise<VendaProduto[]> => {
 };
 
 export const createSaleProduct = async (data: VendaProduto): Promise<VendaProduto> => {
-  if (!hasPermission('criar_venda_produto')) {
+  if (!hasPermission('criar_vendas_produtos')) {
     throw new ApiError('Você não tem permissão para criar produtos de vendas.');
   }
   try {
@@ -1182,7 +1206,7 @@ export const updateSaleProduct = async (
   id: string,
   data: Partial<VendaProduto>,
 ): Promise<VendaProduto> => {
-  if (!hasPermission('atualizar_venda_produto')) {
+  if (!hasPermission('atualizar_vendas_produtos')) {
     throw new ApiError('Você não tem permissão para atualizar produtos de vendas.');
   }
   try {
@@ -1194,8 +1218,10 @@ export const updateSaleProduct = async (
 };
 
 export const deleteSaleProduct = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para deletar produtos de vendas.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('eliminar_venda_produto')) {
+    throw new ApiError(
+      'Você não tem a função ou permissão necessária para deletar produtos de vendas.',
+    );
   }
   try {
     await api.delete(`/vendaProduto/${id}`);
@@ -1217,7 +1243,7 @@ export const getAllAlerts = async (): Promise<Alerta[]> => {
 };
 
 export const createAlert = async (data: Alerta): Promise<Alerta> => {
-  if (!hasPermission('criar_alerta')) {
+  if (!hasPermission('criar_alertas')) {
     throw new ApiError('Você não tem permissão para criar alertas.');
   }
   try {
@@ -1229,7 +1255,7 @@ export const createAlert = async (data: Alerta): Promise<Alerta> => {
 };
 
 export const updateAlert = async (id: string, data: Partial<Alerta>): Promise<Alerta> => {
-  if (!hasPermission('atualizar_alerta')) {
+  if (!hasPermission('atualizar_alertas')) {
     throw new ApiError('Você não tem permissão para atualizar alertas.');
   }
   try {
@@ -1241,8 +1267,8 @@ export const updateAlert = async (id: string, data: Partial<Alerta>): Promise<Al
 };
 
 export const deleteAlert = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para deletar alertas.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('eliminar_alertas')) {
+    throw new ApiError('Você não tem a função ou permissão necessária para deletar alertas.');
   }
   try {
     await api.delete(`/alertas/${id}`);
@@ -1264,7 +1290,7 @@ export const getAllTasks = async (): Promise<Tarefa[]> => {
 };
 
 export const createTask = async (data: Tarefa): Promise<Tarefa> => {
-  if (!hasPermission('criar_tarefa')) {
+  if (!hasPermission('criar_tarefas')) {
     throw new ApiError('Você não tem permissão para criar tarefas.');
   }
   try {
@@ -1276,7 +1302,7 @@ export const createTask = async (data: Tarefa): Promise<Tarefa> => {
 };
 
 export const updateTask = async (id: string, data: Partial<Tarefa>): Promise<Tarefa> => {
-  if (!hasPermission('atualizar_tarefa')) {
+  if (!hasPermission('atualizar_tarefas')) {
     throw new ApiError('Você não tem permissão para atualizar tarefas.');
   }
   try {
@@ -1288,8 +1314,8 @@ export const updateTask = async (id: string, data: Partial<Tarefa>): Promise<Tar
 };
 
 export const deleteTask = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para deletar tarefas.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('eliminar_tarefas')) {
+    throw new ApiError('Você não tem a função ou permissão necessária para deletar tarefas.');
   }
   try {
     await api.delete(`/tarefa/${id}`);
@@ -1299,7 +1325,7 @@ export const deleteTask = async (id: string): Promise<void> => {
 };
 
 export const getAllDailyActivities = async (): Promise<AtividadeDoDia[]> => {
-  if (!hasPermission('listar_atividades_dia')) {
+  if (!hasPermission('listar_funcionario_tarefa')) {
     throw new ApiError('Você não tem permissão para listar atividades do dia.');
   }
   try {
@@ -1311,7 +1337,7 @@ export const getAllDailyActivities = async (): Promise<AtividadeDoDia[]> => {
 };
 
 export const createDailyActivity = async (data: AtividadeDoDia): Promise<AtividadeDoDia> => {
-  if (!hasPermission('criar_atividade_dia')) {
+  if (!hasPermission('criar_funcionario_tarefa')) {
     throw new ApiError('Você não tem permissão para criar atividades do dia.');
   }
   try {
@@ -1326,7 +1352,7 @@ export const updateDailyActivity = async (
   id: string,
   data: Partial<AtividadeDoDia>,
 ): Promise<AtividadeDoDia> => {
-  if (!hasPermission('atualizar_atividade_dia')) {
+  if (!hasPermission('atualizar_funcionario_tarefa')) {
     throw new ApiError('Você não tem permissão para atualizar atividades do dia.');
   }
   try {
@@ -1338,8 +1364,10 @@ export const updateDailyActivity = async (
 };
 
 export const deleteDailyActivity = async (id: string): Promise<void> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para deletar atividades do dia.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('eliminar_funcionario_tarefa')) {
+    throw new ApiError(
+      'Você não tem a função ou permissão necessária para deletar atividades do dia.',
+    );
   }
   try {
     await api.delete(`/funcionarioTarefa/${id}`);
@@ -1353,7 +1381,7 @@ export const assignTaskToEmployees = async (
   funcionarioIds: string[],
   funcaoIds: string[],
 ): Promise<void> => {
-  if (!hasPermission('atribuir_tarefa')) {
+  if (!hasPermission('criar_funcionario_tarefa')) {
     throw new ApiError('Você não tem permissão para atribuir tarefas.');
   }
   try {
@@ -1369,7 +1397,7 @@ export const assignTaskToEmployees = async (
 export const getTaskAssignments = async (
   tarefaId: string,
 ): Promise<{ funcionarios: Funcionario[]; funcoes: Funcao[] }> => {
-  if (!hasPermission('listar_atribuicoes_tarefa')) {
+  if (!hasPermission('listar_funcionario_tarefa')) {
     throw new ApiError('Você não tem permissão para listar atribuições de tarefas.');
   }
   try {
@@ -1385,7 +1413,7 @@ export const removeTaskAssignment = async (
   funcionarioId: string,
   funcaoId: string,
 ): Promise<void> => {
-  if (!hasPermission('remover_atribuicao_tarefa')) {
+  if (!hasPermission('eliminar_funcionario_tarefa')) {
     throw new ApiError('Você não tem permissão para remover atribuições de tarefas.');
   }
   try {
@@ -1401,8 +1429,10 @@ export const getSalesByPeriod = async (
   startDate: string,
   endDate: string,
 ): Promise<VendaComFuncionario[]> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para acessar relatórios de vendas.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('listar_vendas')) {
+    throw new ApiError(
+      'Você não tem a função ou permissão necessária para acessar relatórios de vendas.',
+    );
   }
   try {
     const response = await api.get('/relatorio/vendas-periodo', {
@@ -1419,9 +1449,9 @@ export const getSalesByClient = async (
   startDate: string,
   endDate: string,
 ): Promise<VendaComFuncionario[]> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('listar_vendas')) {
     throw new ApiError(
-      'Você não tem a função necessária para acessar relatórios de vendas por cliente.',
+      'Você não tem a função ou permissão necessária para acessar relatórios de vendas por cliente.',
     );
   }
   try {
@@ -1438,9 +1468,9 @@ export const getTopSellingProducts = async (
   startDate: string,
   endDate: string,
 ): Promise<ProdutoMaisVendido[]> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('listar_produtos')) {
     throw new ApiError(
-      'Você não tem a função necessária para acessar relatórios de produtos mais vendidos.',
+      'Você não tem a função ou permissão necessária para acessar relatórios de produtos mais vendidos.',
     );
   }
   try {
@@ -1457,8 +1487,10 @@ export const getRevenueByPeriod = async (
   startDate: string,
   endDate: string,
 ): Promise<FaturamentoPorPeriodo> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
-    throw new ApiError('Você não tem a função necessária para acessar relatórios de faturamento.');
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('listar_vendas')) {
+    throw new ApiError(
+      'Você não tem a função ou permissão necessária para acessar relatórios de faturamento.',
+    );
   }
   try {
     const response = await api.get('/relatorio/faturamento-periodo', {
@@ -1474,9 +1506,9 @@ export const getRevenueByCashRegister = async (
   startDate: string,
   endDate: string,
 ): Promise<QuantidadeFaturadaPorCaixa[]> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('listar_caixas')) {
     throw new ApiError(
-      'Você não tem a função necessária para acessar relatórios de faturamento por caixa.',
+      'Você não tem a função ou permissão necessária para acessar relatórios de faturamento por caixa.',
     );
   }
   try {
@@ -1505,9 +1537,9 @@ export const getStockEntriesByPeriod = async (
   startDate: string,
   endDate: string,
 ): Promise<EntradaEstoqueComFuncionario[]> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('listar_entrada_estoque')) {
     throw new ApiError(
-      'Você não tem a função necessária para acessar relatórios de entradas de estoque.',
+      'Você não tem a função ou permissão necessária para acessar relatórios de entradas de estoque.',
     );
   }
   try {
@@ -1524,9 +1556,9 @@ export const getTransfersByPeriod = async (
   startDate: string,
   endDate: string,
 ): Promise<TransferenciaComFuncionario[]> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('listar_transferencias')) {
     throw new ApiError(
-      'Você não tem a função necessária para acessar relatórios de transferências.',
+      'Você não tem a função ou permissão necessária para acessar relatórios de transferências.',
     );
   }
   try {
@@ -1555,9 +1587,9 @@ export const getCashierActivity = async (
   startDate: string,
   endDate: string,
 ): Promise<FuncionarioCaixaComNome[]> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('listar_funcionario_caixa')) {
     throw new ApiError(
-      'Você não tem a função necessária para acessar relatórios de atividade de caixa.',
+      'Você não tem a função ou permissão necessária para acessar relatórios de atividade de caixa.',
     );
   }
   try {
@@ -1573,9 +1605,9 @@ export const getCashierActivity = async (
 export const getTopSellingPeriodByProduct = async (
   referenciaProduto: string,
 ): Promise<PeriodoMaisVendidoPorProduto> => {
-  if (!hasAnyRole(['Gerente', 'Admin'])) {
+  if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('listar_vendas')) {
     throw new ApiError(
-      'Você não tem a função necessária para acessar relatórios de período mais vendido.',
+      'Você não tem a função ou permissão necessária para acessar relatórios de período mais vendido.',
     );
   }
   try {

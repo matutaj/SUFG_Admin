@@ -19,7 +19,7 @@ import {
   Alert,
   TablePagination,
 } from '@mui/material';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import IconifyIcon from 'components/base/IconifyIcon';
 import Edit from 'components/icons/factor/Edit';
 import Delete from 'components/icons/factor/Delete';
@@ -77,7 +77,6 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
   const [nomeCategoria, setNomeCategoria] = useState('');
   const [descricao, setDescricao] = useState('');
   const [categorias, setCategorias] = useState<CategoriaProduto[]>([]);
-  const [filteredCategorias, setFilteredCategorias] = useState<CategoriaProduto[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [errors, setErrors] = useState<{ nomeCategoria?: string; descricao?: string }>({});
   const [loading, setLoading] = useState(false);
@@ -111,8 +110,7 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
     try {
       setLoading(true);
       const data = await getAllProductCategories();
-      setCategorias(data);
-      setFilteredCategorias(data);
+      setCategorias(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Erro ao buscar categorias:', error);
       setAlert({ severity: 'error', message: 'Erro ao carregar categorias!' });
@@ -121,17 +119,21 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
       setLoading(false);
     }
   };
+
   useEffect(() => {
     fetchCategories();
   }, []);
 
-  useEffect(() => {
-    const filtered = categorias.filter((categoria) =>
+  const filteredCategorias = useMemo(() => {
+    const validCategorias = Array.isArray(categorias) ? categorias : [];
+    return validCategorias.filter((categoria) =>
       categoria.nomeCategoria?.toLowerCase().includes(searchTerm.toLowerCase()),
     );
-    setFilteredCategorias(filtered);
-    setPage(0);
   }, [searchTerm, categorias]);
+
+  const paginatedCategorias = useMemo(() => {
+    return filteredCategorias.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  }, [filteredCategorias, page, rowsPerPage]);
 
   const handleAddCategoria = async () => {
     try {
@@ -199,11 +201,6 @@ const Categoria: React.FC<CollapsedItemProps> = ({ open }) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
   };
-
-  const paginatedCategorias = filteredCategorias.slice(
-    page * rowsPerPage,
-    page * rowsPerPage + rowsPerPage,
-  );
 
   return (
     <>

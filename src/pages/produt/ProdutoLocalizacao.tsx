@@ -196,7 +196,9 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       const newShelves = shelvesResult.status === 'fulfilled' ? shelvesResult.value : [];
       const newCorridors = corridorsResult.status === 'fulfilled' ? corridorsResult.value : [];
       const newProductLocations =
-        productLocationsResult.status === 'fulfilled' ? productLocationsResult.value : [];
+        productLocationsResult.status === 'fulfilled' && Array.isArray(productLocationsResult.value)
+          ? productLocationsResult.value
+          : [];
 
       setProducts(newProducts);
       setLocations(newLocations);
@@ -238,13 +240,16 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       setStockQuantity(totalStock);
 
       const updatedProductLocations = await getAllProductLocations();
-      setProductLocations(updatedProductLocations);
+      const validProductLocations = Array.isArray(updatedProductLocations)
+        ? updatedProductLocations
+        : [];
+      setProductLocations(validProductLocations);
 
-      const storeLocations = updatedProductLocations.filter(
+      const storeLocations = validProductLocations.filter(
         (loc) =>
           loc.id_produto === idProdutoLocalizacao && isStoreLocation(loc.id_localizacao, locations),
       );
-      const warehouseLocations = updatedProductLocations.filter(
+      const warehouseLocations = validProductLocations.filter(
         (loc) =>
           loc.id_produto === idProdutoLocalizacao &&
           !isStoreLocation(loc.id_localizacao, locations),
@@ -269,7 +274,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       setStoreQuantity(0);
       setRemainingQuantity(0);
     }
-  }, [idProdutoLocalizacao, locations, productLocations]);
+  }, [idProdutoLocalizacao, locations]);
 
   useEffect(() => {
     updateStockAndWarehouseData();
@@ -293,7 +298,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   );
 
   const filteredProductLocations = useMemo(() => {
-    let filtered = productLocations;
+    let filtered = Array.isArray(productLocations) ? productLocations : [];
 
     if (selectedLocationType) {
       filtered = filtered.filter((location) => location.id_localizacao === selectedLocationType);
@@ -309,11 +314,20 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     return filtered;
   }, [selectedLocationType, searchQuery, productLocations, products]);
 
+  const uniqueProductLocations = useMemo(() => {
+    const seenIds = new Set();
+    return filteredProductLocations.filter((loc) => {
+      if (seenIds.has(loc.id)) return false;
+      seenIds.add(loc.id);
+      return true;
+    });
+  }, [filteredProductLocations]);
+
   const paginatedProductLocations = useMemo(() => {
     const start = page * rowsPerPage;
     const end = start + rowsPerPage;
-    return filteredProductLocations.slice(start, end);
-  }, [filteredProductLocations, page, rowsPerPage]);
+    return uniqueProductLocations.slice(start, end);
+  }, [uniqueProductLocations, page, rowsPerPage]);
 
   const handleAddProductLocation = useCallback(async () => {
     const newErrors: {
@@ -355,7 +369,10 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
     if (totalStock > 0 && quantidadeProduto > 0) {
       const updatedProductLocations = await getAllProductLocations();
-      setProductLocations(updatedProductLocations);
+      const validProductLocations = Array.isArray(updatedProductLocations)
+        ? updatedProductLocations
+        : [];
+      setProductLocations(validProductLocations);
 
       const currentTotal = getTotalStockInLocations(idProdutoLocalizacao, editLocationId);
       const newTotal = currentTotal + quantidadeProduto;
@@ -389,7 +406,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
           loc.id_seccao === idSeccao &&
           loc.id_prateleira === idPrateleira &&
           loc.id_corredor === idCorredor &&
-          loc.id !== editLocationId, // Excluir a localização em edição
+          loc.id !== editLocationId,
       );
 
       const locationData: ProdutoLocalizacao = {
@@ -404,7 +421,6 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       };
 
       if (existingLocation && !editLocationId) {
-        // Atualizar a localização existente
         locationData.id = existingLocation.id;
         locationData.quantidadeProduto =
           (existingLocation.quantidadeProduto ?? 0) + quantidadeProduto;
@@ -414,15 +430,14 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         );
         await updateProductLocation(existingLocation.id!, locationData);
       } else if (editLocationId) {
-        // Atualizar a localização em edição
         await updateProductLocation(editLocationId, locationData);
       } else {
-        // Criar uma nova localização
         await createProductLocation(locationData);
       }
 
       const updatedLocations = await getAllProductLocations();
-      setProductLocations(updatedLocations);
+      const validUpdatedLocations = Array.isArray(updatedLocations) ? updatedLocations : [];
+      setProductLocations(validUpdatedLocations);
       await updateStockAndWarehouseData();
 
       setAlert({
@@ -487,7 +502,8 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       setAlert(null);
       await deleteProductLocation(locationToDelete);
       const updatedLocations = await getAllProductLocations();
-      setProductLocations(updatedLocations);
+      const validUpdatedLocations = Array.isArray(updatedLocations) ? updatedLocations : [];
+      setProductLocations(validUpdatedLocations);
       await updateStockAndWarehouseData();
       setAlert({ severity: 'success', message: 'Localização do produto excluída com sucesso!' });
     } catch (error) {
@@ -885,7 +901,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             <TablePagination
               rowsPerPageOptions={[5, 10, 25]}
               component="div"
-              count={filteredProductLocations.length}
+              count={uniqueProductLocations.length}
               rowsPerPage={rowsPerPage}
               page={page}
               onPageChange={handleChangePage}
