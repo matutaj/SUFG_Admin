@@ -69,7 +69,7 @@ export const login = async (credentials: LoginCredentials): Promise<LoginRespons
     const { token, nome, email, telefone, numeroBI, roles, permissoes } = response.data.result;
 
     // Armazenar token e dados do usuário
-    localStorage.setItem('auth_token', token);
+    localStorage.setItem('token', token);
     localStorage.setItem(
       'user',
       JSON.stringify({ nome, email, telefone, numeroBI, roles, permissoes }),
