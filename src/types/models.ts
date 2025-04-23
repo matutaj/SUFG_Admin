@@ -57,6 +57,7 @@ export interface Produto {
   quantidadePorUnidade: number;
   unidadeMedida: string;
   unidadeConteudo: string;
+  createdAt: Date;
 }
 
 export interface Fornecedor {

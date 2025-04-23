@@ -44,6 +44,7 @@ class ApiError extends Error {
     this.name = 'ApiError';
   }
 }
+
 export interface LoginCredentials {
   email: string;
   senha: string;
@@ -61,6 +62,7 @@ export interface LoginResponse {
     permissoes: string[];
   };
 }
+
 export const login = async (credentials: LoginCredentials): Promise<LoginResponse> => {
   try {
     const response = await api.post('/login', credentials);
@@ -77,6 +79,7 @@ export const login = async (credentials: LoginCredentials): Promise<LoginRespons
     throw new ApiError('Falha ao fazer login');
   }
 };
+
 export const getAllStockEntries = async (): Promise<DadosEntradaEstoque[]> => {
   // if (!hasPermission('listar_entrada_estoque')) {
   //   throw new ApiError('Você não tem permissão para listar entradas de estoque.');
@@ -1410,9 +1413,11 @@ export const removeTaskAssignment = async (
   }
 };
 
+// Updated and new methods for /relatorio/ routes
 export const getSalesByPeriod = async (
   startDate: string,
   endDate: string,
+  limit?: number,
 ): Promise<VendaComFuncionario[]> => {
   // if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('listar_vendas')) {
   //   throw new ApiError(
@@ -1421,7 +1426,7 @@ export const getSalesByPeriod = async (
   // }
   try {
     const response = await api.get('/relatorio/vendas-periodo', {
-      params: { dataInicio: startDate, dataFim: endDate },
+      params: { dataInicio: startDate, dataFim: endDate, limite: limit },
     });
     return response.data;
   } catch (error) {
@@ -1433,6 +1438,7 @@ export const getSalesByClient = async (
   idCliente: string,
   startDate: string,
   endDate: string,
+  limit?: number,
 ): Promise<VendaComFuncionario[]> => {
   // if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('listar_vendas')) {
   //   throw new ApiError(
@@ -1441,7 +1447,7 @@ export const getSalesByClient = async (
   // }
   try {
     const response = await api.get(`/relatorio/vendas-cliente/${idCliente}`, {
-      params: { dataInicio: startDate, dataFim: endDate },
+      params: { dataInicio: startDate, dataFim: endDate, limite: limit },
     });
     return response.data;
   } catch (error) {
@@ -1452,6 +1458,7 @@ export const getSalesByClient = async (
 export const getTopSellingProducts = async (
   startDate: string,
   endDate: string,
+  limit?: number,
 ): Promise<ProdutoMaisVendido[]> => {
   // if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('listar_produtos')) {
   //   throw new ApiError(
@@ -1460,7 +1467,7 @@ export const getTopSellingProducts = async (
   // }
   try {
     const response = await api.get('/relatorio/produtos-mais-vendidos', {
-      params: { dataInicio: startDate, dataFim: endDate },
+      params: { dataInicio: startDate, dataFim: endDate, limite: limit },
     });
     return response.data;
   } catch (error) {
@@ -1506,12 +1513,17 @@ export const getRevenueByCashRegister = async (
   }
 };
 
-export const getCurrentStock = async (): Promise<DadosEstoque[]> => {
+export const getCurrentStock = async (
+  startDate: string,
+  endDate: string,
+): Promise<DadosEstoque[]> => {
   // if (!hasPermission('listar_estoque_atual')) {
   //   throw new ApiError('Você não tem permissão para listar estoque atual.');
   // }
   try {
-    const response = await api.get('/relatorio/estoque-atual');
+    const response = await api.get('/relatorio/estoque-atual', {
+      params: { dataInicio: startDate, dataFim: endDate },
+    });
     return response.data;
   } catch (error) {
     throw new ApiError('Falha ao buscar estoque atual');
@@ -1556,12 +1568,17 @@ export const getTransfersByPeriod = async (
   }
 };
 
-export const getProductsBelowMinimum = async (): Promise<ProdutoAbaixoMinimo[]> => {
+export const getProductsBelowMinimum = async (
+  startDate: string,
+  endDate: string,
+): Promise<ProdutoAbaixoMinimo[]> => {
   // if (!hasPermission('listar_produtos_abaixo_minimo')) {
   //   throw new ApiError('Você não tem permissão para listar produtos abaixo do mínimo.');
   // }
   try {
-    const response = await api.get('/relatorio/produtos-abaixo-minimo');
+    const response = await api.get('/relatorio/produtos-abaixo-minimo', {
+      params: { dataInicio: startDate, dataFim: endDate },
+    });
     return response.data;
   } catch (error) {
     throw new ApiError('Falha ao buscar produtos abaixo do mínimo');
@@ -1588,7 +1605,9 @@ export const getCashierActivity = async (
 };
 
 export const getTopSellingPeriodByProduct = async (
-  referenciaProduto: string,
+  idProduto: string,
+  startDate: string,
+  endDate: string,
 ): Promise<PeriodoMaisVendidoPorProduto> => {
   // if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('listar_vendas')) {
   //   throw new ApiError(
@@ -1596,9 +1615,170 @@ export const getTopSellingPeriodByProduct = async (
   //   );
   // }
   try {
-    const response = await api.get(`/relatorio/periodo-mais-vendido/${referenciaProduto}`);
+    const response = await api.get(`/relatorio/periodo-mais-vendido/${idProduto}`, {
+      params: { dataInicio: startDate, dataFim: endDate },
+    });
     return response.data;
   } catch (error) {
-    throw new ApiError(`Falha ao buscar período mais vendido para produto ${referenciaProduto}`);
+    throw new ApiError(`Falha ao buscar período mais vendido para produto ${idProduto}`);
+  }
+};
+
+export const getCashRegistersActivity = async (
+  startDate: string,
+  endDate: string,
+  idProduto?: string,
+): Promise<FuncionarioCaixaComNome[]> => {
+  // if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('listar_funcionario_caixa')) {
+  //   throw new ApiError(
+  //     'Você não tem a função ou permissão necessária para acessar relatórios de atividades de caixas.',
+  //   );
+  // }
+  try {
+    const response = await api.get('/relatorio/atividades-caixas', {
+      params: { dataInicio: startDate, dataFim: endDate, idProduto },
+    });
+    return response.data;
+  } catch (error) {
+    throw new ApiError('Falha ao buscar atividades de caixas');
+  }
+};
+
+export const getTasksReport = async (startDate: string, endDate: string): Promise<Tarefa[]> => {
+  // if (!hasPermission('listar_tarefas')) {
+  //   throw new ApiError('Você não tem permissão para listar tarefas.');
+  // }
+  try {
+    const response = await api.get('/relatorio/tarefas', {
+      params: { dataInicio: startDate, dataFim: endDate },
+    });
+    return response.data;
+  } catch (error) {
+    throw new ApiError('Falha ao buscar relatório de tarefas');
+  }
+};
+
+export const getSalesReport = async (
+  startDate: string,
+  endDate: string,
+  idProduto?: string,
+): Promise<VendaComFuncionario[]> => {
+  // if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('listar_vendas')) {
+  //   throw new ApiError(
+  //     'Você não tem a função ou permissão necessária para acessar relatórios de vendas.',
+  //   );
+  // }
+  try {
+    const response = await api.get('/relatorio/relatorio-vendas', {
+      params: { dataInicio: startDate, dataFim: endDate, idProduto },
+    });
+    return response.data;
+  } catch (error) {
+    throw new ApiError('Falha ao buscar relatório de vendas');
+  }
+};
+
+export const getStockReport = async (
+  startDate: string,
+  endDate: string,
+  idProduto?: string,
+): Promise<DadosEstoque[]> => {
+  // if (!hasPermission('listar_estoque')) {
+  //   throw new ApiError('Você não tem permissão para listar estoque.');
+  // }
+  try {
+    const response = await api.get('/relatorio/relatorio-estoque', {
+      params: { dataInicio: startDate, dataFim: endDate, idProduto },
+    });
+    return response.data;
+  } catch (error) {
+    throw new ApiError('Falha ao buscar relatório de estoque');
+  }
+};
+
+export const getStockEntriesReport = async (
+  startDate: string,
+  endDate: string,
+  idProduto?: string,
+): Promise<EntradaEstoqueComFuncionario[]> => {
+  // if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('listar_entrada_estoque')) {
+  //   throw new ApiError(
+  //     'Você não tem a função ou permissão necessária para acessar relatórios de entradas de estoque.',
+  //   );
+  // }
+  try {
+    const response = await api.get('/relatorio/relatorio-entradas-estoque', {
+      params: { dataInicio: startDate, dataFim: endDate, idProduto },
+    });
+    return response.data;
+  } catch (error) {
+    throw new ApiError('Falha ao buscar relatório de entradas de estoque');
+  }
+};
+
+export const getProductsReport = async (startDate: string, endDate: string): Promise<Produto[]> => {
+  // if (!hasPermission('listar_produtos')) {
+  //   throw new ApiError('Você não tem permissão para listar produtos.');
+  // }
+  try {
+    const response = await api.get('/relatorio/relatorio-produtos', {
+      params: { dataInicio: startDate, dataFim: endDate },
+    });
+    return response.data;
+  } catch (error) {
+    throw new ApiError('Falha ao buscar relatório de produtos');
+  }
+};
+
+export const getProductLocationReport = async (
+  startDate: string,
+  endDate: string,
+  idProduto?: string,
+): Promise<ProdutoLocalizacao[]> => {
+  // if (!hasPermission('listar_produto_localizacao')) {
+  //   throw new ApiError('Você não tem permissão para listar localizações de produtos.');
+  // }
+  try {
+    const response = await api.get('/relatorio/relatorio-produto-localizacao', {
+      params: { dataInicio: startDate, dataFim: endDate, idProduto },
+    });
+    return response.data;
+  } catch (error) {
+    throw new ApiError('Falha ao buscar relatório de localização de produtos');
+  }
+};
+
+export const getDailyActivitiesReport = async (date: string): Promise<AtividadeDoDia[]> => {
+  // if (!hasPermission('listar_funcionario_tarefa')) {
+  //   throw new ApiError('Você não tem permissão para listar atividades do dia.');
+  // }
+  try {
+    const response = await api.get('/relatorio/atividades-do-dia', {
+      params: { data: date },
+    });
+    return response.data;
+  } catch (error) {
+    throw new ApiError('Falha ao buscar relatório de atividades do dia');
+  }
+};
+
+export const getCashRegistersReport = async (
+  startDate?: string,
+  endDate?: string,
+  idCaixa?: string,
+): Promise<Caixa[]> => {
+  // if (!hasAnyRole(['Gerente', 'Admin']) || !hasPermission('listar_caixas')) {
+  //   throw new ApiError(
+  //     'Você não tem a função ou permissão necessária para acessar relatórios de caixas.',
+  //   );
+  // }
+  try {
+    const endpoint = idCaixa ? `/relatorio/caixas/${idCaixa}` : '/relatorio/caixas';
+    const response = await api.get(endpoint, {
+      params: { dataInicio: startDate, dataFim: endDate, idCaixa },
+    });
+    return response.data;
+  } catch (error) {
+    throw new ApiError('Falha ao buscar relatório de caixas');
   }
 };
