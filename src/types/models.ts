@@ -60,6 +60,7 @@ export interface Produto {
   unidadeMedida: string;
   unidadeConteudo: string;
   createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface Fornecedor {
