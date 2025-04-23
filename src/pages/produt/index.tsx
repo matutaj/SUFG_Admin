@@ -38,6 +38,28 @@ interface CollapsedItemProps {
   open: boolean;
 }
 
+// Definir opções predefinidas para Unidade de Medida e Unidade de Conteúdo
+const unidadeMedidaOptions = [
+  { value: 'L', label: 'Litros (L)' },
+  { value: 'mL', label: 'Mililitros (mL)' },
+  { value: 'kg', label: 'Quilogramas (kg)' },
+  { value: 'g', label: 'Gramas (g)' },
+  { value: 'un', label: 'Unidades (un)' },
+  { value: 'm', label: 'Metros (m)' },
+  { value: 'cm', label: 'Centímetros (cm)' },
+];
+
+const unidadeConteudoOptions = [
+  { value: 'caixa', label: 'Caixa' },
+  { value: 'pacote', label: 'Pacote' },
+  { value: 'garrafa', label: 'Garrafa' },
+  { value: 'lata', label: 'Lata' },
+  { value: 'saco', label: 'Saco' },
+  { value: 'frasco', label: 'Frasco' },
+  { value: 'unidade', label: 'Unidade' },
+  { value: 'embalagem', label: 'Embalagem' },
+];
+
 const modalStyle = {
   position: 'absolute' as const,
   top: '50%',
@@ -188,79 +210,79 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       unidadeConteudo?: string;
     } = {};
 
-    // Existing validations
+    // Validações
     if (!nomeProduto.trim()) newErrors.nomeProduto = 'O nome do produto é obrigatório.';
     if (!referenciaProduto.trim()) newErrors.referenciaProduto = 'A referência é obrigatória.';
     if (!idCategoriaProduto) newErrors.idCategoriaProduto = 'A categoria é obrigatória.';
     if (precoVenda <= 0) newErrors.precoVenda = 'O preço de venda deve ser maior que 0.';
-    if (quantidadePorUnidade < 0)
+    if (editProductRef && quantidadePorUnidade < 0)
       newErrors.quantidadePorUnidade = 'A quantidade em estoque não pode ser negativa.';
-    if (!unidadeMedida.trim()) newErrors.unidadeMedida = 'A unidade de medida é obrigatória.';
-    if (!unidadeConteudo.trim()) newErrors.unidadeConteudo = 'O conteúdo é obrigatório.';
+    if (!unidadeMedida) newErrors.unidadeMedida = 'A unidade de medida é obrigatória.';
+    if (!unidadeConteudo) newErrors.unidadeConteudo = 'O conteúdo é obrigatório.';
 
-    // Check for duplicate product name
+    // Verificar duplicidade de nome
     const existingProduct = products.find(
       (p) =>
         p.nomeProduto.toLowerCase() === nomeProduto.trim().toLowerCase() &&
-        (!editProductRef || p.id !== editProductRef), // Exclude the product being edited
+        (!editProductRef || p.id !== editProductRef),
     );
     if (existingProduct) {
       newErrors.nomeProduto = 'Já existe um produto com este nome.';
     }
 
     if (Object.keys(newErrors).length > 0) {
-      console.log('Validation errors:', newErrors);
+      console.log('Erros de validação:', newErrors);
       setErrors(newErrors);
       return;
     }
 
     try {
       setLoading(true);
-      console.log('No validation errors, proceeding with API call...');
+      console.log('Sem erros de validação, prosseguindo com a chamada à API...');
       const productData: Produto = {
         nomeProduto,
         referenciaProduto,
         id_categoriaProduto: idCategoriaProduto,
         precoVenda,
-        quantidadePorUnidade,
+        quantidadePorUnidade: editProductRef ? quantidadePorUnidade : 0, // Definir 0 ao criar
         unidadeMedida,
         unidadeConteudo,
       };
-      console.log('Product data to send:', productData);
+      console.log('Dados do produto a enviar:', productData);
 
       if (editProductRef) {
-        console.log(`Updating product with ref: ${editProductRef}`);
+        console.log(`Atualizando produto com ref: ${editProductRef}`);
         const response = await updateProduct(editProductRef, productData);
-        console.log('Update response:', response);
+        console.log('Resposta da atualização:', response);
         setAlert({ severity: 'success', message: 'Produto atualizado com sucesso!' });
       } else {
-        console.log('Creating new product');
+        console.log('Criando novo produto');
         const response = await createProduct(productData);
-        console.log('Create response:', response);
+        console.log('Resposta da criação:', response);
         setAlert({ severity: 'success', message: 'Produto cadastrado com sucesso!' });
       }
 
-      console.log('Fetching updated products list...');
+      console.log('Buscando lista de produtos atualizada...');
       await fetchProducts();
-      console.log('Products state after fetch:', products);
-      console.log('Closing modal after successful save');
+      console.log('Estado dos produtos após busca:', products);
+      console.log('Fechando modal após salvar com sucesso');
       handleCloseProduct();
       setPage(0);
     } catch (error) {
-      console.error('Error saving product:', error);
+      console.error('Erro ao salvar produto:', error);
       setErrors({ nomeProduto: 'Erro ao salvar. Tente novamente.' });
       setAlert({ severity: 'error', message: 'Erro ao salvar produto!' });
     } finally {
       setLoading(false);
-      console.log('handleAddProduct completed, loading:', false);
+      console.log('handleAddProduct concluído, loading:', false);
     }
   };
 
   const handleEditProduct = (ref: string) => {
-    console.log(`handleEditProduct called for ref: ${ref}`);
+    console.log(`handleEditProduct chamado para ref: ${ref}`);
     const productToEdit = products.find((p) => p.id === ref);
     if (productToEdit) {
-      console.log('Product to edit found:', productToEdit);
+      console.log('Produto para edição encontrado:', productToEdit);
       setNomeProduto(productToEdit.nomeProduto);
       setReferenciaProduto(productToEdit.referenciaProduto);
       setIdCategoriaProduto(productToEdit.id_categoriaProduto);
@@ -271,37 +293,37 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       setEditProductRef(ref);
       handleOpenProduct();
     } else {
-      console.warn(`Product with ref ${ref} not found`);
+      console.warn(`Produto com ref ${ref} não encontrado`);
     }
   };
 
   const handleDeleteProduct = async () => {
-    console.log(`handleDeleteProduct called for ref: ${productToDelete}`);
+    console.log(`handleDeleteProduct chamado para ref: ${productToDelete}`);
     if (productToDelete) {
       try {
         setLoading(true);
-        console.log('Deleting product...');
+        console.log('Deletando produto...');
         const response = await deleteProduct(productToDelete);
-        console.log('Delete response:', response);
-        console.log('Fetching updated products list...');
+        console.log('Resposta da exclusão:', response);
+        console.log('Buscando lista de produtos atualizada...');
         await fetchProducts();
-        console.log('Products state after fetch:', products);
+        console.log('Estado dos produtos após busca:', products);
         setAlert({ severity: 'success', message: 'Produto excluído com sucesso!' });
         const totalPages = Math.ceil(filteredProducts.length / rowsPerPage);
         if (page >= totalPages && page > 0) {
           setPage(page - 1);
         }
       } catch (error) {
-        console.error('Error deleting product:', error);
+        console.error('Erro ao excluir produto:', error);
         setAlert({ severity: 'error', message: 'Erro ao excluir produto!' });
       } finally {
         setLoading(false);
-        console.log('handleDeleteProduct completed, loading:', false);
-        console.log('Closing confirm modal');
+        console.log('handleDeleteProduct concluído, loading:', false);
+        console.log('Fechando modal de confirmação');
         handleCloseConfirmModal();
       }
     } else {
-      console.warn('No product to delete (productToDelete is null)');
+      console.warn('Nenhum produto para excluir (productToDelete é nulo)');
     }
   };
 
@@ -310,16 +332,16 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       product.nomeProduto.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.referenciaProduto.toLowerCase().includes(searchTerm.toLowerCase()),
   );
-  console.log('Filtered products:', filteredProducts);
+  console.log('Produtos filtrados:', filteredProducts);
 
   const handleChangePage = (event: unknown, newPage: number) => {
-    console.log('Changing page to:', event);
+    console.log('Mudando página para:', newPage);
     setPage(newPage);
   };
 
   const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
     const newRowsPerPage = parseInt(event.target.value, 10);
-    console.log('Changing rows per page to:', newRowsPerPage);
+    console.log('Mudando linhas por página para:', newRowsPerPage);
     setRowsPerPage(newRowsPerPage);
     setPage(0);
   };
@@ -328,6 +350,18 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     page * rowsPerPage,
     page * rowsPerPage + rowsPerPage,
   );
+
+  // Função para obter o rótulo da Unidade de Medida
+  const getUnidadeMedidaLabel = (value: string) => {
+    const option = unidadeMedidaOptions.find((opt) => opt.value === value);
+    return option ? option.label : 'N/A';
+  };
+
+  // Função para obter o rótulo da Unidade de Conteúdo
+  const getUnidadeConteudoLabel = (value: string) => {
+    const option = unidadeConteudoOptions.find((opt) => opt.value === value);
+    return option ? option.label : 'N/A';
+  };
 
   return (
     <>
@@ -424,20 +458,23 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 fullWidth
               />
             </Grid>
+            {editProductRef && (
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Quantidade por Unidade"
+                  type="number"
+                  value={quantidadePorUnidade}
+                  onChange={(e) => setquantidadePorUnidade(Number(e.target.value) || 0)}
+                  error={Boolean(errors.quantidadePorUnidade)}
+                  helperText={errors.quantidadePorUnidade}
+                  disabled={loading}
+                  fullWidth
+                />
+              </Grid>
+            )}
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Quantidade por Unidade"
-                type="number"
-                value={quantidadePorUnidade}
-                onChange={(e) => setquantidadePorUnidade(Number(e.target.value) || 0)}
-                error={Boolean(errors.quantidadePorUnidade)}
-                helperText={errors.quantidadePorUnidade}
-                disabled={loading}
-                fullWidth
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
+                select
                 label="Unidade de Medida"
                 value={unidadeMedida}
                 onChange={(e) => setUnidadeMedida(e.target.value)}
@@ -445,10 +482,20 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 helperText={errors.unidadeMedida}
                 disabled={loading}
                 fullWidth
-              />
+              >
+                <MenuItem value="" disabled>
+                  Selecione uma Unidade de Medida
+                </MenuItem>
+                {unidadeMedidaOptions.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </TextField>
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
+                select
                 label="Unidade de Conteúdo"
                 value={unidadeConteudo}
                 onChange={(e) => setUnidadeConteudo(e.target.value)}
@@ -456,7 +503,16 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 helperText={errors.unidadeConteudo}
                 disabled={loading}
                 fullWidth
-              />
+              >
+                <MenuItem value="" disabled>
+                  Selecione uma Unidade de Conteúdo
+                </MenuItem>
+                {unidadeConteudoOptions.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </TextField>
             </Grid>
             <Grid item xs={12}>
               <Button
@@ -480,7 +536,7 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             Confirmar Exclusão
           </Typography>
           <Typography variant="body1" mb={3}>
-            Tem certeza que deseja excluir este produto? Esta ação não pode be desfeita.
+            Tem certeza que deseja excluir este produto? Esta ação não pode ser desfeita.
           </Typography>
           <Stack direction="row" spacing={2} justifyContent="flex-end">
             <Button
@@ -524,6 +580,12 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                   <TableCell>
                     <strong>Preço Venda</strong>
                   </TableCell>
+                  <TableCell>
+                    <strong>Unidade de Medida</strong>
+                  </TableCell>
+                  <TableCell>
+                    <strong>Unidade de Conteúdo</strong>
+                  </TableCell>
                   <TableCell align="right">
                     <strong>Ações</strong>
                   </TableCell>
@@ -532,7 +594,7 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={5} align="center">
+                    <TableCell colSpan={7} align="center">
                       Carregando...
                     </TableCell>
                   </TableRow>
@@ -546,6 +608,8 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                           ?.nomeCategoria || 'N/A'}
                       </TableCell>
                       <TableCell>{product.precoVenda || 0}</TableCell>
+                      <TableCell>{getUnidadeMedidaLabel(product.unidadeMedida)}</TableCell>
+                      <TableCell>{getUnidadeConteudoLabel(product.unidadeConteudo)}</TableCell>
                       <TableCell align="right">
                         <IconButton
                           color="primary"
@@ -566,7 +630,7 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5} align="center">
+                    <TableCell colSpan={7} align="center">
                       Nenhum produto encontrado.
                     </TableCell>
                   </TableRow>
