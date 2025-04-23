@@ -16,6 +16,7 @@ import LocalProduto from 'pages/produt/ProdutoLocalizacao';
 import Tarefa from 'pages/tarefa/tarefa';
 import Secao from 'pages/seccao/Seccao';
 import Caixas from 'pages/caixa/caixa';
+import Perfil from 'pages/perfil/Perfil';
 import { StockProvider } from 'pages/stock/StockContext';
 
 const App = lazy(() => import('App'));
@@ -74,7 +75,10 @@ export const routes = [
             path: paths.tarefa,
             element: <Tarefa />,
           },
-
+          {
+            path: paths.perfil,
+            element: <Perfil />,
+          },
           {
             path: paths.loja,
             element: <Loja open={true} />,

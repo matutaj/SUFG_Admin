@@ -7,7 +7,6 @@ export const rootPaths = {
 
 export default {
   // Autenticação
-  login: `/${rootPaths.authRoot}/login`,
   signup: `/${rootPaths.authRoot}/sign-up`,
 
   // Páginas principais
@@ -17,6 +16,7 @@ export default {
   categorias: `/${rootPaths.pagesRoot}/categorias`,
   estoque: `/${rootPaths.pagesRoot}/stock`,
   vendas: `/${rootPaths.pagesRoot}/venda`,
+  perfil: `/${rootPaths.pagesRoot}/perfil`,
   relatorio: `/${rootPaths.pagesRoot}/relatorio`,
   corredor: `/${rootPaths.pagesRoot}/corredor`,
   caixa: `/${rootPaths.pagesRoot}/caixa`,

@@ -33,6 +33,7 @@ export interface DadosWrapper {
 }
 
 export interface Funcionario {
+  roles: never[];
   id?: string;
   numeroBI: string;
   nomeFuncionario: string;
@@ -40,6 +41,7 @@ export interface Funcionario {
   moradaFuncionario: string;
   telefoneFuncionario: string;
   emailFuncionario: string;
+  profilePic?: string;
 }
 
 export interface CategoriaProduto {
@@ -57,6 +59,7 @@ export interface Produto {
   quantidadePorUnidade: number;
   unidadeMedida: string;
   unidadeConteudo: string;
+  createdAt: Date;
 }
 
 export interface Fornecedor {
