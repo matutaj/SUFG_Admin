@@ -194,7 +194,7 @@ export interface FuncionarioCaixa {
   horarioAbertura: Date;
   horarioFechamento: Date | null;
   caixas?: Caixa;
-  funcionarios?: Funcionario;
+  Funcionarios?: Funcionario;
   vendas?: Venda[];
   fornecedores?: Fornecedor[];
   createdAt?: Date;
