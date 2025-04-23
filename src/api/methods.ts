@@ -330,7 +330,7 @@ export const createEmployee = async (data: Funcionario): Promise<Funcionario> =>
 };
 
 export const updateEmployee = async (
-  numeroBI: string,
+  id: string,
   data: Partial<Funcionario>,
 ): Promise<Funcionario> => {
   // if (!hasAnyRole(['Gerente', 'RH']) || !hasPermission('atualizar_funcionarios')) {
@@ -339,21 +339,21 @@ export const updateEmployee = async (
   //   );
   // }
   try {
-    const response = await api.put(`/funcionario/${numeroBI}`, data);
+    const response = await api.put(`/funcionario/${id}`, data);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Falha ao atualizar funcionário com BI ${numeroBI}`);
+    throw new ApiError(`Falha ao atualizar funcionário com BI ${id}`);
   }
 };
 
-export const deleteEmployee = async (numeroBI: string): Promise<void> => {
+export const deleteEmployee = async (id: string): Promise<void> => {
   // if (!hasAnyRole(['Gerente', 'RH']) || !hasPermission('eliminar_funcionarios')) {
   //   throw new ApiError('Você não tem a função ou permissão necessária para deletar funcionários.');
   // }
   try {
-    await api.delete(`/funcionario/${numeroBI}`);
+    await api.delete(`/funcionario/${id}`);
   } catch (error) {
-    throw new ApiError(`Falha ao deletar funcionário com BI ${numeroBI}`);
+    throw new ApiError(`Falha ao deletar funcionário com BI ${id}`);
   }
 };
 

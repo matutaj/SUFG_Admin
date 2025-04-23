@@ -24,7 +24,15 @@ const decodeToken = (token: string) => {
 
 const AccountMenu = () => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [userData, setUserData] = useState<{ nome?: string; email?: string } | null>(null);
+  const [userData, setUserData] = useState<{
+    id?: string;
+    nome?: string;
+    email?: string;
+    telefone?: string;
+    morada?: string;
+    roles?: string[];
+    profilePic?: string;
+  } | null>(null);
   const open = Boolean(anchorEl);
   const navigate = useNavigate();
 
@@ -33,7 +41,15 @@ const AccountMenu = () => {
     if (token) {
       const decoded = decodeToken(token);
       if (decoded) {
-        setUserData({ nome: decoded.nome, email: decoded.email });
+        setUserData({
+          id: decoded.id,
+          nome: decoded.nome,
+          email: decoded.email,
+          telefone: decoded.telefone,
+          morada: decoded.morada,
+          roles: decoded.roles,
+          profilePic: localStorage.getItem('profilePic') || undefined,
+        });
         console.log('Decoded token:', decoded);
       }
     }
@@ -42,12 +58,12 @@ const AccountMenu = () => {
   const menuItems = [
     {
       id: 0,
-      label: userData?.nome ? `Olá, ${userData.nome}` : 'Profile',
+      label: userData?.nome ? `Olá, ${userData.nome}` : 'Perfil',
       icon: 'material-symbols:person',
     },
     {
       id: 1,
-      label: userData?.email || 'My Account',
+      label: userData?.roles?.[0] || 'Função',
       icon: 'material-symbols:account-box-sharp',
     },
     {
@@ -66,14 +82,16 @@ const AccountMenu = () => {
   };
 
   const handleMenuItemClick = async (itemId: number) => {
-    if (itemId === 2) {
+    if (itemId === 0 || itemId === 1) {
+      navigate(paths.perfil, { state: { user: userData } });
+    } else if (itemId === 2) {
+      // Handle logout
       try {
-        //await logout();
         localStorage.removeItem('token');
         sessionStorage.removeItem('token');
-        navigate(paths.login);
+        navigate("/login");
       } catch (error) {
-        console.error('Erro ao fazer logout:');
+        console.error('Erro ao fazer logout:', error);
       }
     }
     handleClose();
@@ -89,7 +107,7 @@ const AccountMenu = () => {
         aria-haspopup="true"
         aria-expanded={open ? 'true' : undefined}
       >
-        <Avatar sx={{ width: 40, height: 40 }} alt="avatar" src={avatar} />
+        <Avatar sx={{ width: 40, height: 40 }} alt="avatar" src={userData?.profilePic || avatar} />
       </IconButton>
 
       <Menu

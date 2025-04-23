@@ -50,9 +50,9 @@ import {
   getAllStockEntries,
   getAllTasks,
   getAllDailyActivities,
-  getProductById,
+  /* getProductById,
   getTaskById,
-  getEmployeeById,
+  getEmployeeById, */
 } from '../../api/methods';
 import {
   VendaComFuncionario,
@@ -509,7 +509,7 @@ const ReportPage = () => {
           break;
         }
 
-        case 'ListarAtividadesDoDia': {
+        /*  case 'ListarAtividadesDoDia': {
           if (startDate) {
             const activities: AtividadeDoDia[] = await getDailyActivitiesReport(startDate);
             data = await Promise.all(
@@ -541,7 +541,7 @@ const ReportPage = () => {
             );
           }
           break;
-        }
+        } */
 
         case 'ListarTodasVendas': {
           if (hasDateRange) {
@@ -583,7 +583,7 @@ const ReportPage = () => {
           break;
         }
 
-        case 'ListarTodasEntradasEstoque': {
+        /*  case 'ListarTodasEntradasEstoque': {
           if (hasDateRange) {
             const entries: DadosEntradaEstoque[] = await getAllStockEntries();
             data = await Promise.all(
@@ -614,7 +614,7 @@ const ReportPage = () => {
             );
           }
           break;
-        }
+        } */
 
         case 'ListarDefinicaoMetas': {
           if (hasDateRange) {
@@ -652,7 +652,7 @@ const ReportPage = () => {
     } catch (error) {
       console.error('Erro ao buscar dados do relatório:', error);
       setReportData([]);
-      setAuthError('Erro ao carregar dados: ' + (error.message || 'Desconhecido'));
+      setAuthError('Erro ao carregar dados: ' + (error || 'Desconhecido'));
     }
   };
 
