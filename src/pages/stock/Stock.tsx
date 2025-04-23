@@ -120,7 +120,7 @@ const Stock: React.FC = () => {
     id_produto: '',
     id_funcionario: '',
     quantidadeRecebida: 0,
-    dataEntrada: formatDateToInput(new Date()),
+    dataEntrada: new Date(),
     custoUnitario: 0,
     lote: '',
     dataValidadeLote: new Date(),
@@ -204,19 +204,44 @@ const Stock: React.FC = () => {
   const handleOpen = useCallback(() => {
     setIsEditing(false);
     setEditEntryId(null);
+    let userId = '';
+    const user = localStorage.getItem('user');
+    console.log('Conteúdo do localStorage user:', user); // Log para depuração
+    try {
+      if (user) {
+        const parsedUser = JSON.parse(user);
+        // Suporta userId, id, ou user.id
+        userId = parsedUser.userId || parsedUser.id || parsedUser.user?.id || '';
+        console.log('userId extraído:', userId); // Log para depuração
+        if (userId) {
+          const userExists = employees.some((employee) => employee.id === userId);
+          if (!userExists) {
+            setFetchError('Funcionário logado não encontrado na lista de funcionários.');
+          }
+        } else {
+          setFetchError('ID do usuário não encontrado no localStorage.');
+        }
+      } else {
+        setFetchError('Nenhum usuário logado encontrado. Faça login novamente.');
+      }
+    } catch (error) {
+      console.error('Erro ao parsear user do localStorage:', error);
+      setFetchError('Erro ao recuperar informações do usuário logado.');
+    }
+
     setForm({
       id_fornecedor: '',
       id_produto: '',
-      id_funcionario: '',
+      id_funcionario: userId,
       quantidadeRecebida: 0,
-      dataEntrada: new Date(),
+      dataEntrada: (new Date()),
       custoUnitario: 0,
       lote: '',
-      dataValidadeLote: new Date(),
+      dataValidadeLote: (new Date()),
     });
     setErrors({});
     setOpenModal(true);
-  }, []);
+  }, [employees]);
 
   const handleClose = useCallback(() => {
     setOpenModal(false);
@@ -232,7 +257,7 @@ const Stock: React.FC = () => {
       id_produto: '',
       quantidadeAtual: 0,
       lote: '',
-      dataValidadeLote: new Date(),
+      dataValidadeLote: (new Date()),
     });
     setErrors({});
     setSuccessMessage(null);
@@ -595,7 +620,7 @@ const Stock: React.FC = () => {
       id_produto: stock.id_produto,
       quantidadeAtual: stock.quantidadeAtual,
       lote: stock.lote,
-      dataValidadeLote: stock.dataValidadeLote,
+      dataValidadeLote: (stock.dataValidadeLote),
     });
     setEditStockModal(true);
     setErrors({});
@@ -609,10 +634,10 @@ const Stock: React.FC = () => {
       id_produto: entry.id_produto,
       id_funcionario: entry.id_funcionario,
       quantidadeRecebida: entry.quantidadeRecebida,
-      dataEntrada: formatDateToInput(entry.dataEntrada),
+      dataEntrada: (entry.dataEntrada),
       custoUnitario: entry.custoUnitario,
       lote: entry.lote,
-      dataValidadeLote: entry.dataValidadeLote,
+      dataValidadeLote: (entry.dataValidadeLote),
     });
     setErrors({});
     setOpenModal(true);
@@ -896,13 +921,19 @@ const Stock: React.FC = () => {
               </FormControl>
             </Grid>
             <Grid item xs={12} sm={6}>
-              <FormControl fullWidth error={!!errors.id_funcionario} disabled={loading}>
+              <FormControl fullWidth error={!!errors.id_funcionario} disabled={loading || !isEditing}>
                 <InputLabel>Funcionário</InputLabel>
                 <Select
                   name="id_funcionario"
                   value={form.id_funcionario || ''}
                   onChange={handleSelectChange}
                   aria-label="Selecionar funcionário responsável"
+                  renderValue={(value) =>
+                    value
+                      ? employees.find((e) => e.id === value)?.nomeFuncionario ||
+                        'Funcionário não encontrado'
+                      : 'Selecione um funcionário'
+                  }
                 >
                   <MenuItem value="" disabled>
                     Selecione um funcionário
@@ -913,6 +944,11 @@ const Stock: React.FC = () => {
                     </MenuItem>
                   ))}
                 </Select>
+                {!isEditing && form.id_funcionario && (
+                  <Typography variant="caption" color="textSecondary">
+                    Funcionário logado
+                  </Typography>
+                )}
                 {errors.id_funcionario && (
                   <Typography color="error">{errors.id_funcionario}</Typography>
                 )}
@@ -1188,8 +1224,7 @@ const Stock: React.FC = () => {
                   name="id_prateleira"
                   value={locationForm.id_prateleira || ''}
                   onChange={handleLocationSelectChange}
-                  aria-label="Selecionar prateleira para o produto"
-                >
+                  aria-label="Selecionar prateleira para o produto">
                   <MenuItem value="" disabled>
                     Selecione uma prateleira
                   </MenuItem>
