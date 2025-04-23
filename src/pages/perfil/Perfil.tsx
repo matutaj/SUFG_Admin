@@ -16,6 +16,7 @@ interface UserData {
 export default function ProfilePage() {
   const navigate = useNavigate();
   const [employee, setEmployee] = useState<Funcionario | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const [formData, setFormData] = useState<Partial<Funcionario>>({});
   const [password, setPassword] = useState('');
@@ -27,27 +28,42 @@ export default function ProfilePage() {
   useEffect(() => {
     const loadProfile = async () => {
       try {
+        setIsLoading(true);
         const userData = localStorage.getItem('user');
         const token = localStorage.getItem('token');
         if (!userData || !token) {
+          console.error('Faltando user ou token no localStorage');
           navigate('/login');
           return;
         }
 
         const parsedUser: UserData = JSON.parse(userData);
         if (!parsedUser.numeroBI || !Array.isArray(parsedUser.roles)) {
+          console.error('Dados de usuário inválidos:', parsedUser);
           throw new Error('Dados de usuário inválidos');
         }
 
         const decoded: { id?: string } = jwtDecode(token);
-        if (!decoded.id) throw new Error('ID não encontrado no token');
+        if (!decoded.id) {
+          console.error('ID não encontrado no token:', decoded);
+          throw new Error('ID não encontrado no token');
+        }
 
         const employees = await getAllEmployees();
+        console.log('Funcionários recebidos:', employees);
         const currentEmployee = employees.find(
           (emp) => emp.id === decoded.id || emp.numeroBI === parsedUser.numeroBI,
         );
 
-        if (!currentEmployee) throw new Error('Funcionário não encontrado');
+        if (!currentEmployee) {
+          console.error(
+            'Funcionário não encontrado para id:',
+            decoded.id,
+            'ou numeroBI:',
+            parsedUser.numeroBI,
+          );
+          throw new Error('Funcionário não encontrado');
+        }
 
         setEmployee(currentEmployee);
         setFormData({
@@ -60,8 +76,10 @@ export default function ProfilePage() {
         });
       } catch (err) {
         console.error('Erro ao carregar perfil:', err);
-        setErrorMessage('Erro ao carregar perfil.');
+        setErrorMessage('Erro ao carregar perfil. Tente novamente.');
         navigate('/login');
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -164,7 +182,7 @@ export default function ProfilePage() {
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
       console.error('Erro ao atualizar perfil:', err);
-      setErrorMessage('Erro ao atualizar perfil.');
+      setErrorMessage('Erro ao atualizar perfil. Tente novamente.');
     }
   };
 
@@ -184,7 +202,21 @@ export default function ProfilePage() {
     setEditMode(false);
   };
 
-  if (!employee) return null;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+        <div className="text-gray-600 text-lg">Carregando...</div>
+      </div>
+    );
+  }
+
+  if (!employee) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+        <div className="text-red-600 text-lg">Erro ao carregar perfil. Redirecionando...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
