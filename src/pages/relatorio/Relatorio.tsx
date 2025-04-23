@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { jwtDecode } from 'jwt-decode';
 import {
   Paper,
   Typography,
@@ -17,6 +19,7 @@ import {
   TextField,
   Box,
   Alert,
+  CircularProgress,
 } from '@mui/material';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -50,9 +53,6 @@ import {
   getAllStockEntries,
   getAllTasks,
   getAllDailyActivities,
-  /* getProductById,
-  getTaskById,
-  getEmployeeById, */
 } from '../../api/methods';
 import {
   VendaComFuncionario,
@@ -85,11 +85,6 @@ type JsPDFWithAutoTable = jsPDF & {
     headStyles?: { fillColor: [number, number, number] };
   }) => void;
 };
-
-interface Funcionario {
-  id: string;
-  nomeFuncionario: string;
-}
 
 interface GoalData {
   id: string;
@@ -124,6 +119,7 @@ interface ReportData {
 }
 
 const ReportPage = () => {
+  const navigate = useNavigate();
   const [reportType, setReportType] = useState<string>('ListarVendasPorPeriodo');
   const [reportData, setReportData] = useState<ReportData[]>([]);
   const [startDate, setStartDate] = useState<string>('');
@@ -134,29 +130,84 @@ const ReportPage = () => {
   const [cashRegisterId, setCashRegisterId] = useState<string>('');
   const [clients, setClients] = useState<Cliente[]>([]);
   const [cashRegisters, setCashRegisters] = useState<Caixa[]>([]);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [usuarioId, setUserId] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    const user = localStorage.getItem('user');
-    if (user) {
+    const loadUserId = async () => {
       try {
-        const parsedUser = JSON.parse(user);
-        if (parsedUser.id) {
-          setUserId(parsedUser.id);
-        } else {
-          setAuthError('ID do usuário não encontrado no localStorage');
+        setIsLoading(true);
+        console.log('Iniciando carregamento do userId...');
+
+        // Check for token
+        const token = localStorage.getItem('token');
+        if (!token) {
+          console.error('Token não encontrado no localStorage');
+          throw new Error('Token não encontrado. Faça login novamente.');
         }
-      } catch (error) {
-        setAuthError('Erro ao parsear dados do usuário');
+
+        // Check for user
+        const user = localStorage.getItem('user');
+        let parsedUser: { userId?: string } | null = null;
+        if (user) {
+          try {
+            parsedUser = JSON.parse(user);
+            console.log('Parsed user from localStorage:', parsedUser);
+          } catch (err) {
+            console.error('Erro ao parsear user:', err);
+            throw new Error('Dados de usuário corrompidos');
+          }
+        }
+
+        // Try to get userId from token
+        let userId: string | null = null;
+        try {
+          const decoded: { userId?: string } = jwtDecode(token);
+          console.log('Token decodificado:', decoded);
+          if (decoded.userId) {
+            userId = decoded.userId;
+          } else {
+            console.warn('userId não encontrado no token:', decoded);
+          }
+        } catch (err) {
+          console.error('Erro ao decodificar token:', err);
+          throw new Error('Token inválido');
+        }
+
+        // Fallback to parsedUser.userId if token doesn't provide userId
+        if (!userId && parsedUser && parsedUser.userId) {
+          userId = parsedUser.userId;
+          console.log('userId obtido de parsedUser:', userId);
+        }
+
+        if (!userId) {
+          console.error('Nenhum userId encontrado em token ou user:', {
+            parsedUser,
+            tokenDecoded: jwtDecode(token),
+          });
+          throw new Error(
+            `ID do usuário não encontrado. Dados do user: ${JSON.stringify(parsedUser, null, 2)}`,
+          );
+        }
+
+        setUserId(userId);
+      } catch (err) {
+        console.error('Erro ao carregar userId:', err);
+        setAuthError(
+          err instanceof Error ? err.message : 'Erro ao autenticar usuário. Tente novamente.',
+        );
+        navigate('/login'); // Redirect to login on auth failure
+      } finally {
+        setIsLoading(false);
       }
-    } else {
-      setAuthError('Usuário não autenticado');
-    }
-  }, []);
+    };
+
+    loadUserId();
+  }, [navigate]);
 
   useEffect(() => {
-    if (userId) {
+    if (usuarioId) {
       fetchReportData();
       if (reportType === 'ListarVendasPorCliente') {
         fetchClients();
@@ -165,7 +216,7 @@ const ReportPage = () => {
         fetchCashRegisters();
       }
     }
-  }, [reportType, startDate, endDate, clientId, productId, cashRegisterId, userId]);
+  }, [reportType, startDate, endDate, clientId, productId, cashRegisterId, usuarioId]);
 
   const fetchClients = async () => {
     try {
@@ -189,7 +240,7 @@ const ReportPage = () => {
 
   const fetchReportData = async () => {
     try {
-      if (!userId) {
+      if (!usuarioId) {
         throw new Error('Usuário não autenticado');
       }
 
@@ -509,40 +560,6 @@ const ReportPage = () => {
           break;
         }
 
-        /*  case 'ListarAtividadesDoDia': {
-          if (startDate) {
-            const activities: AtividadeDoDia[] = await getDailyActivitiesReport(startDate);
-            data = await Promise.all(
-              activities.map(async (activity) => {
-                let taskName = '-';
-                try {
-                  const task = await getTaskById(activity.id_tarefa);
-                  taskName = task.nome || '-';
-                } catch (error) {
-                  console.error(`Erro ao buscar tarefa ${activity.id_tarefa}:`, error);
-                }
-
-                let employeeName = '-';
-                try {
-                  const employee = await getEmployeeById(activity.id_funcionario);
-                  employeeName = employee.nomeFuncionario || '-';
-                } catch (error) {
-                  console.error(`Erro ao buscar funcionário ${activity.id_funcionario}:`, error);
-                }
-
-                return {
-                  id: activity.id ?? '',
-                  name: taskName,
-                  status: activity.status || '-',
-                  dataTransacao: activity.createdAt?.toString() || '-',
-                  extra: employeeName,
-                };
-              }),
-            );
-          }
-          break;
-        } */
-
         case 'ListarTodasVendas': {
           if (hasDateRange) {
             const sales: Venda[] = await getAllSales();
@@ -583,39 +600,6 @@ const ReportPage = () => {
           break;
         }
 
-        /*  case 'ListarTodasEntradasEstoque': {
-          if (hasDateRange) {
-            const entries: DadosEntradaEstoque[] = await getAllStockEntries();
-            data = await Promise.all(
-              entries
-                .filter(
-                  (entry) =>
-                    new Date(entry.dataEntrada) >= new Date(startDate) &&
-                    new Date(entry.dataEntrada) <= new Date(endDate),
-                )
-                .map(async (entry) => {
-                  let productName = '-';
-                  try {
-                    const product = await getProductById(entry.id_produto);
-                    productName = product.nomeProduto || '-';
-                  } catch (error) {
-                    console.error(`Erro ao buscar produto ${entry.id_produto}:`, error);
-                  }
-
-                  return {
-                    id: entry.id ?? '',
-                    name: productName,
-                    quantidade: entry.quantidadeRecebida || 0,
-                    dataTransacao: entry.dataEntrada.toString(),
-                    extra: `Lote: ${entry.lote}`,
-                    custo: `Kz${entry.custoUnitario}`,
-                  };
-                }),
-            );
-          }
-          break;
-        } */
-
         case 'ListarDefinicaoMetas': {
           if (hasDateRange) {
             const goals: GoalData[] = [
@@ -652,7 +636,9 @@ const ReportPage = () => {
     } catch (error) {
       console.error('Erro ao buscar dados do relatório:', error);
       setReportData([]);
-      setAuthError('Erro ao carregar dados: ' + (error || 'Desconhecido'));
+      setAuthError(
+        'Erro ao carregar dados: ' + (error instanceof Error ? error.message : 'Desconhecido'),
+      );
     }
   };
 
@@ -926,19 +912,25 @@ const ReportPage = () => {
         Relatórios
       </Typography>
 
-      {authError && (
+      {isLoading && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
+          <CircularProgress />
+        </Box>
+      )}
+
+      {authError && !isLoading && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {authError}
         </Alert>
       )}
 
-      {!authError && (
+      {!authError && !isLoading && usuarioId && (
         <>
           <Box sx={{ mb: 3 }}>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
               <FormControl sx={{ minWidth: 300 }}>
                 <InputLabel>Tipo de Relatório</InputLabel>
-                <Select value={reportType} onChange={handleReportTypeChange} disabled={!userId}>
+                <Select value={reportType} onChange={handleReportTypeChange}>
                   <MenuItem value="ListarVendasPorPeriodo">Vendas por Período</MenuItem>
                   <MenuItem value="ListarVendasPorCliente">Vendas por Cliente</MenuItem>
                   <MenuItem value="ListarProdutosMaisVendidos">Produtos Mais Vendidos</MenuItem>
@@ -990,7 +982,7 @@ const ReportPage = () => {
                 InputLabelProps={{ shrink: true }}
                 sx={{ width: { xs: '100%', sm: 180 } }}
                 error={!!dateError}
-                disabled={reportType === 'ListarAtividadesDoDia' || !userId}
+                disabled={reportType === 'ListarAtividadesDoDia'}
               />
               <TextField
                 type="date"
@@ -1000,18 +992,13 @@ const ReportPage = () => {
                 InputLabelProps={{ shrink: true }}
                 sx={{ width: { xs: '100%', sm: 180 } }}
                 error={!!dateError}
-                disabled={reportType === 'ListarAtividadesDoDia' || !userId}
+                disabled={reportType === 'ListarAtividadesDoDia'}
               />
 
               {reportType === 'ListarVendasPorCliente' && (
                 <FormControl sx={{ width: { xs: '100%', sm: 180 } }}>
                   <InputLabel>Cliente</InputLabel>
-                  <Select
-                    value={clientId}
-                    onChange={handleClientChange}
-                    label="Cliente"
-                    disabled={!userId}
-                  >
+                  <Select value={clientId} onChange={handleClientChange} label="Cliente">
                     <MenuItem value="">
                       <em>Selecione um cliente</em>
                     </MenuItem>
@@ -1027,12 +1014,7 @@ const ReportPage = () => {
               {reportType === 'ListarCaixas' && (
                 <FormControl sx={{ width: { xs: '100%', sm: 180 } }}>
                   <InputLabel>Caixa</InputLabel>
-                  <Select
-                    value={cashRegisterId}
-                    onChange={handleCashRegisterChange}
-                    label="Caixa"
-                    disabled={!userId}
-                  >
+                  <Select value={cashRegisterId} onChange={handleCashRegisterChange} label="Caixa">
                     <MenuItem value="">
                       <em>Todos os caixas</em>
                     </MenuItem>
@@ -1058,7 +1040,6 @@ const ReportPage = () => {
                   value={productId}
                   onChange={(e) => setProductId(e.target.value)}
                   sx={{ width: { xs: '100%', sm: 180 } }}
-                  disabled={!userId}
                 />
               )}
             </Stack>
@@ -1105,7 +1086,7 @@ const ReportPage = () => {
               variant="contained"
               color="primary"
               onClick={exportPDF}
-              disabled={reportData.length === 0 || !userId}
+              disabled={reportData.length === 0}
             >
               Exportar PDF
             </Button>
@@ -1113,7 +1094,7 @@ const ReportPage = () => {
               variant="contained"
               color="secondary"
               onClick={exportExcel}
-              disabled={reportData.length === 0 || !userId}
+              disabled={reportData.length === 0}
             >
               Exportar Excel
             </Button>
