@@ -27,53 +27,33 @@ import * as XLSX from 'xlsx';
 import { SelectChangeEvent } from '@mui/material';
 import {
   getSalesByPeriod,
-  getSalesByClient,
   getTopSellingProducts,
   getRevenueByPeriod,
   getRevenueByCashRegister,
-  getCurrentStock,
-  getStockEntriesByPeriod,
   getTransfersByPeriod,
   getProductsBelowMinimum,
   getCashierActivity,
   getTopSellingPeriodByProduct,
   getCashRegistersActivity,
-  getTasksReport,
-  getSalesReport,
-  getStockReport,
-  getStockEntriesReport,
   getProductsReport,
   getProductLocationReport,
   getDailyActivitiesReport,
   getCashRegistersReport,
-  getAllClients,
   getAllCashRegisters,
-  getAllSales,
-  getAllTransfers,
-  getAllStockEntries,
-  getAllTasks,
-  getAllDailyActivities,
 } from '../../api/methods';
 import {
   VendaComFuncionario,
   ProdutoMaisVendido,
   FaturamentoPorPeriodo,
   QuantidadeFaturadaPorCaixa,
-  EntradaEstoqueComFuncionario,
-  FuncionarioCaixaComNome,
-  ProdutoAbaixoMinimo,
   TransferenciaComFuncionario,
+  ProdutoAbaixoMinimo,
   PeriodoMaisVendidoPorProduto,
-  DadosEstoque,
-  Cliente,
   Caixa,
-  Venda,
-  Transferencia,
-  DadosEntradaEstoque,
-  Tarefa,
-  AtividadeDoDia,
   Produto,
   ProdutoLocalizacao,
+  AtividadeDoDia,
+  FuncionarioCaixaComNome,
 } from '../../types/models';
 
 type JsPDFWithAutoTable = jsPDF & {
@@ -115,7 +95,6 @@ interface ReportData {
   quantidade?: number;
   funcionarioNome?: string;
   caixaNome?: string;
-  custo?: string;
 }
 
 const ReportPage = () => {
@@ -125,10 +104,8 @@ const ReportPage = () => {
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [dateError, setDateError] = useState<string>('');
-  const [clientId, setClientId] = useState<string>('');
   const [productId, setProductId] = useState<string>('');
   const [cashRegisterId, setCashRegisterId] = useState<string>('');
-  const [clients, setClients] = useState<Cliente[]>([]);
   const [cashRegisters, setCashRegisters] = useState<Caixa[]>([]);
   const [usuarioId, setUserId] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string>('');
@@ -138,66 +115,35 @@ const ReportPage = () => {
     const loadUserId = async () => {
       try {
         setIsLoading(true);
-        console.log('Iniciando carregamento do userId...');
-
-        // Check for token
         const token = localStorage.getItem('token');
         if (!token) {
-          console.error('Token não encontrado no localStorage');
           throw new Error('Token não encontrado. Faça login novamente.');
         }
 
-        // Check for user
         const user = localStorage.getItem('user');
         let parsedUser: { userId?: string } | null = null;
         if (user) {
-          try {
-            parsedUser = JSON.parse(user);
-            console.log('Parsed user from localStorage:', parsedUser);
-          } catch (err) {
-            console.error('Erro ao parsear user:', err);
-            throw new Error('Dados de usuário corrompidos');
-          }
+          parsedUser = JSON.parse(user);
         }
 
-        // Try to get userId from token
         let userId: string | null = null;
-        try {
-          const decoded: { userId?: string } = jwtDecode(token);
-          console.log('Token decodificado:', decoded);
-          if (decoded.userId) {
-            userId = decoded.userId;
-          } else {
-            console.warn('userId não encontrado no token:', decoded);
-          }
-        } catch (err) {
-          console.error('Erro ao decodificar token:', err);
-          throw new Error('Token inválido');
-        }
-
-        // Fallback to parsedUser.userId if token doesn't provide userId
-        if (!userId && parsedUser && parsedUser.userId) {
+        const decoded: { userId?: string } = jwtDecode(token);
+        if (decoded.userId) {
+          userId = decoded.userId;
+        } else if (parsedUser && parsedUser.userId) {
           userId = parsedUser.userId;
-          console.log('userId obtido de parsedUser:', userId);
         }
 
         if (!userId) {
-          console.error('Nenhum userId encontrado em token ou user:', {
-            parsedUser,
-            tokenDecoded: jwtDecode(token),
-          });
-          throw new Error(
-            `ID do usuário não encontrado. Dados do user: ${JSON.stringify(parsedUser, null, 2)}`,
-          );
+          throw new Error('ID do usuário não encontrado.');
         }
 
         setUserId(userId);
       } catch (err) {
-        console.error('Erro ao carregar userId:', err);
         setAuthError(
           err instanceof Error ? err.message : 'Erro ao autenticar usuário. Tente novamente.',
         );
-        navigate('/login'); // Redirect to login on auth failure
+        navigate('/login');
       } finally {
         setIsLoading(false);
       }
@@ -209,24 +155,11 @@ const ReportPage = () => {
   useEffect(() => {
     if (usuarioId) {
       fetchReportData();
-      if (reportType === 'ListarVendasPorCliente') {
-        fetchClients();
-      }
       if (reportType === 'ListarCaixas') {
         fetchCashRegisters();
       }
     }
-  }, [reportType, startDate, endDate, clientId, productId, cashRegisterId, usuarioId]);
-
-  const fetchClients = async () => {
-    try {
-      const clientList = await getAllClients();
-      setClients(clientList);
-    } catch (error) {
-      console.error('Erro ao buscar clientes:', error);
-      setClients([]);
-    }
-  };
+  }, [reportType, startDate, endDate, productId, cashRegisterId, usuarioId]);
 
   const fetchCashRegisters = async () => {
     try {
@@ -251,26 +184,6 @@ const ReportPage = () => {
         case 'ListarVendasPorPeriodo': {
           if (hasDateRange) {
             const sales: VendaComFuncionario[] = await getSalesByPeriod(startDate, endDate);
-            data = sales.map((sale) => ({
-              id: sale.id,
-              name: sale.produto?.nomeProduto || 'Produto Desconhecido',
-              quantidadeVendida: sale.quantidade || 0,
-              valorTotal: sale.valorTotal || 0,
-              dataTransacao: sale.data,
-              cliente: sale.cliente?.nome || '-',
-              status: sale.status || 'Concluída',
-            }));
-          }
-          break;
-        }
-
-        case 'ListarVendasPorCliente': {
-          if (hasDateRange && clientId) {
-            const sales: VendaComFuncionario[] = await getSalesByClient(
-              clientId,
-              startDate,
-              endDate,
-            );
             data = sales.map((sale) => ({
               id: sale.id,
               name: sale.produto?.nomeProduto || 'Produto Desconhecido',
@@ -339,36 +252,6 @@ const ReportPage = () => {
               name: cr.nomeCaixa,
               extra: cr.descricao || '-',
               dataTransacao: cr.createdAt || '-',
-            }));
-          }
-          break;
-        }
-
-        case 'ListarEstoqueAtual': {
-          if (hasDateRange) {
-            const stock: DadosEstoque[] = await getCurrentStock(startDate, endDate);
-            data = stock.map((item) => ({
-              id: item.id_produto,
-              name: item.produtos?.nomeProduto || 'Produto Desconhecido',
-              quantidade: item.quantidadeAtual || 0,
-              dataTransacao: item.updatedAt || '-',
-            }));
-          }
-          break;
-        }
-
-        case 'ListarEntradasEstoquePorPeriodo': {
-          if (hasDateRange) {
-            const entries: EntradaEstoqueComFuncionario[] = await getStockEntriesByPeriod(
-              startDate,
-              endDate,
-            );
-            data = entries.map((entry) => ({
-              id: entry.id,
-              name: entry.produto?.nomeProduto || 'Produto Desconhecido',
-              quantidade: entry.quantidade || 0,
-              dataTransacao: entry.data,
-              extra: entry.funcionarioNome || '-',
             }));
           }
           break;
@@ -462,74 +345,6 @@ const ReportPage = () => {
           break;
         }
 
-        case 'ListarTarefas': {
-          if (hasDateRange) {
-            const tasks: Tarefa[] = await getTasksReport(startDate, endDate);
-            data = tasks.map((task) => ({
-              id: task.id || '',
-              name: task.nome,
-              description: task.descricao || '-',
-              dataTransacao: new Date().toISOString().split('T')[0],
-            }));
-          }
-          break;
-        }
-
-        case 'ListarRelatorioVendas': {
-          if (hasDateRange) {
-            const sales: VendaComFuncionario[] = await getSalesReport(
-              startDate,
-              endDate,
-              productId || undefined,
-            );
-            data = sales.map((sale) => ({
-              id: sale.id,
-              name: sale.produto?.nomeProduto || 'Produto Desconhecido',
-              quantidadeVendida: sale.quantidade || 0,
-              valorTotal: sale.valorTotal || 0,
-              dataTransacao: sale.data,
-              cliente: sale.cliente?.nome || '-',
-              status: sale.status || 'Concluída',
-            }));
-          }
-          break;
-        }
-
-        case 'ListarRelatorioEstoque': {
-          if (hasDateRange) {
-            const stock: DadosEstoque[] = await getStockReport(
-              startDate,
-              endDate,
-              productId || undefined,
-            );
-            data = stock.map((item) => ({
-              id: item.id_produto,
-              name: item.produtos?.nomeProduto || 'Produto Desconhecido',
-              quantidade: item.quantidadeAtual || 0,
-              dataTransacao: item.updatedAt || '-',
-            }));
-          }
-          break;
-        }
-
-        case 'ListarRelatorioEntradasEstoque': {
-          if (hasDateRange) {
-            const entries: EntradaEstoqueComFuncionario[] = await getStockEntriesReport(
-              startDate,
-              endDate,
-              productId || undefined,
-            );
-            data = entries.map((entry) => ({
-              id: entry.id,
-              name: entry.produto?.nomeProduto || 'Produto Desconhecido',
-              quantidade: entry.quantidade || 0,
-              dataTransacao: entry.data,
-              extra: entry.funcionarioNome || '-',
-            }));
-          }
-          break;
-        }
-
         case 'ListarRelatorioProdutos': {
           if (hasDateRange) {
             const products: Produto[] = await getProductsReport(startDate, endDate);
@@ -560,42 +375,16 @@ const ReportPage = () => {
           break;
         }
 
-        case 'ListarTodasVendas': {
+        case 'ListarAtividadesDoDia': {
           if (hasDateRange) {
-            const sales: Venda[] = await getAllSales();
-            data = sales
-              .filter(
-                (sale) =>
-                  new Date(sale.dataEmissao) >= new Date(startDate) &&
-                  new Date(sale.dataEmissao) <= new Date(endDate),
-              )
-              .map((sale) => ({
-                id: sale.id ?? '',
-                name: sale.clientes?.nomeCliente || '-',
-                valorTotal: sale.valorTotal || 0,
-                dataTransacao: sale.dataEmissao,
-                extra: sale.tipoDocumento || '-',
-              }));
-          }
-          break;
-        }
-
-        case 'ListarTodasTransferencias': {
-          if (hasDateRange) {
-            const transfers: Transferencia[] = await getAllTransfers();
-            data = transfers
-              .filter(
-                (transfer) =>
-                  new Date(transfer.dataTransferencia) >= new Date(startDate) &&
-                  new Date(transfer.dataTransferencia) <= new Date(endDate),
-              )
-              .map((transfer) => ({
-                id: transfer.id ?? '',
-                name: transfer.produtos?.nomeProduto || 'Produto Desconhecido',
-                quantidade: transfer.quantidadeTransferida || 0,
-                dataTransacao: transfer.dataTransferencia,
-                extra: transfer.funcionarios?.nomeFuncionario || '-',
-              }));
+            const activities: AtividadeDoDia[] = await getDailyActivitiesReport(startDate, endDate);
+            data = activities.map((activity) => ({
+              id: activity.id || '',
+              name: activity.tarefa?.nome || '-',
+              status: activity.status || '-',
+              extra: activity.funcionario?.nome || '-',
+              dataTransacao: activity.data || '-',
+            }));
           }
           break;
         }
@@ -647,7 +436,6 @@ const ReportPage = () => {
     setStartDate('');
     setEndDate('');
     setDateError('');
-    setClientId('');
     setProductId('');
     setCashRegisterId('');
   };
@@ -672,10 +460,6 @@ const ReportPage = () => {
     }
   };
 
-  const handleClientChange = (event: SelectChangeEvent<string>) => {
-    setClientId(event.target.value);
-  };
-
   const handleCashRegisterChange = (event: SelectChangeEvent<string>) => {
     setCashRegisterId(event.target.value);
   };
@@ -683,8 +467,6 @@ const ReportPage = () => {
   const getTableHeaders = () => {
     switch (reportType) {
       case 'ListarVendasPorPeriodo':
-      case 'ListarVendasPorCliente':
-      case 'ListarRelatorioVendas':
         return ['Produto', 'Quantidade Vendida', 'Valor Total', 'Data', 'Cliente', 'Status'];
       case 'ListarProdutosMaisVendidos':
         return ['Produto', 'Quantidade Vendida', 'Valor Total'];
@@ -694,16 +476,8 @@ const ReportPage = () => {
         return ['Caixa', 'Quantidade Faturada', 'Funcionários'];
       case 'ListarCaixas':
         return ['Caixa', 'Descrição', 'Data Criação'];
-      case 'ListarEstoqueAtual':
-      case 'ListarRelatorioEstoque':
-        return ['Produto', 'Quantidade', 'Data Atualização'];
-      case 'ListarEntradasEstoquePorPeriodo':
-      case 'ListarRelatorioEntradasEstoque':
       case 'ListarTransferenciasPorPeriodo':
-      case 'ListarTodasTransferencias':
         return ['Produto', 'Quantidade', 'Data', 'Extra'];
-      case 'ListarTodasEntradasEstoque':
-        return ['Produto', 'Quantidade', 'Data', 'Lote', 'Custo'];
       case 'ListarProdutosAbaixoMinimo':
         return ['Produto', 'Quantidade Atual', 'Detalhes', 'Data'];
       case 'ListarAtividadeFuncionariosCaixa':
@@ -711,16 +485,12 @@ const ReportPage = () => {
         return ['Funcionário', 'Caixa', 'Data'];
       case 'ListarPeriodoMaisVendidoPorProduto':
         return ['Produto', 'Quantidade Vendida', 'Valor Total', 'Período'];
-      case 'ListarTodasVendas':
-        return ['Cliente', 'Valor Total', 'Data', 'Tipo Documento'];
-      case 'ListarTarefas':
-        return ['Tarefa', 'Descrição', 'Data'];
-      case 'ListarAtividadesDoDia':
-        return ['Tarefa', 'Status', 'Funcionário', 'Data'];
       case 'ListarRelatorioProdutos':
         return ['Produto', 'Categoria', 'Data Criação'];
       case 'ListarRelatorioProdutoLocalizacao':
         return ['Produto', 'Localização', 'Data'];
+      case 'ListarAtividadesDoDia':
+        return ['Tarefa', 'Status', 'Funcionário', 'Data'];
       case 'ListarDefinicaoMetas':
         return [
           'Nº Meta',
@@ -740,8 +510,6 @@ const ReportPage = () => {
   const getRowData = (item: ReportData, index: number) => {
     switch (reportType) {
       case 'ListarVendasPorPeriodo':
-      case 'ListarVendasPorCliente':
-      case 'ListarRelatorioVendas':
         return [
           item.name || '-',
           item.quantidadeVendida ?? 0,
@@ -767,30 +535,12 @@ const ReportPage = () => {
           item.extra || '-',
           item.dataTransacao ? new Date(item.dataTransacao).toLocaleDateString('pt-BR') : '-',
         ];
-      case 'ListarEstoqueAtual':
-      case 'ListarRelatorioEstoque':
-        return [
-          item.name || '-',
-          item.quantidade ?? 0,
-          item.dataTransacao ? new Date(item.dataTransacao).toLocaleDateString('pt-BR') : '-',
-        ];
-      case 'ListarEntradasEstoquePorPeriodo':
-      case 'ListarRelatorioEntradasEstoque':
       case 'ListarTransferenciasPorPeriodo':
-      case 'ListarTodasTransferencias':
         return [
           item.name || '-',
           item.quantidade ?? 0,
           item.dataTransacao ? new Date(item.dataTransacao).toLocaleDateString('pt-BR') : '-',
           item.extra || '-',
-        ];
-      case 'ListarTodasEntradasEstoque':
-        return [
-          item.name || '-',
-          item.quantidade ?? 0,
-          item.dataTransacao ? new Date(item.dataTransacao).toLocaleDateString('pt-BR') : '-',
-          item.extra || '-',
-          item.custo || '-',
         ];
       case 'ListarProdutosAbaixoMinimo':
         return [
@@ -813,26 +563,6 @@ const ReportPage = () => {
           `Kz${item.valorTotal ?? 0}`,
           item.extra || '-',
         ];
-      case 'ListarTodasVendas':
-        return [
-          item.name || '-',
-          `Kz${item.valorTotal ?? 0}`,
-          item.dataTransacao ? new Date(item.dataTransacao).toLocaleDateString('pt-BR') : '-',
-          item.extra || '-',
-        ];
-      case 'ListarTarefas':
-        return [
-          item.name || '-',
-          item.description || '-',
-          item.dataTransacao ? new Date(item.dataTransacao).toLocaleDateString('pt-BR') : '-',
-        ];
-      case 'ListarAtividadesDoDia':
-        return [
-          item.name || '-',
-          item.status || '-',
-          item.extra || '-',
-          item.dataTransacao ? new Date(item.dataTransacao).toLocaleDateString('pt-BR') : '-',
-        ];
       case 'ListarRelatorioProdutos':
         return [
           item.name || '-',
@@ -842,6 +572,13 @@ const ReportPage = () => {
       case 'ListarRelatorioProdutoLocalizacao':
         return [
           item.name || '-',
+          item.extra || '-',
+          item.dataTransacao ? new Date(item.dataTransacao).toLocaleDateString('pt-BR') : '-',
+        ];
+      case 'ListarAtividadesDoDia':
+        return [
+          item.name || '-',
+          item.status || '-',
           item.extra || '-',
           item.dataTransacao ? new Date(item.dataTransacao).toLocaleDateString('pt-BR') : '-',
         ];
@@ -932,17 +669,12 @@ const ReportPage = () => {
                 <InputLabel>Tipo de Relatório</InputLabel>
                 <Select value={reportType} onChange={handleReportTypeChange}>
                   <MenuItem value="ListarVendasPorPeriodo">Vendas por Período</MenuItem>
-                  <MenuItem value="ListarVendasPorCliente">Vendas por Cliente</MenuItem>
                   <MenuItem value="ListarProdutosMaisVendidos">Produtos Mais Vendidos</MenuItem>
                   <MenuItem value="ListarFaturamentoPorPeriodo">Faturamento por Período</MenuItem>
                   <MenuItem value="ListarQuantidadeFaturadaPorCaixa">
                     Quantidade Faturada por Caixa
                   </MenuItem>
                   <MenuItem value="ListarCaixas">Caixas</MenuItem>
-                  <MenuItem value="ListarEstoqueAtual">Estoque Atual</MenuItem>
-                  <MenuItem value="ListarEntradasEstoquePorPeriodo">
-                    Entradas de Estoque por Período
-                  </MenuItem>
                   <MenuItem value="ListarTransferenciasPorPeriodo">
                     Transferências por Período
                   </MenuItem>
@@ -954,22 +686,11 @@ const ReportPage = () => {
                     Período Mais Vendido por Produto
                   </MenuItem>
                   <MenuItem value="ListarAtividadesCaixas">Atividades de Caixas</MenuItem>
-                  <MenuItem value="ListarTarefas">Tarefas</MenuItem>
-                  <MenuItem value="ListarRelatorioVendas">Relatório de Vendas</MenuItem>
-                  <MenuItem value="ListarRelatorioEstoque">Relatório de Estoque</MenuItem>
-                  <MenuItem value="ListarRelatorioEntradasEstoque">
-                    Relatório de Entradas de Estoque
-                  </MenuItem>
                   <MenuItem value="ListarRelatorioProdutos">Relatório de Produtos</MenuItem>
                   <MenuItem value="ListarRelatorioProdutoLocalizacao">
                     Relatório de Localização de Produtos
                   </MenuItem>
                   <MenuItem value="ListarAtividadesDoDia">Atividades do Dia</MenuItem>
-                  <MenuItem value="ListarTodasVendas">Todas as Vendas</MenuItem>
-                  <MenuItem value="ListarTodasTransferencias">Todas as Transferências</MenuItem>
-                  <MenuItem value="ListarTodasEntradasEstoque">
-                    Todas as Entradas de Estoque
-                  </MenuItem>
                   <MenuItem value="ListarDefinicaoMetas">Definição de Metas</MenuItem>
                 </Select>
               </FormControl>
@@ -995,22 +716,6 @@ const ReportPage = () => {
                 disabled={reportType === 'ListarAtividadesDoDia'}
               />
 
-              {reportType === 'ListarVendasPorCliente' && (
-                <FormControl sx={{ width: { xs: '100%', sm: 180 } }}>
-                  <InputLabel>Cliente</InputLabel>
-                  <Select value={clientId} onChange={handleClientChange} label="Cliente">
-                    <MenuItem value="">
-                      <em>Selecione um cliente</em>
-                    </MenuItem>
-                    {clients.map((client) => (
-                      <MenuItem key={client.id} value={client.id}>
-                        {client.nomeCliente}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              )}
-
               {reportType === 'ListarCaixas' && (
                 <FormControl sx={{ width: { xs: '100%', sm: 180 } }}>
                   <InputLabel>Caixa</InputLabel>
@@ -1030,9 +735,6 @@ const ReportPage = () => {
               {[
                 'ListarPeriodoMaisVendidoPorProduto',
                 'ListarAtividadesCaixas',
-                'ListarRelatorioVendas',
-                'ListarRelatorioEstoque',
-                'ListarRelatorioEntradasEstoque',
                 'ListarRelatorioProdutoLocalizacao',
               ].includes(reportType) && (
                 <TextField
