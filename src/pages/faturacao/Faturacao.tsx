@@ -293,6 +293,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           getAllClients(),
         ]);
 
+        console.log('FuncionariosCaixaData:', JSON.stringify(funcionariosCaixaData, null, 2));
         setClientes(clientsData as Cliente[]);
 
         const mappedFaturas = salesData.map((venda: Venda, index: number) => {
@@ -318,6 +319,8 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                     quantidadePorUnidade: produto?.quantidadePorUnidade || 0,
                     unidadeMedida: produto?.unidadeMedida || '',
                     unidadeConteudo: produto?.unidadeConteudo || '',
+                    createdAt: produto?.createdAt || new Date(),
+                    updatedAt: produto?.updatedAt || new Date(),
                   },
                   quantidade: vp.quantidadeVendida,
                 };
@@ -393,11 +396,11 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       newErrors.produtos = 'Adicione pelo menos um produto';
     }
     if (!state.funcionariosCaixaId) {
-      newErrors.funcionariosCaixaId = 'Selecione um caixa';
+      newErrors.funcionariosCaixaId = 'Nenhum caixa aberto encontrado. Abra um caixa primeiro.';
     } else if (
       !funcionariosCaixa.some((fc) => fc.id === state.funcionariosCaixaId && fc.estadoCaixa)
     ) {
-      newErrors.funcionariosCaixaId = 'Nenhum caixa aberto disponível';
+      newErrors.funcionariosCaixaId = 'O caixa selecionado não está aberto.';
     }
     state.produtosSelecionados.forEach((p, index) => {
       if (!p.id) {
@@ -530,7 +533,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           3: { cellWidth: 35, halign: 'right' },
         },
       });
-      finalY = doc.lastAutoTable.finalY;
+      finalY = (doc as any).lastAutoTable.finalY;
     }
 
     doc.setFontSize(12);
@@ -595,6 +598,28 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
             })),
             funcionariosCaixaId: fatura.funcionariosCaixa?.id || '',
           },
+        });
+      }
+    } else {
+      // Buscar automaticamente o primeiro caixa aberto para o funcionário logado
+      const caixaAberto = funcionariosCaixa.find(
+        (fc) => fc.estadoCaixa && fc.id_funcionario === loggedInFuncionarioId,
+      );
+      if (caixaAberto && caixaAberto.id) {
+        dispatchFatura({
+          type: 'UPDATE_FIELD',
+          field: 'funcionariosCaixaId',
+          value: caixaAberto.id,
+        });
+      } else {
+        dispatchFatura({
+          type: 'UPDATE_FIELD',
+          field: 'funcionariosCaixaId',
+          value: '',
+        });
+        setAlert({
+          severity: 'warning',
+          message: 'Nenhum caixa aberto encontrado. Abra um caixa primeiro.',
         });
       }
     }
@@ -811,16 +836,13 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
 
       const novosProdutosFatura = faturaState.produtosSelecionados.map((p) => {
         const produto = produtos.find((prod) => prod.id === p.id);
+        if (!produto) {
+          throw new Error(`Produto com ID ${p.id} não encontrado.`);
+        }
         return {
           produto: {
-            id: produto!.id!,
-            id_categoriaProduto: produto!.id_categoriaProduto,
-            referenciaProduto: produto!.referenciaProduto,
-            nomeProduto: produto!.nomeProduto,
-            precoVenda: produto!.precoVenda,
-            quantidadePorUnidade: produto!.quantidadePorUnidade - p.quantidade,
-            unidadeMedida: produto!.unidadeMedida,
-            unidadeConteudo: produto!.unidadeConteudo,
+            ...produto,
+            quantidadePorUnidade: produto.quantidadePorUnidade - p.quantidade,
           },
           quantidade: p.quantidade,
         };
@@ -1010,6 +1032,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       };
 
       const createdCaixa = await createEmployeeCashRegister(newFuncionarioCaixa);
+      console.log('Novo Caixa Criado:', JSON.stringify(createdCaixa, null, 2));
       setFuncionariosCaixa((prev) => [...prev, createdCaixa]);
       setAlert({ severity: 'success', message: 'Caixa aberto com sucesso!' });
       handleCloseCaixaModal();
@@ -1142,6 +1165,27 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           </Typography>
           <Stack spacing={3}>
             <Divider sx={{ borderColor: 'primary.main' }} />
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+              <Typography variant="h6" color="text.secondary">
+                Dados da Venda
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                {faturaState.funcionariosCaixaId ? (
+                  <>
+                    Caixa Selecionado:{' '}
+                    {funcionariosCaixa.find((fc) => fc.id === faturaState.funcionariosCaixaId)
+                      ?.caixas?.nomeCaixa || 'Caixa Sem Nome'}{' '}
+                    -{' '}
+                    {funcionariosCaixa.find((fc) => fc.id === faturaState.funcionariosCaixaId)
+                      ?.Funcionarios?.nomeFuncionario || 'Funcionário Desconhecido'}
+                  </>
+                ) : (
+                  'Nenhum caixa aberto disponível. Abra um caixa primeiro.'
+                )}
+              </Typography>
+            </Box>
+
+            <Divider sx={{ borderColor: 'primary.main' }} />
             <Typography variant="h6" color="text.secondary">
               Dados do Cliente
             </Typography>
@@ -1223,39 +1267,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   onChange={handleTextFieldChange}
                   sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
                 />
-              </Grid>
-            </Grid>
-
-            <Divider sx={{ borderColor: 'primary.main' }} />
-            <Typography variant="h6" color="text.secondary">
-              Dados da Venda
-            </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6} md={4}>
-                <FormControl
-                  fullWidth
-                  variant="outlined"
-                  error={Boolean(faturaState.errors.funcionariosCaixaId)}
-                  sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
-                >
-                  <InputLabel>Caixa</InputLabel>
-                  <Select
-                    name="funcionariosCaixaId"
-                    value={faturaState.funcionariosCaixaId}
-                    onChange={handleSelectChange}
-                  >
-                    {funcionariosCaixa
-                      .filter((fc) => fc.estadoCaixa)
-                      .map((fc) => (
-                        <MenuItem key={fc.id} value={fc.id}>
-                          {fc.caixas?.nomeCaixa} - {fc.Funcionarios?.nomeFuncionario || 'N/A'}
-                        </MenuItem>
-                      ))}
-                  </Select>
-                  {faturaState.errors.funcionariosCaixaId && (
-                    <FormHelperText>{faturaState.errors.funcionariosCaixaId}</FormHelperText>
-                  )}
-                </FormControl>
               </Grid>
             </Grid>
 
@@ -1427,7 +1438,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   <TableRow key={item.id}>
                     <TableCell>{item.id}</TableCell>
                     <TableCell>{item.caixas?.nomeCaixa || 'N/A'}</TableCell>
-                    <TableCell>{item.Funcionarios?.nomeFuncionario|| 'N/A'}</TableCell>
+                    <TableCell>{item.Funcionarios?.nomeFuncionario || 'N/A'}</TableCell>
                     <TableCell>{item.estadoCaixa ? 'Aberto' : 'Fechado'}</TableCell>
                     <TableCell>{item.quantidadaFaturada} kz</TableCell>
                     <TableCell>
