@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useReducer } from 'react';
+import { useNavigate } from 'react-router-dom'; // Adicionado para redirecionamento
+import { jwtDecode } from 'jwt-decode'; // Adicionado para decodificar o token
 import {
   Paper,
   Button,
@@ -65,6 +67,12 @@ import {
 } from '../../api/methods';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+
+// Interface para decodificação do token
+interface DecodedToken {
+  userId?: string;
+  sub?: string;
+}
 
 interface Fatura {
   id: string;
@@ -213,6 +221,7 @@ const confirmModalStyle = {
 };
 
 const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
+  const navigate = useNavigate(); // Adicionado para redirecionamento
   const [openFaturaModal, setOpenFaturaModal] = useState(false);
   const [openCaixaModal, setOpenCaixaModal] = useState(false);
   const [openCaixaListModal, setOpenCaixaListModal] = useState(false);
@@ -236,47 +245,84 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
   const [caixas, setCaixas] = useState<Caixa[]>([]);
   const [loggedInFuncionarioId, setLoggedInFuncionarioId] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(true); // Adicionado para estado de carregamento
 
-  useEffect(() => {
-    const handleStorageChange = () => {
+  // Função para carregar e validar os dados do usuário logado
+  const loadUserData = () => {
+    try {
       const token = localStorage.getItem('token');
-      let id = '';
-      if (token) {
-        try {
-          const decoded = JSON.parse(atob(token.split('.')[1]));
-          id = decoded.userId || '';
-        } catch (error) {
-          console.error('Erro ao decodificar token:', error);
-        }
+      if (!token) {
+        throw new Error('Nenhum token encontrado. Faça login novamente.');
       }
-      if (id && funcionarios.some((f) => f.id === id)) {
+
+      let decoded: DecodedToken = {};
+      try {
+        decoded = jwtDecode(token);
+      } catch (error) {
+        console.error('Erro ao decodificar token:', error);
+        localStorage.removeItem('token');
+        throw new Error('Token inválido. Faça login novamente.');
+      }
+
+      const id = decoded.userId || decoded.sub || '';
+      if (!id) {
+        throw new Error('ID de usuário não encontrado no token.');
+      }
+
+      return id;
+    } catch (error: any) {
+      setAlert({ severity: 'error', message: error.message });
+      setIsLoading(false);
+      navigate('/login');
+      return '';
+    }
+  };
+
+  // Efeito para carregar dados do usuário logado e inicializar o componente
+  useEffect(() => {
+    const handleStorageChange = async () => {
+      setIsLoading(true);
+      const id = loadUserData();
+      if (!id) return;
+
+      try {
+        const employees = await getAllEmployees();
+        const currentEmployee = employees.find((emp) => emp.id === id);
+
+        if (!currentEmployee) {
+          throw new Error('Funcionário não encontrado. Verifique suas credenciais.');
+        }
+
         setLoggedInFuncionarioId(id);
         dispatchCaixa({ type: 'UPDATE_FIELD', field: 'funcionarioId', value: id });
-      } else {
-        setAlert({
-          severity: 'error',
-          message: 'Nenhum funcionário logado. Faça login novamente.',
-        });
+        setFuncionarios(employees);
+      } catch (error: any) {
+        setAlert({ severity: 'error', message: error.message });
         setLoggedInFuncionarioId('');
         dispatchCaixa({ type: 'UPDATE_FIELD', field: 'funcionarioId', value: '' });
+        navigate('/login');
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    window.addEventListener('storage', handleStorageChange);
     handleStorageChange();
+    window.addEventListener('storage', handleStorageChange);
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, [funcionarios]);
+  }, [navigate]);
 
+  // Efeito para carregar dados iniciais
   useEffect(() => {
     const fetchInitialData = async () => {
+      if (!loggedInFuncionarioId) return;
+
       try {
         const [
           salesData,
           funcionariosCaixaData,
-          funcionariosData,
           caixasData,
           locationsData,
           productsData,
@@ -285,7 +331,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         ] = await Promise.all([
           getAllSales(),
           getAllEmployeeCashRegisters(),
-          getAllEmployees(),
           getAllCashRegisters(),
           getAllLocations(),
           getAllProducts(),
@@ -331,7 +376,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
 
         setFaturas(mappedFaturas);
         setFuncionariosCaixa(funcionariosCaixaData);
-        setFuncionarios(funcionariosData);
         setCaixas(caixasData);
         setLocations(locationsData);
         setProdutos(productsData);
@@ -341,7 +385,10 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         setAlert({ severity: 'error', message: 'Erro ao carregar dados iniciais!' });
       }
     };
-    fetchInitialData();
+
+    if (loggedInFuncionarioId) {
+      fetchInitialData();
+    }
   }, [loggedInFuncionarioId]);
 
   const fetchProductsAndLocations = async () => {
@@ -389,6 +436,8 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     state: FaturaState,
     produtos: Produto[],
     funcionariosCaixa: FuncionarioCaixa[],
+    productLocations: ProdutoLocalizacao[],
+    locations: Localizacao[],
   ) => {
     const newErrors: { [key: string]: string } = {};
     if (!state.cliente.trim()) newErrors.cliente = 'Nome do cliente é obrigatório';
@@ -406,10 +455,15 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       if (!p.id) {
         newErrors[`produto_${index}`] = 'Selecione um produto';
       } else {
-        const produto = produtos.find((prod) => prod.id === p.id);
-        if (produto && p.quantidade > produto.quantidadePorUnidade) {
+        const lojaLocation = locations.find((loc) =>
+          loc.nomeLocalizacao.toLowerCase().includes('loja'),
+        );
+        const produtoLocation = productLocations.find(
+          (loc) => loc.id_produto === p.id && loc.id_localizacao === lojaLocation?.id,
+        );
+        if (produtoLocation && p.quantidade > (produtoLocation.quantidadeProduto ?? 0)) {
           newErrors[`produto_${index}`] =
-            `Quantidade indisponível. Estoque total: ${produto.quantidadePorUnidade}`;
+            `Quantidade indisponível. Estoque na loja: ${produtoLocation.quantidadeProduto ?? 0}`;
         }
       }
     });
@@ -580,6 +634,12 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   };
 
   const handleOpenFaturaModal = (faturaId?: string) => {
+    if (!loggedInFuncionarioId) {
+      setAlert({ severity: 'error', message: 'Usuário não autenticado. Faça login novamente.' });
+      navigate('/login');
+      return;
+    }
+
     if (faturaId) {
       const fatura = faturas.find((f) => f.id === faturaId);
       if (fatura) {
@@ -601,7 +661,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         });
       }
     } else {
-      // Buscar automaticamente o primeiro caixa aberto para o funcionário logado
       const caixaAberto = funcionariosCaixa.find(
         (fc) => fc.estadoCaixa && fc.id_funcionario === loggedInFuncionarioId,
       );
@@ -660,14 +719,21 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   const handleProdutoChange = (index: number, field: string, value: string | number) => {
     dispatchFatura({ type: 'UPDATE_PRODUTO', index, field, value });
     if (field === 'quantidade') {
-      const produto = produtos.find((p) => p.id === faturaState.produtosSelecionados[index].id);
+      const lojaLocation = locations.find((loc) =>
+        loc.nomeLocalizacao.toLowerCase().includes('loja'),
+      );
+      const produtoLocation = productLocations.find(
+        (loc) =>
+          loc.id_produto === faturaState.produtosSelecionados[index].id &&
+          loc.id_localizacao === lojaLocation?.id,
+      );
       const quantidade = Number(value);
-      if (produto && quantidade > produto.quantidadePorUnidade) {
+      if (produtoLocation && quantidade > (produtoLocation.quantidadeProduto ?? 0)) {
         dispatchFatura({
           type: 'SET_ERRORS',
           errors: {
             ...faturaState.errors,
-            [`produto_${index}`]: `Quantidade indisponível. Estoque total: ${produto.quantidadePorUnidade}`,
+            [`produto_${index}`]: `Quantidade indisponível. Estoque na loja: ${produtoLocation.quantidadeProduto ?? 0}`,
           },
         });
       } else {
@@ -727,7 +793,19 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   };
 
   const onAddFaturaSubmit = async () => {
-    const errors = validateFaturaForm(faturaState, produtos, funcionariosCaixa);
+    if (!loggedInFuncionarioId) {
+      setAlert({ severity: 'error', message: 'Usuário não autenticado. Faça login novamente.' });
+      navigate('/login');
+      return;
+    }
+
+    const errors = validateFaturaForm(
+      faturaState,
+      produtos,
+      funcionariosCaixa,
+      productLocations,
+      locations,
+    );
     dispatchFatura({ type: 'SET_ERRORS', errors });
     if (Object.keys(errors).length > 0) return;
 
@@ -753,7 +831,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
             })),
           },
           cliente: clienteExistente
-            ? []
+            ? [clienteExistente.id]
             : [
                 {
                   nomeCliente: faturaState.cliente,
@@ -765,6 +843,8 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
               ],
         },
       };
+
+      console.log('Dados enviados para createSale:', JSON.stringify(dadosWrapper, null, 2));
 
       const createdVenda = await createSale(dadosWrapper);
 
@@ -902,8 +982,8 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       generatePDF(newFatura);
       handleCloseFaturaModal();
       await fetchProductsAndLocations();
-    } catch (error) {
-      console.error('Erro ao criar fatura:', error);
+    } catch (error: any) {
+      console.error('Erro ao criar fatura:', error.response?.data || error);
       setAlert({ severity: 'error', message: 'Falha ao cadastrar fatura. Tente novamente.' });
     }
   };
@@ -996,6 +1076,11 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   };
 
   const handleOpenCaixaModal = () => {
+    if (!loggedInFuncionarioId) {
+      setAlert({ severity: 'error', message: 'Usuário não autenticado. Faça login novamente.' });
+      navigate('/login');
+      return;
+    }
     dispatchCaixa({ type: 'UPDATE_FIELD', field: 'funcionarioId', value: loggedInFuncionarioId });
     setOpenCaixaModal(true);
   };
@@ -1017,6 +1102,12 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   };
 
   const onAddCaixaSubmit = async () => {
+    if (!loggedInFuncionarioId) {
+      setAlert({ severity: 'error', message: 'Usuário não autenticado. Faça login novamente.' });
+      navigate('/login');
+      return;
+    }
+
     const errors = validateCaixaForm(caixaState, funcionarios, caixas, funcionariosCaixa);
     dispatchCaixa({ type: 'SET_ERRORS', errors });
     if (Object.keys(errors).length > 0) return;
@@ -1024,7 +1115,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     try {
       const newFuncionarioCaixa: FuncionarioCaixa = {
         id_caixa: caixaState.caixaId,
-        id_funcionario: caixaState.funcionarioId,
+        id_funcionario: loggedInFuncionarioId,
         estadoCaixa: true,
         quantidadaFaturada: 0,
         horarioAbertura: new Date(),
@@ -1101,6 +1192,15 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   };
 
   const paginatedFaturas = faturas.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+
+  // Exibir tela de carregamento enquanto valida o usuário
+  if (isLoading) {
+    return (
+      <Box sx={{ textAlign: 'center', padding: '50px' }}>
+        <Typography variant="h6">Carregando...</Typography>
+      </Box>
+    );
+  }
 
   return (
     <>
@@ -1288,11 +1388,21 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                       value={produto.id}
                       onChange={(e) => handleProdutoChange(index, 'id', e.target.value)}
                     >
-                      {produtos.map((p) => (
-                        <MenuItem key={p.id} value={p.id}>
-                          {p.nomeProduto} - {p.precoVenda}kzs (Estoque: {p.quantidadePorUnidade})
-                        </MenuItem>
-                      ))}
+                      {produtos.map((p) => {
+                        const lojaLocation = locations.find((loc) =>
+                          loc.nomeLocalizacao.toLowerCase().includes('loja'),
+                        );
+                        const produtoLocation = productLocations.find(
+                          (loc) =>
+                            loc.id_produto === p.id && loc.id_localizacao === lojaLocation?.id,
+                        );
+                        const quantidade = produtoLocation?.quantidadeProduto ?? 0;
+                        return (
+                          <MenuItem key={p.id} value={p.id}>
+                            {p.nomeProduto} - {p.precoVenda}kzs (Estoque: {quantidade})
+                          </MenuItem>
+                        );
+                      })}
                     </Select>
                     {faturaState.errors[`produto_${index}`] && (
                       <FormHelperText>{faturaState.errors[`produto_${index}`]}</FormHelperText>

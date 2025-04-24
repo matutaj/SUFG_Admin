@@ -1748,7 +1748,10 @@ export const getProductLocationReport = async (
   }
 };
 
-export const getDailyActivitiesReport = async (date: string, endDate: string): Promise<AtividadeDoDia[]> => {
+export const getDailyActivitiesReport = async (
+  date: string,
+  endDate: string,
+): Promise<AtividadeDoDia[]> => {
   // if (!hasPermission('listar_funcionario_tarefa')) {
   //   throw new ApiError('Você não tem permissão para listar atividades do dia.');
   // }

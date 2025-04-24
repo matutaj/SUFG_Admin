@@ -1,27 +1,84 @@
 import { Box, Paper, Stack, Typography } from '@mui/material';
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import EChartsReactCore from 'echarts-for-react/lib/core';
-import { barChart } from 'data/dashboard/chartData';
+import { getSalesByPeriod } from '../../../../api/methods';
+import { VendaComFuncionario } from '../../../../types/models';
 import MilesStatisticsChart from './MilesStatisticsChart';
 import ChartLegend from './ChartLegend';
-
-type ChartDataKey = keyof typeof barChart;
 
 const MilesStatistics = () => {
   const barChartRef = useRef<null | EChartsReactCore>(null);
   const [selectedOption, setSelectedOption] = useState('day');
+  const [dailySalesData, setDailySalesData] = useState<number[]>([]);
+  const [todayQuantity, setTodayQuantity] = useState<number>(0);
 
-  let barChartData: number[] | null = null;
-  const handleChartLegend = (value: ChartDataKey) => {
+  useEffect(() => {
+    const fetchSalesData = async () => {
+      try {
+        // Get current date and date 7 days ago
+        const today = new Date('2025-04-23'); // Using provided context date
+        const startDate = new Date();
+        startDate.setDate(today.getDate() - 6); // Last 7 days including today
+        const startDateStr = startDate.toISOString().split('T')[0]; // e.g., '2025-04-17'
+        const endDateStr = today.toISOString().split('T')[0]; // e.g., '2025-04-23'
+
+        // Fetch sales data for the last 7 days
+        const sales: VendaComFuncionario[] = await getSalesByPeriod(startDateStr, endDateStr);
+
+        // Aggregate sales by day (total quantity sold per day)
+        const dailyQuantities: { [key: string]: number } = {};
+        for (let d = new Date(startDate); d <= today; d.setDate(d.getDate() + 1)) {
+          const dateStr = d.toISOString().split('T')[0];
+          dailyQuantities[dateStr] = 0;
+        }
+        sales.forEach((sale) => {
+          const saleDate = sale.data.split('T')[0];
+          if (dailyQuantities.hasOwnProperty(saleDate)) {
+            dailyQuantities[saleDate] += sale.quantidade || 0;
+          }
+        });
+
+        // Convert to array for chart (in chronological order)
+        const chartData = Object.keys(dailyQuantities)
+          .sort()
+          .map((date) => dailyQuantities[date]);
+        setDailySalesData(chartData);
+
+        // Calculate total quantity sold today
+        const todaySales = sales.filter((sale) => sale.data.split('T')[0] === endDateStr);
+        const totalToday = todaySales.reduce((sum, sale) => sum + (sale.quantidade || 0), 0);
+        setTodayQuantity(totalToday);
+
+        // Update chart
+        if (barChartRef.current) {
+          const chartInstance = barChartRef.current.getEchartsInstance();
+          chartInstance.setOption({
+            series: [
+              {
+                data: chartData,
+              },
+            ],
+          });
+        }
+      } catch (error) {
+        console.error('Erro ao buscar dados de vendas:', error);
+        setDailySalesData([]);
+        setTodayQuantity(0);
+      }
+    };
+
+    fetchSalesData();
+  }, []);
+
+  const handleChartLegend = (value: string) => {
     setSelectedOption(value);
-    barChartData = barChart[value];
-
+    // For now, only 'day' is supported; extend here for other periods if needed
     if (barChartRef.current) {
       const chartInstance = barChartRef.current.getEchartsInstance();
       chartInstance.setOption({
         series: [
           {
-            data: barChartData,
+            data: dailySalesData,
           },
         ],
       });
@@ -56,25 +113,19 @@ const MilesStatistics = () => {
               label="Day"
               onHandleClick={handleChartLegend}
             />
-            <ChartLegend
-              active={selectedOption === 'week'}
-              label="Week"
-              onHandleClick={handleChartLegend}
-            />
-            <ChartLegend
-              active={selectedOption === 'month'}
-              label="Month"
-              onHandleClick={handleChartLegend}
-            />
           </Stack>
 
           <Typography variant="subtitle2" component="p" sx={{ color: 'grey.700' }}>
-            256 vendidos
+            {todayQuantity} vendidos
           </Typography>
         </Stack>
       </Stack>
 
-      <MilesStatisticsChart barChartRef={barChartRef} data={barChartData} style={{ height: 223 }} />
+      <MilesStatisticsChart
+        barChartRef={barChartRef}
+        data={dailySalesData}
+        style={{ height: 223 }}
+      />
     </Paper>
   );
 };

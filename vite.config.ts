@@ -4,6 +4,10 @@ import tsconfigPaths from 'vite-tsconfig-paths';
 //import checker from 'vite-plugin-checker';
 
 export default defineConfig({
+  server: {
+    port: 5173,
+    allowedHosts: true,
+  },
   plugins: [
     react(),
     tsconfigPaths(),
