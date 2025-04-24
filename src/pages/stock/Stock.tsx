@@ -28,15 +28,7 @@ import IconifyIcon from 'components/base/IconifyIcon';
 import Delete from 'components/icons/factor/Delete';
 import Edit from 'components/icons/factor/Edit';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  DadosEntradaEstoque,
-  DadosEstoque,
-  Produto,
-  Fornecedor,
-  Funcionario,
-  ProdutoLocalizacao,
-  Localizacao,
-} from 'types/models';
+import { jwtDecode } from 'jwt-decode';
 import {
   getAllStock,
   createStockEntry,
@@ -55,6 +47,15 @@ import {
   getAllLocations,
   createProductLocation,
 } from '../../api/methods';
+import {
+  DadosEntradaEstoque,
+  DadosEstoque,
+  Produto,
+  Fornecedor,
+  Funcionario,
+  ProdutoLocalizacao,
+  Localizacao,
+} from 'types/models';
 
 const modalStyle = {
   position: 'absolute' as const,
@@ -202,45 +203,55 @@ const Stock: React.FC = () => {
   };
 
   const handleOpen = useCallback(() => {
-    setIsEditing(false);
-    setEditEntryId(null);
     let userId = '';
-    const user = localStorage.getItem('user');
-    console.log('Conteúdo do localStorage user:', user); // Log para depuração
     try {
-      if (user) {
-        const parsedUser = JSON.parse(user);
-        // Suporta userId, id, ou user.id
-        userId = parsedUser.userId || parsedUser.id || parsedUser.user?.id || '';
-        console.log('userId extraído:', userId); // Log para depuração
-        if (userId) {
-          const userExists = employees.some((employee) => employee.id === userId);
-          if (!userExists) {
-            setFetchError('Funcionário logado não encontrado na lista de funcionários.');
-          }
-        } else {
-          setFetchError('ID do usuário não encontrado no localStorage.');
-        }
-      } else {
+      const token = localStorage.getItem('token');
+      if (!token) {
         setFetchError('Nenhum usuário logado encontrado. Faça login novamente.');
+        return; // Impede a abertura do modal
       }
-    } catch (error) {
-      console.error('Erro ao parsear user do localStorage:', error);
-      setFetchError('Erro ao recuperar informações do usuário logado.');
-    }
 
-    setForm({
-      id_fornecedor: '',
-      id_produto: '',
-      id_funcionario: userId,
-      quantidadeRecebida: 0,
-      dataEntrada: (new Date()),
-      custoUnitario: 0,
-      lote: '',
-      dataValidadeLote: (new Date()),
-    });
-    setErrors({});
-    setOpenModal(true);
+      let decoded: { userId?: string } = {};
+      try {
+        decoded = jwtDecode(token);
+      } catch (err) {
+        console.error('Erro ao decodificar token:', err);
+        setFetchError('Token inválido. Faça login novamente.');
+        return; // Impede a abertura do modal
+      }
+
+      userId = decoded.userId || '';
+      if (!userId) {
+        setFetchError('ID do usuário não encontrado no token. Faça login novamente.');
+        return; // Impede a abertura do modal
+      }
+
+      // Verifica se o userId corresponde a um funcionário existente
+      const userExists = employees.some((employee) => employee.id === userId);
+      if (!userExists) {
+        setFetchError('Funcionário logado não encontrado na lista de funcionários.');
+        return; // Impede a abertura do modal
+      }
+
+      // Se chegou até aqui, o userId é válido
+      setIsEditing(false);
+      setEditEntryId(null);
+      setForm({
+        id_fornecedor: '',
+        id_produto: '',
+        id_funcionario: userId, // Define o id_funcionario automaticamente
+        quantidadeRecebida: 0,
+        dataEntrada: new Date(),
+        custoUnitario: 0,
+        lote: '',
+        dataValidadeLote: new Date(),
+      });
+      setErrors({});
+      setOpenModal(true);
+    } catch (error) {
+      console.error('Erro ao recuperar usuário:', error);
+      setFetchError('Erro ao recuperar informações do usuário logado. Tente novamente.');
+    }
   }, [employees]);
 
   const handleClose = useCallback(() => {
@@ -257,7 +268,7 @@ const Stock: React.FC = () => {
       id_produto: '',
       quantidadeAtual: 0,
       lote: '',
-      dataValidadeLote: (new Date()),
+      dataValidadeLote: new Date(),
     });
     setErrors({});
     setSuccessMessage(null);
@@ -620,7 +631,7 @@ const Stock: React.FC = () => {
       id_produto: stock.id_produto,
       quantidadeAtual: stock.quantidadeAtual,
       lote: stock.lote,
-      dataValidadeLote: (stock.dataValidadeLote),
+      dataValidadeLote: stock.dataValidadeLote,
     });
     setEditStockModal(true);
     setErrors({});
@@ -634,10 +645,10 @@ const Stock: React.FC = () => {
       id_produto: entry.id_produto,
       id_funcionario: entry.id_funcionario,
       quantidadeRecebida: entry.quantidadeRecebida,
-      dataEntrada: (entry.dataEntrada),
+      dataEntrada: entry.dataEntrada,
       custoUnitario: entry.custoUnitario,
       lote: entry.lote,
-      dataValidadeLote: (entry.dataValidadeLote),
+      dataValidadeLote: entry.dataValidadeLote,
     });
     setErrors({});
     setOpenModal(true);
@@ -873,7 +884,7 @@ const Stock: React.FC = () => {
                 label="Data de Entrada"
                 type="date"
                 fullWidth
-                value={form.dataEntrada}
+                value={(form.dataEntrada)}
                 onChange={handleTextFieldChange}
                 InputLabelProps={{ shrink: true }}
                 error={!!errors.dataEntrada}
@@ -973,7 +984,7 @@ const Stock: React.FC = () => {
                 label="Validade do Lote"
                 type="date"
                 fullWidth
-                value={form.dataValidadeLote}
+                value={(form.dataValidadeLote)}
                 onChange={handleTextFieldChange}
                 InputLabelProps={{ shrink: true }}
                 error={!!errors.dataValidadeLote}
@@ -1081,7 +1092,7 @@ const Stock: React.FC = () => {
                 label="Validade do Lote"
                 type="date"
                 fullWidth
-                value={stockForm.dataValidadeLote}
+                value={(stockForm.dataValidadeLote)}
                 onChange={handleStockTextFieldChange}
                 InputLabelProps={{ shrink: true }}
                 error={!!errors.dataValidadeLote}
@@ -1224,7 +1235,8 @@ const Stock: React.FC = () => {
                   name="id_prateleira"
                   value={locationForm.id_prateleira || ''}
                   onChange={handleLocationSelectChange}
-                  aria-label="Selecionar prateleira para o produto">
+                  aria-label="Selecionar prateleira para o produto"
+                >
                   <MenuItem value="" disabled>
                     Selecione uma prateleira
                   </MenuItem>
@@ -1389,44 +1401,60 @@ const Stock: React.FC = () => {
               <Table aria-label="Tabela de detalhes da entrada de estoque">
                 <TableBody>
                   <TableRow>
-                    <TableCell><strong>Produto</strong></TableCell>
+                    <TableCell>
+                      <strong>Produto</strong>
+                    </TableCell>
                     <TableCell>
                       {products.find((p) => p.id === selectedEntry.id_produto)?.nomeProduto ||
                         selectedEntry.id_produto}
                     </TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell><strong>Fornecedor</strong></TableCell>
+                    <TableCell>
+                      <strong>Fornecedor</strong>
+                    </TableCell>
                     <TableCell>
                       {suppliers.find((s) => s.id === selectedEntry.id_fornecedor)?.nomeFornecedor ||
                         selectedEntry.id_fornecedor}
                     </TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell><strong>Funcionário</strong></TableCell>
+                    <TableCell>
+                      <strong>Funcionário</strong>
+                    </TableCell>
                     <TableCell>
                       {employees.find((e) => e.id === selectedEntry.id_funcionario)?.nomeFuncionario ||
                         selectedEntry.id_funcionario}
                     </TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell><strong>Quantidade</strong></TableCell>
+                    <TableCell>
+                      <strong>Quantidade</strong>
+                    </TableCell>
                     <TableCell>{selectedEntry.quantidadeRecebida}</TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell><strong>Data de Entrada</strong></TableCell>
+                    <TableCell>
+                      <strong>Data de Entrada</strong>
+                    </TableCell>
                     <TableCell>{formatDateToDisplay(selectedEntry.dataEntrada)}</TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell><strong>Custo Unitário</strong></TableCell>
+                    <TableCell>
+                      <strong>Custo Unitário</strong>
+                    </TableCell>
                     <TableCell>{Number(selectedEntry.custoUnitario).toFixed(2)}</TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell><strong>Lote</strong></TableCell>
+                    <TableCell>
+                      <strong>Lote</strong>
+                    </TableCell>
                     <TableCell>{selectedEntry.lote}</TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell><strong>Validade</strong></TableCell>
+                    <TableCell>
+                      <strong>Validade</strong>
+                    </TableCell>
                     <TableCell>{formatDateToDisplay(selectedEntry.dataValidadeLote)}</TableCell>
                   </TableRow>
                 </TableBody>
@@ -1604,9 +1632,7 @@ const Stock: React.FC = () => {
                               />
                             </IconButton>
                           </TableCell>
-                          <TableCell align="right">
-                            {/* Ações gerais do produto, se necessário */}
-                          </TableCell>
+                          <TableCell align="right"></TableCell>
                         </TableRow>
                         {isExpanded && (
                           <TableRow>

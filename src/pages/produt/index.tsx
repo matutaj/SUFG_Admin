@@ -247,6 +247,8 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         quantidadePorUnidade: editProductRef ? quantidadePorUnidade : 0, // Definir 0 ao criar
         unidadeMedida,
         unidadeConteudo,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       };
       console.log('Dados do produto a enviar:', productData);
 
