@@ -32,6 +32,7 @@ import {
   updateProduct,
   deleteProduct,
   getAllProductCategories,
+  getTotalStockByProduct,
 } from '../../api/methods';
 
 interface CollapsedItemProps {
@@ -101,18 +102,17 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const [referenciaProduto, setReferenciaProduto] = React.useState('');
   const [idCategoriaProduto, setIdCategoriaProduto] = React.useState('');
   const [precoVenda, setPrecoVenda] = React.useState(0);
-  const [quantidadePorUnidade, setquantidadePorUnidade] = React.useState(0);
   const [unidadeMedida, setUnidadeMedida] = React.useState('');
   const [unidadeConteudo, setUnidadeConteudo] = React.useState('');
   const [searchTerm, setSearchTerm] = React.useState('');
   const [products, setProducts] = React.useState<Produto[]>([]);
+  const [productStockQuantities, setProductStockQuantities] = React.useState<{ [key: string]: number }>({});
   const [categories, setCategories] = React.useState<CategoriaProduto[]>([]);
   const [errors, setErrors] = React.useState<{
     nomeProduto?: string;
     referenciaProduto?: string;
     idCategoriaProduto?: string;
     precoVenda?: string;
-    quantidadePorUnidade?: string;
     unidadeMedida?: string;
     unidadeConteudo?: string;
   }>({});
@@ -124,88 +124,81 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const [page, setPage] = React.useState(0);
   const [rowsPerPage, setRowsPerPage] = React.useState(5);
 
+  // Função de logging condicional
+  const log = (message: string, ...args: any[]) => {
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(message, ...args);
+    }
+  };
+
   const handleOpenProduct = () => {
-    console.log('Opening product modal');
     setOpenProductModal(true);
   };
 
   const handleCloseProduct = () => {
-    console.log('Closing product modal, resetting state');
     setOpenProductModal(false);
     setEditProductRef(null);
     setNomeProduto('');
     setReferenciaProduto('');
     setIdCategoriaProduto('');
     setPrecoVenda(0);
-    setquantidadePorUnidade(0);
     setUnidadeMedida('');
     setUnidadeConteudo('');
     setErrors({});
   };
 
   const handleOpenConfirmModal = (ref: string) => {
-    console.log(`Opening confirm modal for product ref: ${ref}`);
     setProductToDelete(ref);
     setOpenConfirmModal(true);
   };
 
   const handleCloseConfirmModal = () => {
-    console.log('Closing confirm modal');
     setOpenConfirmModal(false);
     setProductToDelete(null);
   };
 
-  const fetchProducts = async () => {
-    console.log('Fetching products...');
+  const fetchProductsAndStock = async () => {
     try {
       setLoading(true);
-      const data = await getAllProducts();
-      console.log('Products fetched:', data);
-      setProducts(data);
+      const productsData = await getAllProducts();
+      const stockQuantities: { [key: string]: number } = {};
+      for (const product of productsData) {
+        try {
+          const totalQuantity = await getTotalStockByProduct(product.referenciaProduto);
+          stockQuantities[product.referenciaProduto] = totalQuantity;
+        } catch (error) {
+          stockQuantities[product.referenciaProduto] = 0;
+        }
+      }
+      setProducts(productsData);
+      setProductStockQuantities(stockQuantities);
     } catch (error) {
-      console.error('Error fetching products:', error);
       setAlert({ severity: 'error', message: 'Erro ao carregar produtos!' });
     } finally {
       setLoading(false);
-      console.log('Fetch products completed, loading:', false);
     }
   };
 
   const fetchCategories = async () => {
-    console.log('Fetching categories...');
     try {
       const data = await getAllProductCategories();
-      console.log('Categories fetched:', data);
       setCategories(data);
     } catch (error) {
-      console.error('Error fetching categories:', error);
+      log('Error fetching categories:', error);
     }
   };
 
   React.useEffect(() => {
-    console.log('useEffect: Initial fetch for products and categories');
-    fetchProducts();
+    fetchProductsAndStock();
     fetchCategories();
   }, []);
 
   const handleAddProduct = async () => {
-    console.log('handleAddProduct called with:', {
-      nomeProduto,
-      referenciaProduto,
-      idCategoriaProduto,
-      precoVenda,
-      quantidadePorUnidade,
-      unidadeMedida,
-      unidadeConteudo,
-      editProductRef,
-    });
-
     const newErrors: {
       nomeProduto?: string;
       referenciaProduto?: string;
       idCategoriaProduto?: string;
       precoVenda?: string;
-      quantidadePorUnidade?: string;
       unidadeMedida?: string;
       unidadeConteudo?: string;
     } = {};
@@ -215,8 +208,6 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     if (!referenciaProduto.trim()) newErrors.referenciaProduto = 'A referência é obrigatória.';
     if (!idCategoriaProduto) newErrors.idCategoriaProduto = 'A categoria é obrigatória.';
     if (precoVenda <= 0) newErrors.precoVenda = 'O preço de venda deve ser maior que 0.';
-    if (editProductRef && quantidadePorUnidade < 0)
-      newErrors.quantidadePorUnidade = 'A quantidade em estoque não pode ser negativa.';
     if (!unidadeMedida) newErrors.unidadeMedida = 'A unidade de medida é obrigatória.';
     if (!unidadeConteudo) newErrors.unidadeConteudo = 'O conteúdo é obrigatório.';
 
@@ -230,102 +221,93 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       newErrors.nomeProduto = 'Já existe um produto com este nome.';
     }
 
+    // Verificar duplicidade de referência
+    const existingReference = products.find(
+      (p) =>
+        p.referenciaProduto.toLowerCase() === referenciaProduto.trim().toLowerCase() &&
+        (!editProductRef || p.id !== editProductRef),
+    );
+    if (existingReference) {
+      newErrors.referenciaProduto = 'Já existe um produto com esta referência.';
+    }
+
     if (Object.keys(newErrors).length > 0) {
-      console.log('Erros de validação:', newErrors);
       setErrors(newErrors);
       return;
     }
 
     try {
       setLoading(true);
-      console.log('Sem erros de validação, prosseguindo com a chamada à API...');
       const productData: Produto = {
         nomeProduto,
         referenciaProduto,
         id_categoriaProduto: idCategoriaProduto,
         precoVenda,
-        quantidadePorUnidade: editProductRef ? quantidadePorUnidade : 0, // Definir 0 ao criar
         unidadeMedida,
         unidadeConteudo,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-      console.log('Dados do produto a enviar:', productData);
 
       if (editProductRef) {
-        console.log(`Atualizando produto com ref: ${editProductRef}`);
-        const response = await updateProduct(editProductRef, productData);
-        console.log('Resposta da atualização:', response);
+        const updatedProduct = await updateProduct(editProductRef, productData);
+        setProducts(products.map((p) => (p.id === updatedProduct.id ? updatedProduct : p)));
         setAlert({ severity: 'success', message: 'Produto atualizado com sucesso!' });
       } else {
-        console.log('Criando novo produto');
-        const response = await createProduct(productData);
-        console.log('Resposta da criação:', response);
+        const newProduct = await createProduct(productData);
+        setProducts([...products, newProduct]);
+        setProductStockQuantities({
+          ...productStockQuantities,
+          [newProduct.referenciaProduto]: 0,
+        });
         setAlert({ severity: 'success', message: 'Produto cadastrado com sucesso!' });
       }
 
-      console.log('Buscando lista de produtos atualizada...');
-      await fetchProducts();
-      console.log('Estado dos produtos após busca:', products);
-      console.log('Fechando modal após salvar com sucesso');
+      await fetchProductsAndStock(); // Atualiza para refletir mudanças no estoque
       handleCloseProduct();
       setPage(0);
-    } catch (error) {
-      console.error('Erro ao salvar produto:', error);
-      setErrors({ nomeProduto: 'Erro ao salvar. Tente novamente.' });
-      setAlert({ severity: 'error', message: 'Erro ao salvar produto!' });
+    } catch (error: any) {
+      const errorMessage = error.message || 'Erro ao salvar produto!';
+      setErrors({ nomeProduto: errorMessage });
+      setAlert({ severity: 'error', message: errorMessage });
     } finally {
       setLoading(false);
-      console.log('handleAddProduct concluído, loading:', false);
     }
   };
 
   const handleEditProduct = (ref: string) => {
-    console.log(`handleEditProduct chamado para ref: ${ref}`);
     const productToEdit = products.find((p) => p.id === ref);
     if (productToEdit) {
-      console.log('Produto para edição encontrado:', productToEdit);
       setNomeProduto(productToEdit.nomeProduto);
       setReferenciaProduto(productToEdit.referenciaProduto);
       setIdCategoriaProduto(productToEdit.id_categoriaProduto);
       setPrecoVenda(productToEdit.precoVenda);
-      setquantidadePorUnidade(productToEdit.quantidadePorUnidade);
       setUnidadeMedida(productToEdit.unidadeMedida);
       setUnidadeConteudo(productToEdit.unidadeConteudo);
       setEditProductRef(ref);
       handleOpenProduct();
-    } else {
-      console.warn(`Produto com ref ${ref} não encontrado`);
     }
   };
 
   const handleDeleteProduct = async () => {
-    console.log(`handleDeleteProduct chamado para ref: ${productToDelete}`);
     if (productToDelete) {
       try {
         setLoading(true);
-        console.log('Deletando produto...');
-        const response = await deleteProduct(productToDelete);
-        console.log('Resposta da exclusão:', response);
-        console.log('Buscando lista de produtos atualizada...');
-        await fetchProducts();
-        console.log('Estado dos produtos após busca:', products);
+        await deleteProduct(productToDelete);
+        setProducts(products.filter((p) => p.id !== productToDelete));
+        const { [productToDelete]: _, ...remainingQuantities } = productStockQuantities;
+        setProductStockQuantities(remainingQuantities);
         setAlert({ severity: 'success', message: 'Produto excluído com sucesso!' });
         const totalPages = Math.ceil(filteredProducts.length / rowsPerPage);
         if (page >= totalPages && page > 0) {
           setPage(page - 1);
         }
       } catch (error) {
-        console.error('Erro ao excluir produto:', error);
         setAlert({ severity: 'error', message: 'Erro ao excluir produto!' });
       } finally {
         setLoading(false);
-        console.log('handleDeleteProduct concluído, loading:', false);
-        console.log('Fechando modal de confirmação');
         handleCloseConfirmModal();
       }
-    } else {
-      console.warn('Nenhum produto para excluir (productToDelete é nulo)');
     }
   };
 
@@ -334,16 +316,13 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       product.nomeProduto.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.referenciaProduto.toLowerCase().includes(searchTerm.toLowerCase()),
   );
-  console.log('Produtos filtrados:', filteredProducts);
 
   const handleChangePage = (event: unknown, newPage: number) => {
-    console.log('Mudando página para:', newPage);
     setPage(newPage);
   };
 
   const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
     const newRowsPerPage = parseInt(event.target.value, 10);
-    console.log('Mudando linhas por página para:', newRowsPerPage);
     setRowsPerPage(newRowsPerPage);
     setPage(0);
   };
@@ -460,20 +439,6 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 fullWidth
               />
             </Grid>
-            {editProductRef && (
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Quantidade por Unidade"
-                  type="number"
-                  value={quantidadePorUnidade}
-                  onChange={(e) => setquantidadePorUnidade(Number(e.target.value) || 0)}
-                  error={Boolean(errors.quantidadePorUnidade)}
-                  helperText={errors.quantidadePorUnidade}
-                  disabled={loading}
-                  fullWidth
-                />
-              </Grid>
-            )}
             <Grid item xs={12} sm={6}>
               <TextField
                 select
@@ -538,7 +503,9 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             Confirmar Exclusão
           </Typography>
           <Typography variant="body1" mb={3}>
-            Tem certeza que deseja excluir este produto? Esta ação não pode ser desfeita.
+            Tem certeza que deseja excluir o produto "
+            {products.find((p) => p.id === productToDelete)?.nomeProduto}"? Esta ação não pode ser
+            desfeita.
           </Typography>
           <Stack direction="row" spacing={2} justifyContent="flex-end">
             <Button
@@ -583,6 +550,9 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                     <strong>Preço Venda</strong>
                   </TableCell>
                   <TableCell>
+                    <strong>Quantidade em Estoque</strong>
+                  </TableCell>
+                  <TableCell>
                     <strong>Unidade de Medida</strong>
                   </TableCell>
                   <TableCell>
@@ -596,7 +566,7 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center">
+                    <TableCell colSpan={8} align="center">
                       Carregando...
                     </TableCell>
                   </TableRow>
@@ -610,6 +580,9 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                           ?.nomeCategoria || 'N/A'}
                       </TableCell>
                       <TableCell>{product.precoVenda || 0}</TableCell>
+                      <TableCell>
+                        {productStockQuantities[product.referenciaProduto] || 0}
+                      </TableCell>
                       <TableCell>{getUnidadeMedidaLabel(product.unidadeMedida)}</TableCell>
                       <TableCell>{getUnidadeConteudoLabel(product.unidadeConteudo)}</TableCell>
                       <TableCell align="right">
@@ -617,6 +590,7 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                           color="primary"
                           onClick={() => handleEditProduct(product.id!)}
                           disabled={loading}
+                          aria-label="Editar produto"
                         >
                           <Edit />
                         </IconButton>
@@ -624,6 +598,7 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                           color="error"
                           onClick={() => handleOpenConfirmModal(product.id!)}
                           disabled={loading}
+                          aria-label="Excluir produto"
                         >
                           <Delete />
                         </IconButton>
@@ -632,7 +607,7 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} align="center">
+                    <TableCell colSpan={8} align="center">
                       Nenhum produto encontrado.
                     </TableCell>
                   </TableRow>

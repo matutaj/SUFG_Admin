@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useReducer } from 'react';
-import { useNavigate } from 'react-router-dom'; // Adicionado para redirecionamento
-import { jwtDecode } from 'jwt-decode'; // Adicionado para decodificar o token
+import { useNavigate } from 'react-router-dom';
+import { jwtDecode } from 'jwt-decode';
 import {
   Paper,
   Button,
@@ -221,7 +221,7 @@ const confirmModalStyle = {
 };
 
 const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
-  const navigate = useNavigate(); // Adicionado para redirecionamento
+  const navigate = useNavigate();
   const [openFaturaModal, setOpenFaturaModal] = useState(false);
   const [openCaixaModal, setOpenCaixaModal] = useState(false);
   const [openCaixaListModal, setOpenCaixaListModal] = useState(false);
@@ -245,7 +245,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
   const [caixas, setCaixas] = useState<Caixa[]>([]);
   const [loggedInFuncionarioId, setLoggedInFuncionarioId] = useState<string>('');
-  const [isLoading, setIsLoading] = useState(true); // Adicionado para estado de carregamento
+  const [isLoading, setIsLoading] = useState(true);
 
   // Função para carregar e validar os dados do usuário logado
   const loadUserData = () => {
@@ -345,7 +345,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           const cliente = clientsData.find((c: Cliente) => c.id === venda.id_cliente);
           return {
             id: venda.id || `temp-${index + 1}`,
-            cliente: cliente ? cliente.nomeCliente : venda.id_cliente || 'Desconhecido',
+            cliente: cliente?.nomeCliente ?? venda.id_cliente ?? 'Desconhecido', // Garantir que cliente seja string
             nif: cliente?.numeroContribuinte || venda.clientes?.numeroContribuinte || '',
             telefone: cliente?.telefoneCliente || venda.clientes?.telefoneCliente || '',
             localizacao: cliente?.moradaCliente || venda.clientes?.moradaCliente || '',
@@ -761,26 +761,30 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         dispatchFatura({ type: 'UPDATE_FIELD', field: 'localizacao', value: '' });
         dispatchFatura({ type: 'UPDATE_FIELD', field: 'email', value: '' });
       } else {
-        dispatchFatura({ type: 'UPDATE_FIELD', field: 'cliente', value: newValue.nomeCliente });
+        dispatchFatura({
+          type: 'UPDATE_FIELD',
+          field: 'cliente',
+          value: newValue.nomeCliente ?? '', // Garantir que cliente seja string
+        });
         dispatchFatura({
           type: 'UPDATE_FIELD',
           field: 'nif',
-          value: newValue.numeroContribuinte || '',
+          value: newValue.numeroContribuinte ?? '',
         });
         dispatchFatura({
           type: 'UPDATE_FIELD',
           field: 'telefone',
-          value: newValue.telefoneCliente || '',
+          value: newValue.telefoneCliente ?? '',
         });
         dispatchFatura({
           type: 'UPDATE_FIELD',
           field: 'localizacao',
-          value: newValue.moradaCliente || '',
+          value: newValue.moradaCliente ?? '',
         });
         dispatchFatura({
           type: 'UPDATE_FIELD',
           field: 'email',
-          value: newValue.emailCliente || '',
+          value: newValue.emailCliente ?? '',
         });
       }
     } else {
@@ -816,6 +820,11 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
 
       const clienteExistente = clientes.find((c) => c.nomeCliente === faturaState.cliente);
 
+      // Verificar explicitamente que cliente é uma string não vazia
+      if (!faturaState.cliente.trim()) {
+        throw new Error('Nome do cliente é obrigatório.');
+      }
+
       const dadosWrapper: DadosWrapper = {
         Dados: {
           dadosVenda: {
@@ -829,17 +838,18 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
               id_produto: p.id,
               quantidade: p.quantidade,
             })),
+            id_cliente: clienteExistente?.id,
           },
           cliente: clienteExistente
-            ? [clienteExistente.id]
+            ? undefined
             : [
                 {
                   nomeCliente: faturaState.cliente,
-                  numeroContribuinte: faturaState.nif || '',
-                  telefoneCliente: faturaState.telefone || '',
-                  moradaCliente: faturaState.localizacao || '',
-                  emailCliente: faturaState.email || '',
-                },
+                  numeroContribuinte: faturaState.nif,
+                  telefoneCliente: faturaState.telefone,
+                  moradaCliente: faturaState.localizacao,
+                  emailCliente: faturaState.email,
+                } as Cliente,
               ],
         },
       };
@@ -849,68 +859,68 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       const createdVenda = await createSale(dadosWrapper);
 
       const lojaLocation = locations.find((loc) => isStoreLocation(loc.id, locations));
-      if (lojaLocation) {
-        for (const produtoSelecionado of faturaState.produtosSelecionados) {
-          const produtoLocation = productLocations.find(
-            (loc) =>
-              loc.id_produto === produtoSelecionado.id && loc.id_localizacao === lojaLocation.id,
+      if (!lojaLocation) {
+        throw new Error('Localização "Loja" não encontrada.');
+      }
+
+      for (const produtoSelecionado of faturaState.produtosSelecionados) {
+        const produtoLocation = productLocations.find(
+          (loc) => loc.id_produto === produtoSelecionado.id && loc.id_localizacao === lojaLocation.id,
+        );
+
+        if (!produtoLocation || !produtoLocation.id_produto) {
+          throw new Error(`Localização do produto ${produtoSelecionado.id} não encontrada na loja.`);
+        }
+
+        const newQuantity = (produtoLocation.quantidadeProduto ?? 0) - produtoSelecionado.quantidade;
+        if (newQuantity < 0) {
+          throw new Error(
+            `Quantidade insuficiente na loja para o produto ${produtoSelecionado.id}`,
           );
+        }
 
-          if (produtoLocation && produtoLocation.id_produto) {
-            const newQuantity =
-              (produtoLocation.quantidadeProduto ?? 0) - produtoSelecionado.quantidade;
-            if (newQuantity >= 0) {
-              const updatedLocation: ProdutoLocalizacao = {
-                ...produtoLocation,
-                quantidadeProduto: newQuantity,
-                id_produto: produtoLocation.id_produto,
-              };
-              await updateProductLocation(produtoLocation.id ?? '', updatedLocation);
+        const updatedLocation: ProdutoLocalizacao = {
+          ...produtoLocation,
+          quantidadeProduto: newQuantity,
+          id_produto: produtoLocation.id_produto,
+        };
+        await updateProductLocation(produtoLocation.id ?? '', updatedLocation);
 
-              const armazemLocation = locations.find((loc) =>
-                loc.nomeLocalizacao.toLowerCase().includes('armazém'),
-              );
-              const armazemProdutoLocation = armazemLocation
-                ? productLocations.find(
-                    (loc) =>
-                      loc.id_produto === produtoSelecionado.id &&
-                      loc.id_localizacao === armazemLocation.id,
-                  )
-                : null;
+        const armazemLocation = locations.find((loc) =>
+          loc.nomeLocalizacao.toLowerCase().includes('armazém'),
+        );
+        const armazemProdutoLocation = armazemLocation
+          ? productLocations.find(
+              (loc) =>
+                loc.id_produto === produtoSelecionado.id &&
+                loc.id_localizacao === armazemLocation.id,
+            )
+          : null;
 
-              const lojaQuantity = Number(produtoLocation.quantidadeProduto) || 0;
-              const armazemQuantity = Number(armazemProdutoLocation?.quantidadeProduto) || 0;
-              const estoqueGeral = lojaQuantity + armazemQuantity - produtoSelecionado.quantidade;
+        const lojaQuantity = Number(produtoLocation.quantidadeProduto) || 0;
+        const armazemQuantity = Number(armazemProdutoLocation?.quantidadeProduto) || 0;
+        const estoqueGeral = lojaQuantity + armazemQuantity;
 
-              const existingStock = await getStockByProduct(produtoSelecionado.id);
-              if (existingStock) {
-                const updatedStockData = {
-                  id_produto: produtoSelecionado.id,
-                  quantidadeAtual: estoqueGeral,
-                  lote: existingStock.lote,
-                  dataValidadeLote: existingStock.dataValidadeLote,
-                };
-                await updateStock(existingStock.id!, updatedStockData);
-              } else {
-                throw new Error(
-                  `Nenhum estoque encontrado para o produto ${produtoSelecionado.id}.`,
-                );
-              }
+        const existingStock = await getStockByProduct(produtoSelecionado.id);
+        if (existingStock && existingStock.id) {
+          const updatedStockData = {
+            id_produto: produtoSelecionado.id,
+            quantidadeAtual: estoqueGeral,
+            lote: existingStock.lote || '',
+            dataValidadeLote: existingStock.dataValidadeLote || new Date().toISOString(),
+          };
+          await updateStock(existingStock.id, updatedStockData);
+        } else {
+          throw new Error(`Nenhum estoque encontrado para o produto ${produtoSelecionado.id}.`);
+        }
 
-              const produto = produtos.find((p) => p.id === produtoSelecionado.id);
-              if (produto) {
-                const updatedProduto: Produto = {
-                  ...produto,
-                  quantidadePorUnidade: estoqueGeral,
-                };
-                await updateProduct(produto.id!, updatedProduto);
-              }
-            } else {
-              throw new Error(
-                `Quantidade insuficiente na loja para o produto ${produtoSelecionado.id}`,
-              );
-            }
-          }
+        const produto = produtos.find((p) => p.id === produtoSelecionado.id);
+        if (produto && produto.id) {
+          const updatedProduto: Produto = {
+            ...produto,
+            quantidadePorUnidade: estoqueGeral,
+          };
+          await updateProduct(produto.id, updatedProduto);
         }
       }
 
@@ -922,7 +932,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         return {
           produto: {
             ...produto,
-            quantidadePorUnidade: produto.quantidadePorUnidade - p.quantidade,
+            quantidadePorUnidade: (produto.quantidadePorUnidade ?? 0) - p.quantidade,
           },
           quantidade: p.quantidade,
         };
@@ -930,11 +940,11 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
 
       const newFatura: Fatura = {
         id: createdVenda.id || `temp-${faturas.length + 1}`,
-        cliente: faturaState.cliente,
-        nif: faturaState.nif,
-        telefone: faturaState.telefone,
-        localizacao: faturaState.localizacao,
-        email: faturaState.email,
+        cliente: faturaState.cliente, // Garantido como string pela validação
+        nif: faturaState.nif || '',
+        telefone: faturaState.telefone || '',
+        localizacao: faturaState.localizacao || '',
+        email: faturaState.email || '',
         data: dataEmissao.toISOString().split('T')[0],
         produtos: novosProdutosFatura,
         funcionariosCaixa: funcionariosCaixa.find(
@@ -958,8 +968,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                 loc.id_localizacao ===
                   locations.find((l) => l.nomeLocalizacao.toLowerCase().includes('armazém'))?.id,
             );
-            const newStock =
-              (lojaLoc?.quantidadeProduto ?? 0) + (armazemLoc?.quantidadeProduto ?? 0);
+            const newStock = (lojaLoc?.quantidadeProduto ?? 0) + (armazemLoc?.quantidadeProduto ?? 0);
             return { ...produto, quantidadePorUnidade: newStock };
           }
           return produto;
@@ -970,10 +979,10 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         const novoCliente: Cliente = {
           id: createdVenda.id_cliente,
           nomeCliente: faturaState.cliente,
-          numeroContribuinte: faturaState.nif || '',
-          telefoneCliente: faturaState.telefone || '',
-          moradaCliente: faturaState.localizacao || '',
-          emailCliente: faturaState.email || '',
+          numeroContribuinte: faturaState.nif,
+          telefoneCliente: faturaState.telefone,
+          moradaCliente: faturaState.localizacao,
+          emailCliente: faturaState.email,
         };
         setClientes((prev) => [...prev, novoCliente]);
       }
@@ -1193,7 +1202,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const paginatedFaturas = faturas.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
-  // Exibir tela de carregamento enquanto valida o usuário
   if (isLoading) {
     return (
       <Box sx={{ textAlign: 'center', padding: '50px' }}>
@@ -1294,12 +1302,12 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                 <Autocomplete
                   options={clientes}
                   getOptionLabel={(option) =>
-                    typeof option === 'string' ? option : option.nomeCliente
+                    typeof option === 'string' ? option : option.nomeCliente ?? '' // Garantir string
                   }
                   onChange={handleClientSelect}
                   value={
                     clientes.find((c) => c.nomeCliente === faturaState.cliente) ||
-                    (faturaState.cliente ? faturaState.cliente : null)
+                    (faturaState.cliente ? { nomeCliente: faturaState.cliente } : null)
                   }
                   freeSolo
                   renderInput={(params) => (

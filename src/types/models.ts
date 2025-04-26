@@ -18,17 +18,17 @@ export interface DadosVenda {
 
 export interface Cliente {
   id?: string;
-  emailCliente: string;
-  moradaCliente: string;
-  nomeCliente: string;
-  telefoneCliente: string;
-  numeroContribuinte: string;
+  emailCliente?: string;
+  moradaCliente?: string;
+  nomeCliente?: string;
+  telefoneCliente?: string;
+  numeroContribuinte?: string;
 }
 
 export interface DadosWrapper {
   Dados: {
     dadosVenda: DadosVenda;
-    cliente?: Cliente[];
+    cliente?: Cliente[] | undefined;
   };
 }
 
@@ -56,7 +56,7 @@ export interface Produto {
   referenciaProduto: string;
   nomeProduto: string;
   precoVenda: number;
-  quantidadePorUnidade: number;
+  quantidadePorUnidade?: number;
   unidadeMedida: string;
   unidadeConteudo: string;
   createdAt: Date;
