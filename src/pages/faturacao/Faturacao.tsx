@@ -83,7 +83,7 @@ interface Fatura {
   email: string;
   data: string;
   produtos: { produto: Produto; quantidade: number }[];
-  funcionariosCaixa?: FuncionarioCaixa;
+  funcionariosCaixa?: FuncionarioCaixa | null;
 }
 
 interface CollapsedItemProps {
@@ -339,13 +339,25 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         ]);
 
         console.log('FuncionariosCaixaData:', JSON.stringify(funcionariosCaixaData, null, 2));
+        console.log('ClientsData:', JSON.stringify(clientsData, null, 2));
         setClientes(clientsData as Cliente[]);
 
         const mappedFaturas = salesData.map((venda: Venda, index: number) => {
           const cliente = clientsData.find((c: Cliente) => c.id === venda.id_cliente);
+          console.log(`Venda ${venda.id}: Cliente ID=${venda.id_cliente}, Nome=${cliente?.nomeCliente || 'N/A'}`);
+
+          const funcionariosCaixa = venda.funcionariosCaixa
+            ? {
+                ...venda.funcionariosCaixa,
+                id_caixa: venda.funcionariosCaixa.id_caixa || '',
+                id_funcionario: venda.funcionariosCaixa.id_funcionario || '',
+                caixas: caixasData.find((c) => c.id === (venda.funcionariosCaixa?.id_caixa || '')),
+              } as FuncionarioCaixa
+            : null;
+
           return {
             id: venda.id || `temp-${index + 1}`,
-            cliente: cliente?.nomeCliente ?? venda.id_cliente ?? 'Desconhecido', // Garantir que cliente seja string
+            cliente: cliente?.nomeCliente || venda.clientes?.nomeCliente || 'Cliente Desconhecido',
             nif: cliente?.numeroContribuinte || venda.clientes?.numeroContribuinte || '',
             telefone: cliente?.telefoneCliente || venda.clientes?.telefoneCliente || '',
             localizacao: cliente?.moradaCliente || venda.clientes?.moradaCliente || '',
@@ -370,7 +382,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   quantidade: vp.quantidadeVendida,
                 };
               }) || [],
-            funcionariosCaixa: venda.funcionariosCaixa,
+            funcionariosCaixa,
           };
         });
 
@@ -764,7 +776,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         dispatchFatura({
           type: 'UPDATE_FIELD',
           field: 'cliente',
-          value: newValue.nomeCliente ?? '', // Garantir que cliente seja string
+          value: newValue.nomeCliente ?? '',
         });
         dispatchFatura({
           type: 'UPDATE_FIELD',
@@ -820,7 +832,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
 
       const clienteExistente = clientes.find((c) => c.nomeCliente === faturaState.cliente);
 
-      // Verificar explicitamente que cliente é uma string não vazia
       if (!faturaState.cliente.trim()) {
         throw new Error('Nome do cliente é obrigatório.');
       }
@@ -940,16 +951,19 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
 
       const newFatura: Fatura = {
         id: createdVenda.id || `temp-${faturas.length + 1}`,
-        cliente: faturaState.cliente, // Garantido como string pela validação
+        cliente: faturaState.cliente,
         nif: faturaState.nif || '',
         telefone: faturaState.telefone || '',
         localizacao: faturaState.localizacao || '',
         email: faturaState.email || '',
         data: dataEmissao.toISOString().split('T')[0],
         produtos: novosProdutosFatura,
-        funcionariosCaixa: funcionariosCaixa.find(
-          (fc) => fc.id === createdVenda.id_funcionarioCaixa,
-        ),
+        funcionariosCaixa: {
+          ...funcionariosCaixa.find((fc) => fc.id === createdVenda.id_funcionarioCaixa),
+          id_caixa: createdVenda.id_funcionarioCaixa || '',
+          id_funcionario: loggedInFuncionarioId,
+          caixas: caixas.find((c) => c.id === createdVenda.id_funcionarioCaixa),
+        } as FuncionarioCaixa,
       };
 
       setFaturas((prev) => [...prev, newFatura]);
@@ -1178,10 +1192,13 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         estadoCaixa: false,
         quantidadaFaturada: totalFaturado,
         horarioFechamento: new Date(),
+        caixas: caixaAtual.caixas,
       };
 
       const response = await updateEmployeeCashRegister(caixaId, updatedCaixa);
-      setFuncionariosCaixa((prev) => prev.map((c) => (c.id === caixaId ? response : c)));
+      setFuncionariosCaixa((prev) =>
+        prev.map((c) => (c.id === caixaId ? { ...response, caixas: c.caixas } : c))
+      );
       setAlert({ severity: 'success', message: 'Caixa fechado com sucesso!' });
       handleCloseCaixaListModal();
     } catch (error) {
@@ -1302,7 +1319,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                 <Autocomplete
                   options={clientes}
                   getOptionLabel={(option) =>
-                    typeof option === 'string' ? option : option.nomeCliente ?? '' // Garantir string
+                    typeof option === 'string' ? option : option.nomeCliente ?? ''
                   }
                   onChange={handleClientSelect}
                   value={
@@ -1618,41 +1635,46 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
               </TableHead>
               <TableBody>
                 {paginatedFaturas.length > 0 ? (
-                  paginatedFaturas.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>{item.cliente}</TableCell>
-                      <TableCell>
-                        {new Intl.DateTimeFormat('pt-BR').format(new Date(item.data))}
-                      </TableCell>
-                      <TableCell>{calcularTotalFatura(item)}kzs</TableCell>
-                      <TableCell>{item.funcionariosCaixa?.caixas?.nomeCaixa || 'N/A'}</TableCell>
-                      <TableCell align="right">
-                        <Stack direction="row" spacing={0.5}>
-                          <IconButton
-                            color="primary"
-                            onClick={() => handleOpenFaturaModal(item.id)}
-                            size="small"
-                          >
-                            <Edit />
-                          </IconButton>
-                          <IconButton
-                            color="error"
-                            onClick={() => handleOpenConfirmModal(item.id)}
-                            size="small"
-                          >
-                            <Delete />
-                          </IconButton>
-                          <IconButton
-                            color="secondary"
-                            onClick={() => generatePDF(item)}
-                            size="small"
-                          >
-                            <IconifyIcon icon="mdi:file-pdf" />
-                          </IconButton>
-                        </Stack>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  paginatedFaturas.map((item) => {
+                    console.log('Fatura:', item.id, 'Cliente:', item.cliente, 'FuncionariosCaixa:', item.funcionariosCaixa);
+                    return (
+                      <TableRow key={item.id}>
+                        <TableCell>{item.cliente}</TableCell>
+                        <TableCell>
+                          {new Intl.DateTimeFormat('pt-BR').format(new Date(item.data))}
+                        </TableCell>
+                        <TableCell>{calcularTotalFatura(item)}kzs</TableCell>
+                        <TableCell>
+                          {item.funcionariosCaixa?.caixas?.nomeCaixa || 'Caixa Não Informado'}
+                        </TableCell>
+                        <TableCell align="right">
+                          <Stack direction="row" spacing={0.5}>
+                            <IconButton
+                              color="primary"
+                              onClick={() => handleOpenFaturaModal(item.id)}
+                              size="small"
+                            >
+                              <Edit />
+                            </IconButton>
+                            <IconButton
+                              color="error"
+                              onClick={() => handleOpenConfirmModal(item.id)}
+                              size="small"
+                            >
+                              <Delete />
+                            </IconButton>
+                            <IconButton
+                              color="secondary"
+                              onClick={() => generatePDF(item)}
+                              size="small"
+                            >
+                              <IconifyIcon icon="mdi:file-pdf" />
+                            </IconButton>
+                          </Stack>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 ) : (
                   <TableRow>
                     <TableCell colSpan={5} align="center">
