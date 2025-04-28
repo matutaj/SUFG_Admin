@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useReducer } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
@@ -338,7 +339,9 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           getAllClients(),
         ]);
 
+        console.log('SalesData:', JSON.stringify(salesData, null, 2));
         console.log('FuncionariosCaixaData:', JSON.stringify(funcionariosCaixaData, null, 2));
+        console.log('CaixasData:', JSON.stringify(caixasData, null, 2));
         console.log('ClientsData:', JSON.stringify(clientsData, null, 2));
         setClientes(clientsData as Cliente[]);
 
@@ -346,14 +349,22 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           const cliente = clientsData.find((c: Cliente) => c.id === venda.id_cliente);
           console.log(`Venda ${venda.id}: Cliente ID=${venda.id_cliente}, Nome=${cliente?.nomeCliente || 'N/A'}`);
 
-          const funcionariosCaixa = venda.funcionariosCaixa
-            ? {
-                ...venda.funcionariosCaixa,
-                id_caixa: venda.funcionariosCaixa.id_caixa || '',
-                id_funcionario: venda.funcionariosCaixa.id_funcionario || '',
-                caixas: caixasData.find((c) => c.id === (venda.funcionariosCaixa?.id_caixa || '')),
-              } as FuncionarioCaixa
-            : null;
+          let funcionariosCaixa: FuncionarioCaixa | null = null;
+          if (venda.id_funcionarioCaixa) {
+            const funcionarioCaixa = funcionariosCaixaData.find((fc) => fc.id === venda.id_funcionarioCaixa);
+            if (funcionarioCaixa) {
+              funcionariosCaixa = {
+                ...funcionarioCaixa,
+                id_caixa: funcionarioCaixa.id_caixa || '',
+                id_funcionario: funcionarioCaixa.id_funcionario || '',
+                caixas: caixasData.find((c) => c.id === funcionarioCaixa.id_caixa),
+              };
+            } else {
+              console.warn(`Nenhum funcionarioCaixa encontrado para id_funcionarioCaixa: ${venda.id_funcionarioCaixa}`);
+            }
+          } else {
+            console.warn(`Venda ${venda.id} não possui id_funcionarioCaixa`);
+          }
 
           return {
             id: venda.id || `temp-${index + 1}`,
@@ -363,25 +374,24 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
             localizacao: cliente?.moradaCliente || venda.clientes?.moradaCliente || '',
             email: cliente?.emailCliente || venda.clientes?.emailCliente || '',
             data: venda.dataEmissao.split('T')[0],
-            produtos:
-              venda.vendasProdutos?.map((vp) => {
-                const produto = productsData.find((p) => p.id === vp.id_produto);
-                return {
-                  produto: {
-                    id: vp.id_produto,
-                    id_categoriaProduto: produto?.id_categoriaProduto || '',
-                    referenciaProduto: produto?.referenciaProduto || '',
-                    nomeProduto: produto?.nomeProduto || '',
-                    precoVenda: produto?.precoVenda || 0,
-                    quantidadePorUnidade: produto?.quantidadePorUnidade || 0,
-                    unidadeMedida: produto?.unidadeMedida || '',
-                    unidadeConteudo: produto?.unidadeConteudo || '',
-                    createdAt: produto?.createdAt || new Date(),
-                    updatedAt: produto?.updatedAt || new Date(),
-                  },
-                  quantidade: vp.quantidadeVendida,
-                };
-              }) || [],
+            produtos: venda.vendasProdutos?.map((vp) => {
+              const produto = productsData.find((p) => p.id === vp.id_produto);
+              return {
+                produto: {
+                  id: vp.id_produto,
+                  id_categoriaProduto: produto?.id_categoriaProduto || '',
+                  referenciaProduto: produto?.referenciaProduto || '',
+                  nomeProduto: produto?.nomeProduto || '',
+                  precoVenda: produto?.precoVenda || 0,
+                  quantidadePorUnidade: produto?.quantidadePorUnidade || 0,
+                  unidadeMedida: produto?.unidadeMedida || '',
+                  unidadeConteudo: produto?.unidadeConteudo || '',
+                  createdAt: produto?.createdAt || new Date(),
+                  updatedAt: produto?.updatedAt || new Date(),
+                },
+                quantidade: vp.quantidadeVendida,
+              };
+            }) || [],
             funcionariosCaixa,
           };
         });
@@ -457,7 +467,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       newErrors.produtos = 'Adicione pelo menos um produto';
     }
     if (!state.funcionariosCaixaId) {
-      newErrors.funcionariosCaixaId = 'Nenhum caixa aberto encontrado. Abra um caixa primeiro.';
+      newErrors.funcionariosCaixaId = 'Nenhum caixa aberto encontrado授予 Abra um caixa primeiro.';
     } else if (
       !funcionariosCaixa.some((fc) => fc.id === state.funcionariosCaixaId && fc.estadoCaixa)
     ) {
@@ -880,7 +890,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         );
 
         if (!produtoLocation || !produtoLocation.id_produto) {
-          throw new Error(`Localização do produto ${produtoSelecionado.id} não encontrada na loja.`);
+          throw new Error(`Localização do produto Oxidized ${produtoSelecionado.id} não encontrada na loja.`);
         }
 
         const newQuantity = (produtoLocation.quantidadeProduto ?? 0) - produtoSelecionado.quantidade;
@@ -959,10 +969,18 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         data: dataEmissao.toISOString().split('T')[0],
         produtos: novosProdutosFatura,
         funcionariosCaixa: {
-          ...funcionariosCaixa.find((fc) => fc.id === createdVenda.id_funcionarioCaixa),
-          id_caixa: createdVenda.id_funcionarioCaixa || '',
+          ...funcionariosCaixa.find((fc) => fc.id === faturaState.funcionariosCaixaId)!,
+          id_caixa: faturaState.funcionariosCaixaId
+            ? funcionariosCaixa.find((fc) => fc.id === faturaState.funcionariosCaixaId)?.id_caixa || ''
+            : '',
           id_funcionario: loggedInFuncionarioId,
-          caixas: caixas.find((c) => c.id === createdVenda.id_funcionarioCaixa),
+          caixas: caixas.find(
+            (c) =>
+              c.id ===
+              (faturaState.funcionariosCaixaId
+                ? funcionariosCaixa.find((fc) => fc.id === faturaState.funcionariosCaixaId)?.id_caixa
+                : ''),
+          ),
         } as FuncionarioCaixa,
       };
 
@@ -1146,8 +1164,8 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       };
 
       const createdCaixa = await createEmployeeCashRegister(newFuncionarioCaixa);
-      console.log('Novo Caixa Criado:', JSON.stringify(createdCaixa, null, 2));
-      setFuncionariosCaixa((prev) => [...prev, createdCaixa]);
+      const updatedFuncionariosCaixa = await getAllEmployeeCashRegisters();
+      setFuncionariosCaixa(updatedFuncionariosCaixa);
       setAlert({ severity: 'success', message: 'Caixa aberto com sucesso!' });
       handleCloseCaixaModal();
     } catch (error) {
@@ -1196,9 +1214,8 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       };
 
       const response = await updateEmployeeCashRegister(caixaId, updatedCaixa);
-      setFuncionariosCaixa((prev) =>
-        prev.map((c) => (c.id === caixaId ? { ...response, caixas: c.caixas } : c))
-      );
+      const updatedFuncionariosCaixa = await getAllEmployeeCashRegisters();
+      setFuncionariosCaixa(updatedFuncionariosCaixa);
       setAlert({ severity: 'success', message: 'Caixa fechado com sucesso!' });
       handleCloseCaixaListModal();
     } catch (error) {
@@ -1645,7 +1662,11 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                         </TableCell>
                         <TableCell>{calcularTotalFatura(item)}kzs</TableCell>
                         <TableCell>
-                          {item.funcionariosCaixa?.caixas?.nomeCaixa || 'Caixa Não Informado'}
+                          {item.funcionariosCaixa?.caixas?.nomeCaixa
+                            ? item.funcionariosCaixa.caixas.nomeCaixa
+                            : item.funcionariosCaixa
+                            ? 'Caixa Não Especificado'
+                            : 'Caixa Não Informado'}
                         </TableCell>
                         <TableCell align="right">
                           <Stack direction="row" spacing={0.5}>
