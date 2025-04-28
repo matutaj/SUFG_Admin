@@ -512,13 +512,11 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     doc.setTextColor(whiteColor);
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text('NOME DE SUA EMPRESA', 10, 10);
+    doc.text('SISTEMA UNIFICADO DE FATURAÇÃO E GESTÃO', 10, 10);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    doc.text('00, muito bom', 10, 15);
-    doc.text('AB CD, Nome da cidade', 10, 18);
-    doc.text('SUAEMPRESA@EMAIL.COM', 150, 10, { align: 'right' });
-    doc.text('(COI) 000 000 000', 150, 15, { align: 'right' });
+    doc.text('LUANDA- ANGOLA', 10, 18);
+    doc.text('SUFGGERAL@EMAIL.COM', 150, 10, { align: 'right' });
 
     doc.setTextColor(blackColor);
     doc.setFontSize(40);
@@ -546,7 +544,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 150, 55, { align: 'right' });
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text('Data de Vencimento: 02.11.2024', 150, 65, { align: 'right' });
 
     doc.setFontSize(12);
     doc.setFillColor(blueColor);
@@ -620,9 +617,9 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     doc.rect(0, 270, 210, 27, 'F');
     doc.setTextColor(whiteColor);
     doc.setFontSize(10);
-    doc.text('(000) 0123 345', 10, 280);
-    doc.text('NOME@EMAIL.COM', 70, 280);
-    doc.text('WWW.WEBSITENOME.COM', 150, 280, { align: 'right' });
+    doc.text('+244 933081862', 10, 280);
+    doc.text('SUFGGERAL@EMAIL.COM', 70, 280);
+    doc.text('WWW.SUFGITEL.COM', 150, 280, { align: 'right' });
 
     const pdfBlob = doc.output('blob');
     const link = document.createElement('a');

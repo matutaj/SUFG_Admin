@@ -835,7 +835,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                   paginatedProductLocations.map((location) => {
                     if (!location.id) return null;
                     const product = products.find(
-                      (p) => p.referenciaProduto === location.id_produto,
+                      (p) => p.id === location.id_produto,
                     );
                     const isAtOrBelowLimit =
                       (location.quantidadeProduto ?? 0) <= (location.quantidadeMinimaProduto ?? 0);

@@ -16,7 +16,7 @@ const MilesStatistics = () => {
     const fetchSalesData = async () => {
       try {
         // Get current date and date 7 days ago
-        const today = new Date('2025-04-23'); // Using provided context date
+        const today = new Date('2025-04-24'); // Using provided context date
         const startDate = new Date();
         startDate.setDate(today.getDate() - 6); // Last 7 days including today
         const startDateStr = startDate.toISOString().split('T')[0]; // e.g., '2025-04-17'
