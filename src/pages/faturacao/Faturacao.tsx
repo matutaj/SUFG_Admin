@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useReducer } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
@@ -467,7 +466,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       newErrors.produtos = 'Adicione pelo menos um produto';
     }
     if (!state.funcionariosCaixaId) {
-      newErrors.funcionariosCaixaId = 'Nenhum caixa aberto encontrado授予 Abra um caixa primeiro.';
+      newErrors.funcionariosCaixaId = 'Nenhum caixa aberto encontrado. Abra um caixa primeiro.';
     } else if (
       !funcionariosCaixa.some((fc) => fc.id === state.funcionariosCaixaId && fc.estadoCaixa)
     ) {
@@ -723,11 +722,45 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   };
 
   const handleTextFieldChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
     dispatchFatura({
       type: 'UPDATE_FIELD',
-      field: e.target.name as keyof FaturaState,
-      value: e.target.value,
+      field: name as keyof FaturaState,
+      value,
     });
+
+    // Busca cliente pelo NIF ao digitar
+    if (name === 'nif') {
+      const clienteEncontrado = clientes.find((c) => c.numeroContribuinte === value);
+      if (clienteEncontrado) {
+        dispatchFatura({
+          type: 'UPDATE_FIELD',
+          field: 'cliente',
+          value: clienteEncontrado.nomeCliente ?? '',
+        });
+        dispatchFatura({
+          type: 'UPDATE_FIELD',
+          field: 'telefone',
+          value: clienteEncontrado.telefoneCliente ?? '',
+        });
+        dispatchFatura({
+          type: 'UPDATE_FIELD',
+          field: 'localizacao',
+          value: clienteEncontrado.moradaCliente ?? '',
+        });
+        dispatchFatura({
+          type: 'UPDATE_FIELD',
+          field: 'email',
+          value: clienteEncontrado.emailCliente ?? '',
+        });
+      } else {
+        // Limpa os campos se nenhum cliente for encontrado, exceto nif
+        dispatchFatura({ type: 'UPDATE_FIELD', field: 'cliente', value: '' });
+        dispatchFatura({ type: 'UPDATE_FIELD', field: 'telefone', value: '' });
+        dispatchFatura({ type: 'UPDATE_FIELD', field: 'localizacao', value: '' });
+        dispatchFatura({ type: 'UPDATE_FIELD', field: 'email', value: '' });
+      }
+    }
   };
 
   const handleSelectChange = (e: SelectChangeEvent<string>) => {
@@ -777,21 +810,18 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   const handleClientSelect = (_event: React.SyntheticEvent, newValue: string | Cliente | null) => {
     if (newValue) {
       if (typeof newValue === 'string') {
-        dispatchFatura({ type: 'UPDATE_FIELD', field: 'cliente', value: newValue });
-        dispatchFatura({ type: 'UPDATE_FIELD', field: 'nif', value: '' });
-        dispatchFatura({ type: 'UPDATE_FIELD', field: 'telefone', value: '' });
-        dispatchFatura({ type: 'UPDATE_FIELD', field: 'localizacao', value: '' });
-        dispatchFatura({ type: 'UPDATE_FIELD', field: 'email', value: '' });
+        dispatchFatura({ type: 'UPDATE_FIELD', field: 'nif', value: newValue });
+        // Não limpa os outros campos para preservar possíveis valores digitados
       } else {
-        dispatchFatura({
-          type: 'UPDATE_FIELD',
-          field: 'cliente',
-          value: newValue.nomeCliente ?? '',
-        });
         dispatchFatura({
           type: 'UPDATE_FIELD',
           field: 'nif',
           value: newValue.numeroContribuinte ?? '',
+        });
+        dispatchFatura({
+          type: 'UPDATE_FIELD',
+          field: 'cliente',
+          value: newValue.nomeCliente ?? '',
         });
         dispatchFatura({
           type: 'UPDATE_FIELD',
@@ -810,8 +840,8 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         });
       }
     } else {
-      dispatchFatura({ type: 'UPDATE_FIELD', field: 'cliente', value: '' });
       dispatchFatura({ type: 'UPDATE_FIELD', field: 'nif', value: '' });
+      dispatchFatura({ type: 'UPDATE_FIELD', field: 'cliente', value: '' });
       dispatchFatura({ type: 'UPDATE_FIELD', field: 'telefone', value: '' });
       dispatchFatura({ type: 'UPDATE_FIELD', field: 'localizacao', value: '' });
       dispatchFatura({ type: 'UPDATE_FIELD', field: 'email', value: '' });
@@ -857,7 +887,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
             valorTotal: calcularTotal(faturaState.produtosSelecionados, produtos),
             vendasProdutos: faturaState.produtosSelecionados.map((p) => ({
               id_produto: p.id,
-              quantidade: p.quantidade,
+              quantidade: Button
             })),
             id_cliente: clienteExistente?.id,
           },
@@ -890,7 +920,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         );
 
         if (!produtoLocation || !produtoLocation.id_produto) {
-          throw new Error(`Localização do produto Oxidized ${produtoSelecionado.id} não encontrada na loja.`);
+          throw new Error(`Localização do produto ${produtoSelecionado.id} não encontrada na loja.`);
         }
 
         const newQuantity = (produtoLocation.quantidadeProduto ?? 0) - produtoSelecionado.quantidade;
@@ -1336,12 +1366,12 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                 <Autocomplete
                   options={clientes}
                   getOptionLabel={(option) =>
-                    typeof option === 'string' ? option : option.nomeCliente ?? ''
+                    typeof option === 'string' ? option : option.numeroContribuinte ?? ''
                   }
                   onChange={handleClientSelect}
                   value={
-                    clientes.find((c) => c.nomeCliente === faturaState.cliente) ||
-                    (faturaState.cliente ? { nomeCliente: faturaState.cliente } : null)
+                    clientes.find((c) => c.numeroContribuinte === faturaState.nif) ||
+                    (faturaState.nif ? { numeroContribuinte: faturaState.nif } : null)
                   }
                   freeSolo
                   renderInput={(params) => (
@@ -1349,16 +1379,12 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                       {...params}
                       fullWidth
                       variant="outlined"
-                      label="Selecione ou Digite Cliente"
-                      error={Boolean(faturaState.errors.cliente)}
-                      helperText={faturaState.errors.cliente}
+                      label="Selecione ou Digite o NIF/BI"
+                      error={Boolean(faturaState.errors.nif)}
+                      helperText={faturaState.errors.nif}
                       sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
                       onChange={(e) =>
-                        dispatchFatura({
-                          type: 'UPDATE_FIELD',
-                          field: 'cliente',
-                          value: e.target.value,
-                        })
+                        handleTextFieldChange({ target: { name: 'nif', value: e.target.value } })
                       }
                     />
                   )}
@@ -1368,11 +1394,13 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                 <TextField
                   fullWidth
                   variant="outlined"
-                  name="nif"
-                  label="NIF/BI"
-                  value={faturaState.nif}
+                  name="cliente"
+                  label="Nome do Cliente"
+                  value={faturaState.cliente}
                   onChange={handleTextFieldChange}
                   sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
+                  error={Boolean(faturaState.errors.cliente)}
+                  helperText={faturaState.errors.cliente}
                 />
               </Grid>
               <Grid item xs={12} sm={6} md={4}>
