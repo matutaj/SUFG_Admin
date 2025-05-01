@@ -8,12 +8,6 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Button,
   Stack,
   TextField,
@@ -21,86 +15,31 @@ import {
   Alert,
   CircularProgress,
 } from '@mui/material';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
-import * as XLSX from 'xlsx';
 import { SelectChangeEvent } from '@mui/material';
-import {
-  getSalesByPeriod,
-  getTopSellingProducts,
-  getRevenueByPeriod,
-  getRevenueByCashRegister,
-  getTransfersByPeriod,
-  getProductsBelowMinimum,
-  getCashierActivity,
-  getTopSellingPeriodByProduct,
-  getCashRegistersActivity,
-  getProductsReport,
-  getProductLocationReport,
-  getDailyActivitiesReport,
-  getCashRegistersReport,
-  getAllCashRegisters,
-} from '../../api/methods';
-import {
-  VendaComFuncionario,
-  ProdutoMaisVendido,
-  FaturamentoPorPeriodo,
-  QuantidadeFaturadaPorCaixa,
-  TransferenciaComFuncionario,
-  ProdutoAbaixoMinimo,
-  PeriodoMaisVendidoPorProduto,
-  Caixa,
-  Produto,
-  ProdutoLocalizacao,
-  AtividadeDoDia,
-  FuncionarioCaixaComNome,
-} from '../../types/models';
+import { getAllCashRegisters } from '../../api/methods';
+import { Caixa } from '../../types/models';
+import axios, { AxiosError } from 'axios';
 
-type JsPDFWithAutoTable = jsPDF & {
-  autoTable: (options: {
-    head: string[][];
-    body: (string | number)[][];
-    startY: number;
-    theme: string;
-    headStyles?: { fillColor: [number, number, number] };
-  }) => void;
+// Mapeamento dos tipos de relatórios para endpoints do back-end
+const reportTypeToEndpoint: { [key: string]: string } = {
+  ListarVendasPorPeriodo: '/relatorio/vendas-periodo',
+  ListarProdutosMaisVendidos: '/relatorio/produtos-mais-vendidos',
+  ListarFaturamentoPorPeriodo: '/relatorio/faturamento-periodo',
+  ListarQuantidadeFaturadaPorCaixa: '/relatorio/faturamento-caixa',
+  ListarCaixas: '/relatorio/caixas',
+  ListarTransferenciasPorPeriodo: '/relatorio/transferencias',
+  ListarProdutosAbaixoMinimo: '/relatorio/produtos-abaixo-minimo',
+  ListarAtividadeFuncionariosCaixa: '/relatorio/atividade-caixa',
+  ListarPeriodoMaisVendidoPorProduto: '/relatorio/periodo-mais-vendido',
+  ListarAtividadesCaixas: '/relatorio/atividades-caixas',
+  ListarRelatorioProdutos: '/relatorio/relatorio-produtos',
+  ListarRelatorioProdutoLocalizacao: '/relatorio/relatorio-produto-localizacao',
+  ListarAtividadesDoDia: '/relatorio/atividades-do-dia',
 };
 
-interface GoalData {
-  id: string;
-  description: string;
-  objective: string;
-  results: string;
-  startDate: string;
-  deadline: string;
-  status: string;
-  observations: string;
-}
-
-interface ReportData {
-  id: string;
-  name?: string;
-  description?: string;
-  objective?: string;
-  results?: string;
-  startDate?: string;
-  deadline?: string;
-  status?: string;
-  observations?: string;
-  quantidadeVendida?: number;
-  valorTotal?: number;
-  dataTransacao?: string;
-  cliente?: string;
-  extra?: string;
-  quantidade?: number;
-  funcionarioNome?: string;
-  caixaNome?: string;
-}
-
-const ReportPage = () => {
+const Relatorio = () => {
   const navigate = useNavigate();
   const [reportType, setReportType] = useState<string>('ListarVendasPorPeriodo');
-  const [reportData, setReportData] = useState<ReportData[]>([]);
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [dateError, setDateError] = useState<string>('');
@@ -110,6 +49,8 @@ const ReportPage = () => {
   const [usuarioId, setUserId] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [pdfUrl, setPdfUrl] = useState<string>('');
+  const [pdfError, setPdfError] = useState<string>('');
 
   useEffect(() => {
     const loadUserId = async () => {
@@ -153,13 +94,10 @@ const ReportPage = () => {
   }, [navigate]);
 
   useEffect(() => {
-    if (usuarioId) {
-      fetchReportData();
-      if (reportType === 'ListarCaixas') {
-        fetchCashRegisters();
-      }
+    if (usuarioId && reportType === 'ListarCaixas') {
+      fetchCashRegisters();
     }
-  }, [reportType, startDate, endDate, productId, cashRegisterId, usuarioId]);
+  }, [reportType, usuarioId]);
 
   const fetchCashRegisters = async () => {
     try {
@@ -171,266 +109,6 @@ const ReportPage = () => {
     }
   };
 
-  const fetchReportData = async () => {
-    try {
-      if (!usuarioId) {
-        throw new Error('Usuário não autenticado');
-      }
-
-      let data: ReportData[] = [];
-      const hasDateRange = startDate && endDate && !dateError;
-
-      switch (reportType) {
-        case 'ListarVendasPorPeriodo': {
-          if (hasDateRange) {
-            const sales: VendaComFuncionario[] = await getSalesByPeriod(startDate, endDate);
-            data = sales.map((sale) => ({
-              id: sale.id,
-              name: sale.produto?.nomeProduto || 'Produto Desconhecido',
-              quantidadeVendida: sale.quantidade || 0,
-              valorTotal: sale.valorTotal || 0,
-              dataTransacao: sale.data,
-              cliente: sale.cliente?.nome || '-',
-              status: sale.status || 'Concluída',
-            }));
-          }
-          break;
-        }
-
-        case 'ListarProdutosMaisVendidos': {
-          if (hasDateRange) {
-            const products: ProdutoMaisVendido[] = await getTopSellingProducts(startDate, endDate);
-            data = products.map((product) => ({
-              id: product.id_produto,
-              name: product.nomeProduto,
-              quantidadeVendida: product.quantidadeVendida || 0,
-              valorTotal: product.valorTotal || 0,
-            }));
-          }
-          break;
-        }
-
-        case 'ListarFaturamentoPorPeriodo': {
-          if (hasDateRange) {
-            const revenue: FaturamentoPorPeriodo = await getRevenueByPeriod(startDate, endDate);
-            data = revenue.vendas.map((sale) => ({
-              id: sale.id,
-              name: sale.cliente?.nome || '-',
-              valorTotal: sale.valorTotal || 0,
-              dataTransacao: sale.data,
-              extra: `Total Faturado: Kz${revenue.totalFaturado || 0}`,
-            }));
-          }
-          break;
-        }
-
-        case 'ListarQuantidadeFaturadaPorCaixa': {
-          if (hasDateRange) {
-            const cashiers: QuantidadeFaturadaPorCaixa[] = await getRevenueByCashRegister(
-              startDate,
-              endDate,
-            );
-            data = cashiers.map((cashier) => ({
-              id: cashier.idCaixa,
-              name: cashier.nomeCaixa,
-              quantidade: cashier.quantidadeFaturada || 0,
-              extra: cashier.funcionarios.join(', ') || '-',
-            }));
-          }
-          break;
-        }
-
-        case 'ListarCaixas': {
-          if (hasDateRange) {
-            const cashRegisters: Caixa[] = await getCashRegistersReport(
-              startDate,
-              endDate,
-              cashRegisterId,
-            );
-            data = cashRegisters.map((cr) => ({
-              id: cr.id ?? '',
-              name: cr.nomeCaixa,
-              extra: cr.descricao || '-',
-              dataTransacao: cr.createdAt || '-',
-            }));
-          }
-          break;
-        }
-
-        case 'ListarTransferenciasPorPeriodo': {
-          if (hasDateRange) {
-            const transfers: TransferenciaComFuncionario[] = await getTransfersByPeriod(
-              startDate,
-              endDate,
-            );
-            data = transfers.map((transfer) => ({
-              id: transfer.id,
-              name: transfer.produto?.nomeProduto || 'Produto Desconhecido',
-              quantidade: transfer.quantidade || 0,
-              dataTransacao: transfer.data,
-              extra: transfer.funcionarioNome || '-',
-            }));
-          }
-          break;
-        }
-
-        case 'ListarProdutosAbaixoMinimo': {
-          if (hasDateRange) {
-            const belowMin: ProdutoAbaixoMinimo[] = await getProductsBelowMinimum(
-              startDate,
-              endDate,
-            );
-            data = belowMin.map((item) => ({
-              id: item.id_produto,
-              name: item.nomeProduto,
-              quantidade: item.quantidadeAtual || 0,
-              extra: `Mínimo: ${item.quantidadeMinima}, Localização: ${item.localizacao || '-'}`,
-              dataTransacao: new Date().toISOString().split('T')[0],
-            }));
-          }
-          break;
-        }
-
-        case 'ListarAtividadeFuncionariosCaixa': {
-          if (hasDateRange) {
-            const activity: FuncionarioCaixaComNome[] = await getCashierActivity(
-              startDate,
-              endDate,
-            );
-            data = activity.map((act) => ({
-              id: act.id,
-              name: act.funcionarioNome,
-              extra: `Caixa: ${act.caixa?.nome || '-'}`,
-              dataTransacao: act.data,
-            }));
-          }
-          break;
-        }
-
-        case 'ListarPeriodoMaisVendidoPorProduto': {
-          if (hasDateRange && productId) {
-            const period: PeriodoMaisVendidoPorProduto = await getTopSellingPeriodByProduct(
-              productId,
-              startDate,
-              endDate,
-            );
-            data = [
-              {
-                id: period.id_produto,
-                name: period.nomeProduto,
-                quantidadeVendida: period.quantidadeVendida || 0,
-                valorTotal: period.valorTotal || 0,
-                extra: period.periodo || '-',
-                dataTransacao: period.periodo.split(' a ')[0] || '-',
-              },
-            ];
-          }
-          break;
-        }
-
-        case 'ListarAtividadesCaixas': {
-          if (hasDateRange) {
-            const activities: FuncionarioCaixaComNome[] = await getCashRegistersActivity(
-              startDate,
-              endDate,
-              productId || undefined,
-            );
-            data = activities.map((act) => ({
-              id: act.id,
-              name: act.funcionarioNome,
-              extra: `Caixa: ${act.caixa?.nome || '-'}`,
-              dataTransacao: act.data,
-            }));
-          }
-          break;
-        }
-
-        case 'ListarRelatorioProdutos': {
-          if (hasDateRange) {
-            const products: Produto[] = await getProductsReport(startDate, endDate);
-            data = products.map((product) => ({
-              id: product.id,
-              name: product.nomeProduto,
-              extra: `Categoria: ${product.id_categoriaProduto}`,
-              dataTransacao: product.createdAt,
-            }));
-          }
-          break;
-        }
-
-        case 'ListarRelatorioProdutoLocalizacao': {
-          if (hasDateRange) {
-            const locations: ProdutoLocalizacao[] = await getProductLocationReport(
-              startDate,
-              endDate,
-              productId || undefined,
-            );
-            data = locations.map((loc) => ({
-              id: loc.id,
-              name: loc.produtos?.nomeProduto || 'Produto Desconhecido',
-              extra: `Localização: ${loc.localizacoes?.nomeLocalizacao || '-'}`,
-              dataTransacao: new Date().toISOString().split('T')[0],
-            }));
-          }
-          break;
-        }
-
-        case 'ListarAtividadesDoDia': {
-          if (hasDateRange) {
-            const activities: AtividadeDoDia[] = await getDailyActivitiesReport(startDate, endDate);
-            data = activities.map((activity) => ({
-              id: activity.id || '',
-              name: activity.tarefa?.nome || '-',
-              status: activity.status || '-',
-              extra: activity.funcionario?.nome || '-',
-              dataTransacao: activity.data || '-',
-            }));
-          }
-          break;
-        }
-
-        case 'ListarDefinicaoMetas': {
-          if (hasDateRange) {
-            const goals: GoalData[] = [
-              {
-                id: '1',
-                description: 'Aumentar vendas mensais',
-                objective: 'Atingir 10.000 Kz em vendas',
-                results: '8.500 Kz alcançados',
-                startDate: startDate,
-                deadline: endDate,
-                status: 'Em andamento',
-                observations: 'Foco em produtos de alta demanda',
-              },
-            ];
-            data = goals.map((goal) => ({
-              id: goal.id,
-              description: goal.description,
-              objective: goal.objective,
-              results: goal.results,
-              startDate: goal.startDate,
-              deadline: goal.deadline,
-              status: goal.status,
-              observations: goal.observations,
-              dataTransacao: goal.startDate,
-            }));
-          }
-          break;
-        }
-
-        default:
-          data = [];
-      }
-      setReportData(data);
-    } catch (error) {
-      console.error('Erro ao buscar dados do relatório:', error);
-      setReportData([]);
-      setAuthError(
-        'Erro ao carregar dados: ' + (error instanceof Error ? error.message : 'Desconhecido'),
-      );
-    }
-  };
-
   const handleReportTypeChange = (event: SelectChangeEvent<string>) => {
     setReportType(event.target.value);
     setStartDate('');
@@ -438,209 +116,135 @@ const ReportPage = () => {
     setDateError('');
     setProductId('');
     setCashRegisterId('');
+    setPdfUrl('');
   };
 
   const handleStartDateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const newStartDate = event.target.value;
     setStartDate(newStartDate);
-    if (endDate && new Date(newStartDate) > new Date(endDate)) {
+    if (endDate && newStartDate && new Date(newStartDate) > new Date(endDate)) {
       setDateError('A data de início não pode ser maior que a data de fim');
     } else {
       setDateError('');
     }
+    setPdfUrl('');
   };
 
   const handleEndDateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const newEndDate = event.target.value;
     setEndDate(newEndDate);
-    if (startDate && new Date(newEndDate) < new Date(startDate)) {
+    if (startDate && newEndDate && new Date(newEndDate) < new Date(startDate)) {
       setDateError('A data de fim não pode ser menor que a data de início');
     } else {
       setDateError('');
     }
+    setPdfUrl('');
   };
 
   const handleCashRegisterChange = (event: SelectChangeEvent<string>) => {
     setCashRegisterId(event.target.value);
+    setPdfUrl('');
   };
 
-  const getTableHeaders = () => {
-    switch (reportType) {
-      case 'ListarVendasPorPeriodo':
-        return ['Produto', 'Quantidade Vendida', 'Valor Total', 'Data', 'Cliente', 'Status'];
-      case 'ListarProdutosMaisVendidos':
-        return ['Produto', 'Quantidade Vendida', 'Valor Total'];
-      case 'ListarFaturamentoPorPeriodo':
-        return ['Cliente', 'Valor', 'Data', 'Extra'];
-      case 'ListarQuantidadeFaturadaPorCaixa':
-        return ['Caixa', 'Quantidade Faturada', 'Funcionários'];
-      case 'ListarCaixas':
-        return ['Caixa', 'Descrição', 'Data Criação'];
-      case 'ListarTransferenciasPorPeriodo':
-        return ['Produto', 'Quantidade', 'Data', 'Extra'];
-      case 'ListarProdutosAbaixoMinimo':
-        return ['Produto', 'Quantidade Atual', 'Detalhes', 'Data'];
-      case 'ListarAtividadeFuncionariosCaixa':
-      case 'ListarAtividadesCaixas':
-        return ['Funcionário', 'Caixa', 'Data'];
-      case 'ListarPeriodoMaisVendidoPorProduto':
-        return ['Produto', 'Quantidade Vendida', 'Valor Total', 'Período'];
-      case 'ListarRelatorioProdutos':
-        return ['Produto', 'Categoria', 'Data Criação'];
-      case 'ListarRelatorioProdutoLocalizacao':
-        return ['Produto', 'Localização', 'Data'];
-      case 'ListarAtividadesDoDia':
-        return ['Tarefa', 'Status', 'Funcionário', 'Data'];
-      case 'ListarDefinicaoMetas':
-        return [
-          'Nº Meta',
-          'Descrição',
-          'Objetivo',
-          'Resultados',
-          'Data de Início',
-          'Prazo',
-          'Status',
-          'Observações',
-        ];
-      default:
-        return [];
+  const exportPDF = async () => {
+    try {
+      setPdfError('');
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Token não encontrado.');
+      }
+
+      // Validar datas obrigatórias
+      if (!startDate || !endDate) {
+        throw new Error('Datas de início e fim são obrigatórias.');
+      }
+
+      // Validar idProduto para relatórios específicos
+      if (
+        [
+          'ListarPeriodoMaisVendidoPorProduto',
+          'ListarAtividadesCaixas',
+          'ListarRelatorioProdutoLocalizacao',
+        ].includes(reportType) &&
+        !productId
+      ) {
+        throw new Error('ID do produto é obrigatório para este relatório.');
+      }
+
+      let endpoint = reportTypeToEndpoint[reportType];
+      const body: any = {
+        dataInicio: startDate, // String YYYY-MM-DD
+        dataFim: endDate, // String YYYY-MM-DD
+      };
+
+      // Adicionar idProduto ao body
+      if (productId) {
+        body.idProduto = productId;
+      }
+
+      // Adicionar idCaixa ao body
+      if (cashRegisterId) {
+        body.idCaixa = cashRegisterId;
+      }
+
+      // Ajustar endpoint para parâmetros na URL
+      if (productId && reportType === 'ListarPeriodoMaisVendidoPorProduto') {
+        endpoint = `${endpoint}/${productId}`;
+        delete body.idProduto; // Remover do body, pois está na URL
+      }
+      if (cashRegisterId && reportType === 'ListarCaixas') {
+        endpoint = `${endpoint}/${cashRegisterId}`;
+        delete body.idCaixa; // Remover do body, pois está na URL
+      }
+
+      if (!endpoint) {
+        throw new Error('Tipo de relatório não suportado.');
+      }
+
+      console.log('Enviando requisição POST:', { endpoint, body });
+
+      const response = await axios.get(`http://localhost:3333${endpoint}`, body);
+
+      const pdfBlob = response.data;
+      const newPdfUrl = URL.createObjectURL(pdfBlob);
+      setPdfUrl(newPdfUrl);
+
+      // Download do PDF
+      const link = document.createElement('a');
+      link.href = newPdfUrl;
+      link.download = `relatorio_${reportType}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Revogar URLs antigas
+      if (pdfUrl) {
+        URL.revokeObjectURL(pdfUrl);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar PDF:', error);
+      if (error instanceof AxiosError && error.response && error.response.data) {
+        try {
+          const errorData = await new Response(error.response.data).json();
+          setPdfError(errorData.message || 'Erro ao buscar o PDF. Tente novamente.');
+        } catch (jsonError) {
+          setPdfError('Erro ao buscar o PDF: resposta inválida do servidor.');
+        }
+      } else {
+        setPdfError(
+          error instanceof Error ? error.message : 'Erro ao buscar o PDF. Tente novamente.',
+        );
+      }
     }
   };
 
-  const getRowData = (item: ReportData, index: number) => {
-    switch (reportType) {
-      case 'ListarVendasPorPeriodo':
-        return [
-          item.name || '-',
-          item.quantidadeVendida ?? 0,
-          `Kz${item.valorTotal ?? 0}`,
-          item.dataTransacao ? new Date(item.dataTransacao).toLocaleDateString('pt-BR') : '-',
-          item.cliente || '-',
-          item.status || '-',
-        ];
-      case 'ListarProdutosMaisVendidos':
-        return [item.name || '-', item.quantidadeVendida ?? 0, `Kz${item.valorTotal ?? 0}`];
-      case 'ListarFaturamentoPorPeriodo':
-        return [
-          item.name || '-',
-          `Kz${item.valorTotal ?? 0}`,
-          item.dataTransacao ? new Date(item.dataTransacao).toLocaleDateString('pt-BR') : '-',
-          item.extra || '-',
-        ];
-      case 'ListarQuantidadeFaturadaPorCaixa':
-        return [item.name || '-', item.quantidade ?? 0, item.extra || '-'];
-      case 'ListarCaixas':
-        return [
-          item.name || '-',
-          item.extra || '-',
-          item.dataTransacao ? new Date(item.dataTransacao).toLocaleDateString('pt-BR') : '-',
-        ];
-      case 'ListarTransferenciasPorPeriodo':
-        return [
-          item.name || '-',
-          item.quantidade ?? 0,
-          item.dataTransacao ? new Date(item.dataTransacao).toLocaleDateString('pt-BR') : '-',
-          item.extra || '-',
-        ];
-      case 'ListarProdutosAbaixoMinimo':
-        return [
-          item.name || '-',
-          item.quantidade ?? 0,
-          item.extra || '-',
-          item.dataTransacao ? new Date(item.dataTransacao).toLocaleDateString('pt-BR') : '-',
-        ];
-      case 'ListarAtividadeFuncionariosCaixa':
-      case 'ListarAtividadesCaixas':
-        return [
-          item.name || '-',
-          item.extra || '-',
-          item.dataTransacao ? new Date(item.dataTransacao).toLocaleDateString('pt-BR') : '-',
-        ];
-      case 'ListarPeriodoMaisVendidoPorProduto':
-        return [
-          item.name || '-',
-          item.quantidadeVendida ?? 0,
-          `Kz${item.valorTotal ?? 0}`,
-          item.extra || '-',
-        ];
-      case 'ListarRelatorioProdutos':
-        return [
-          item.name || '-',
-          item.extra || '-',
-          item.dataTransacao ? new Date(item.dataTransacao).toLocaleDateString('pt-BR') : '-',
-        ];
-      case 'ListarRelatorioProdutoLocalizacao':
-        return [
-          item.name || '-',
-          item.extra || '-',
-          item.dataTransacao ? new Date(item.dataTransacao).toLocaleDateString('pt-BR') : '-',
-        ];
-      case 'ListarAtividadesDoDia':
-        return [
-          item.name || '-',
-          item.status || '-',
-          item.extra || '-',
-          item.dataTransacao ? new Date(item.dataTransacao).toLocaleDateString('pt-BR') : '-',
-        ];
-      case 'ListarDefinicaoMetas':
-        return [
-          index + 1,
-          item.description || '-',
-          item.objective || '-',
-          item.results || '-',
-          item.startDate ? new Date(item.startDate).toLocaleDateString('pt-BR') : '-',
-          item.deadline ? new Date(item.deadline).toLocaleDateString('pt-BR') : '-',
-          item.status || '-',
-          item.observations || '-',
-        ];
-      default:
-        return [];
+  const handlePrint = () => {
+    const iframe = document.getElementById('pdf-preview') as HTMLIFrameElement;
+    if (iframe && iframe.contentWindow) {
+      iframe.contentWindow.print();
+    } else {
+      setPdfError('Nenhum PDF disponível para impressão.');
     }
-  };
-
-  const exportPDF = () => {
-    const doc = new jsPDF() as JsPDFWithAutoTable;
-    const headers = getTableHeaders();
-    const rows = reportData.map((item, index) => getRowData(item, index));
-
-    doc.setFontSize(18);
-    doc.text('Relatório de Gestão', 14, 20);
-    doc.setFontSize(12);
-    doc.text(
-      `Tipo: ${reportType
-        .replace(/Listar/g, '')
-        .replace(/([A-Z])/g, ' $1')
-        .trim()}`,
-      14,
-      30,
-    );
-    doc.text(`Período: ${startDate || 'N/A'} a ${endDate || 'N/A'}`, 14, 40);
-    doc.autoTable({
-      head: [headers],
-      body: rows,
-      startY: 50,
-      theme: 'striped',
-      headStyles: { fillColor: [22, 160, 133] },
-    });
-
-    doc.save(`relatorio_${reportType}.pdf`);
-  };
-
-  const exportExcel = () => {
-    const headers = getTableHeaders();
-    const data = reportData.map((item, index) => {
-      const row = getRowData(item, index);
-      return headers.reduce((obj: { [key: string]: string | number }, header, index) => {
-        const value = row[index] ?? '-';
-        obj[header] = value;
-        return obj;
-      }, {});
-    });
-
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Relatório');
-    XLSX.writeFile(wb, `relatorio_${reportType}.xlsx`);
   };
 
   return (
@@ -658,6 +262,12 @@ const ReportPage = () => {
       {authError && !isLoading && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {authError}
+        </Alert>
+      )}
+
+      {pdfError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {pdfError}
         </Alert>
       )}
 
@@ -691,7 +301,6 @@ const ReportPage = () => {
                     Relatório de Localização de Produtos
                   </MenuItem>
                   <MenuItem value="ListarAtividadesDoDia">Atividades do Dia</MenuItem>
-                  <MenuItem value="ListarDefinicaoMetas">Definição de Metas</MenuItem>
                 </Select>
               </FormControl>
 
@@ -704,6 +313,7 @@ const ReportPage = () => {
                 sx={{ width: { xs: '100%', sm: 180 } }}
                 error={!!dateError}
                 disabled={reportType === 'ListarAtividadesDoDia'}
+                required
               />
               <TextField
                 type="date"
@@ -714,6 +324,7 @@ const ReportPage = () => {
                 sx={{ width: { xs: '100%', sm: 180 } }}
                 error={!!dateError}
                 disabled={reportType === 'ListarAtividadesDoDia'}
+                required
               />
 
               {reportType === 'ListarCaixas' && (
@@ -742,6 +353,7 @@ const ReportPage = () => {
                   value={productId}
                   onChange={(e) => setProductId(e.target.value)}
                   sx={{ width: { xs: '100%', sm: 180 } }}
+                  required
                 />
               )}
             </Stack>
@@ -752,59 +364,56 @@ const ReportPage = () => {
             )}
           </Box>
 
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  {getTableHeaders().map((header) => (
-                    <TableCell key={header}>
-                      <strong>{header}</strong>
-                    </TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {reportData.length > 0 ? (
-                  reportData.map((item, index) => (
-                    <TableRow key={item.id}>
-                      {getRowData(item, index).map((cell, cellIndex) => (
-                        <TableCell key={cellIndex}>{cell}</TableCell>
-                      ))}
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={getTableHeaders().length} align="center">
-                      Nenhum dado disponível para o relatório selecionado
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-
           <Stack direction="row" spacing={2} mt={3} justifyContent="flex-end">
             <Button
               variant="contained"
               color="primary"
               onClick={exportPDF}
-              disabled={reportData.length === 0}
+              disabled={
+                !startDate ||
+                !endDate ||
+                !!dateError ||
+                ([
+                  'ListarPeriodoMaisVendidoPorProduto',
+                  'ListarAtividadesCaixas',
+                  'ListarRelatorioProdutoLocalizacao',
+                ].includes(reportType) &&
+                  !productId)
+              }
             >
               Exportar PDF
             </Button>
-            <Button
-              variant="contained"
-              color="secondary"
-              onClick={exportExcel}
-              disabled={reportData.length === 0}
-            >
-              Exportar Excel
+            <Button variant="contained" color="primary" onClick={handlePrint} disabled={!pdfUrl}>
+              Imprimir
             </Button>
           </Stack>
+
+          {pdfUrl && (
+            <Box
+              sx={{
+                mt: 3,
+                width: '100%',
+                height: '80vh',
+                bgcolor: 'background.paper',
+                p: 2,
+                borderRadius: 2,
+              }}
+            >
+              <Typography variant="h6" gutterBottom>
+                Visualização do Relatório
+              </Typography>
+              <iframe
+                id="pdf-preview"
+                src={pdfUrl}
+                style={{ width: '100%', height: '100%', border: 'none' }}
+                title="PDF Preview"
+              />
+            </Box>
+          )}
         </>
       )}
     </Paper>
   );
 };
 
-export default ReportPage;
+export default Relatorio;

@@ -385,11 +385,11 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                     </MenuItem>
                   ))}
                 </Select>
-                {errors.funcaoId && (
+               {/*  {errors.funcaoId && (
                   <Typography color="error" variant="caption">
                     {errors.funcaoId}
                   </Typography>
-                )}
+                )} */}
               </FormControl>
             </Grid>
             <Grid item xs={12} sm={6}>
