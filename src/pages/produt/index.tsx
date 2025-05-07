@@ -581,7 +581,7 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                       </TableCell>
                       <TableCell>{product.precoVenda || 0}</TableCell>
                       <TableCell>
-                        {productStockQuantities[product.referenciaProduto] || 0}
+                        {productStockQuantities[product?.quantidadePorUnidade!] || 0}
                       </TableCell>
                       <TableCell>{getUnidadeMedidaLabel(product.unidadeMedida)}</TableCell>
                       <TableCell>{getUnidadeConteudoLabel(product.unidadeConteudo)}</TableCell>
