@@ -44,7 +44,6 @@ import {
   ProdutoLocalizacao,
   Localizacao,
   Produto,
-  DadosWrapper,
   Cliente,
 } from '../../types/models';
 import {
@@ -67,6 +66,7 @@ import {
 } from '../../api/methods';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { DadosWrapper } from '../../types/models';
 
 // Interface para decodificação do token
 interface DecodedToken {
@@ -77,10 +77,10 @@ interface DecodedToken {
 interface Fatura {
   id: string;
   cliente: string;
-  nif: string;
-  telefone: string;
-  localizacao: string;
-  email: string;
+  nif: string | null;
+  telefone: string | null;
+  localizacao: string | null;
+  email: string | null;
   data: string;
   produtos: { produto: Produto; quantidade: number }[];
   funcionariosCaixa?: FuncionarioCaixa | null;
@@ -220,6 +220,66 @@ const confirmModalStyle = {
   borderRadius: 1,
 };
 
+// Função utilitária para validação de fatura
+const validateFatura = (
+  state: FaturaState,
+  produtos: Produto[],
+  funcionariosCaixa: FuncionarioCaixa[],
+  productLocations: ProdutoLocalizacao[],
+  locations: Localizacao[],
+): { [key: string]: string } => {
+  const errors: { [key: string]: string } = {};
+  if (!state.cliente.trim()) errors.cliente = 'Nome do cliente é obrigatório';
+  if (state.produtosSelecionados.length === 0) errors.produtos = 'Adicione pelo menos um produto';
+  if (!state.funcionariosCaixaId) {
+    errors.funcionariosCaixaId = 'Nenhum caixa aberto encontrado. Abra um caixa primeiro.';
+  } else if (!funcionariosCaixa.some(fc => fc.id === state.funcionariosCaixaId && fc.estadoCaixa)) {
+    errors.funcionariosCaixaId = 'O caixa selecionado não está aberto.';
+  }
+  if (!locations.length) errors.locations = 'Nenhuma localização encontrada.';
+  state.produtosSelecionados.forEach((p, index) => {
+    if (!p.id) errors[`produto_${index}`] = 'Selecione um produto';
+    const lojaLocation = locations.find(loc => loc.nomeLocalizacao.toLowerCase().includes('loja'));
+    if (!lojaLocation) {
+      errors[`produto_${index}`] = 'Localização "Loja" não encontrada.';
+    } else {
+      const produtoLocation = productLocations.find(
+        loc => loc.id_produto === p.id && loc.id_localizacao === lojaLocation.id,
+      );
+      if (!produtoLocation) {
+        errors[`produto_${index}`] = 'Produto não encontrado na loja.';
+      } else if (p.quantidade > (produtoLocation.quantidadeProduto ?? 0)) {
+        errors[`produto_${index}`] = `Quantidade indisponível. Estoque na loja: ${produtoLocation.quantidadeProduto ?? 0}`;
+      }
+    }
+  });
+  return errors;
+};
+
+// Função utilitária para validação de caixa
+const validateCaixa = (
+  state: CaixaState,
+  funcionarios: Funcionario[],
+  caixas: Caixa[],
+  funcionariosCaixa: FuncionarioCaixa[],
+): { [key: string]: string } => {
+  const errors: { [key: string]: string } = {};
+  if (!state.funcionarioId) {
+    errors.funcionarioId = 'Funcionário é obrigatório. Faça login novamente.';
+  } else if (!funcionarios.some(f => f.id === state.funcionarioId)) {
+    errors.funcionarioId = 'Funcionário inválido ou não encontrado.';
+  }
+  if (!state.caixaId) {
+    errors.caixaId = 'Selecione um caixa';
+  } else if (!caixas.some(c => c.id === state.caixaId)) {
+    errors.caixaId = 'Caixa não encontrado';
+  }
+  if (funcionariosCaixa.some(fc => fc.id_funcionario === state.funcionarioId && fc.estadoCaixa)) {
+    errors.funcionarioId = 'Este funcionário já tem um caixa aberto';
+  }
+  return errors;
+};
+
 const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   const navigate = useNavigate();
   const [openFaturaModal, setOpenFaturaModal] = useState(false);
@@ -248,14 +308,14 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   // Função para carregar e validar os dados do usuário logado
-  const loadUserData = () => {
+  const loadUserData = (): string => {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('Nenhum token encontrado. Faça login novamente.');
       }
 
-      let decoded: DecodedToken = {};
+      let decoded: DecodedToken;
       try {
         decoded = jwtDecode(token);
       } catch (error) {
@@ -264,7 +324,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         throw new Error('Token inválido. Faça login novamente.');
       }
 
-      const id = decoded.userId || decoded.sub || '';
+      const id = decoded.userId || decoded.sub;
       if (!id) {
         throw new Error('ID de usuário não encontrado no token.');
       }
@@ -338,59 +398,58 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           getAllClients(),
         ]);
 
-        console.log('SalesData:', JSON.stringify(salesData, null, 2));
-        console.log('FuncionariosCaixaData:', JSON.stringify(funcionariosCaixaData, null, 2));
-        console.log('CaixasData:', JSON.stringify(caixasData, null, 2));
-        console.log('ClientsData:', JSON.stringify(clientsData, null, 2));
         setClientes(clientsData as Cliente[]);
 
-        const mappedFaturas = salesData.map((venda: Venda, index: number) => {
-          const cliente = clientsData.find((c: Cliente) => c.id === venda.id_cliente);
-          console.log(`Venda ${venda.id}: Cliente ID=${venda.id_cliente}, Nome=${cliente?.nomeCliente || 'N/A'}`);
+        const mappedFaturas: Fatura[] = salesData.map((venda: Venda, index: number) => {
+          const cliente = clientsData.find((c: Cliente) => c.id === venda.id_cliente) || {
+            nomeCliente: 'Cliente Desconhecido',
+            numeroContribuinte: null,
+            telefoneCliente: null,
+            moradaCliente: null,
+            emailCliente: null,
+          };
 
           let funcionariosCaixa: FuncionarioCaixa | null = null;
           if (venda.id_funcionarioCaixa) {
-            const funcionarioCaixa = funcionariosCaixaData.find((fc) => fc.id === venda.id_funcionarioCaixa);
-            if (funcionarioCaixa) {
+            const funcionarioCaixa = funcionariosCaixaData.find((fc: FuncionarioCaixa) => fc.id === venda.id_funcionarioCaixa);
+            if (funcionarioCaixa && funcionarioCaixa.id) {
               funcionariosCaixa = {
                 ...funcionarioCaixa,
-                id_caixa: funcionarioCaixa.id_caixa || '',
-                id_funcionario: funcionarioCaixa.id_funcionario || '',
-                caixas: caixasData.find((c) => c.id === funcionarioCaixa.id_caixa),
+                id_caixa: funcionarioCaixa.id_caixa ?? '',
+                id_funcionario: funcionarioCaixa.id_funcionario ?? '',
+                quantidadaFaturada: Number(funcionarioCaixa.quantidadaFaturada) || 0,
+                caixas: caixasData.find((c: Caixa) => c.id === funcionarioCaixa.id_caixa) ?? undefined,
+                Funcionarios: funcionarios.find((f: Funcionario) => f.id === funcionarioCaixa.id_funcionario) ?? undefined,
               };
-            } else {
-              console.warn(`Nenhum funcionarioCaixa encontrado para id_funcionarioCaixa: ${venda.id_funcionarioCaixa}`);
             }
-          } else {
-            console.warn(`Venda ${venda.id} não possui id_funcionarioCaixa`);
           }
 
           return {
-            id: venda.id || `temp-${index + 1}`,
-            cliente: cliente?.nomeCliente || venda.clientes?.nomeCliente || 'Cliente Desconhecido',
-            nif: cliente?.numeroContribuinte || venda.clientes?.numeroContribuinte || '',
-            telefone: cliente?.telefoneCliente || venda.clientes?.telefoneCliente || '',
-            localizacao: cliente?.moradaCliente || venda.clientes?.moradaCliente || '',
-            email: cliente?.emailCliente || venda.clientes?.emailCliente || '',
+            id: venda.id ?? `temp-${index + 1}`,
+            cliente: cliente.nomeCliente ?? 'Cliente Desconhecido',
+            nif: cliente.numeroContribuinte ?? null,
+            telefone: cliente.telefoneCliente ?? null,
+            localizacao: cliente.moradaCliente ?? null,
+            email: cliente.emailCliente ?? null,
             data: venda.dataEmissao.split('T')[0],
-            produtos: venda.vendasProdutos?.map((vp) => {
-              const produto = productsData.find((p) => p.id === vp.id_produto);
+            produtos: (venda.vendasProdutos ?? []).map((vp) => {
+              const produto = productsData.find((p: Produto) => p.id === vp.id_produto) || {
+                id: vp.id_produto,
+                id_categoriaProduto: '',
+                referenciaProduto: '',
+                nomeProduto: 'Produto Desconhecido',
+                precoVenda: 0,
+                quantidadePorUnidade: 0,
+                unidadeMedida: '',
+                unidadeConteudo: '',
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              };
               return {
-                produto: {
-                  id: vp.id_produto,
-                  id_categoriaProduto: produto?.id_categoriaProduto || '',
-                  referenciaProduto: produto?.referenciaProduto || '',
-                  nomeProduto: produto?.nomeProduto || '',
-                  precoVenda: produto?.precoVenda || 0,
-                  quantidadePorUnidade: produto?.quantidadePorUnidade || 0,
-                  unidadeMedida: produto?.unidadeMedida || '',
-                  unidadeConteudo: produto?.unidadeConteudo || '',
-                  createdAt: produto?.createdAt || new Date(),
-                  updatedAt: produto?.updatedAt || new Date(),
-                },
+                produto,
                 quantidade: vp.quantidadeVendida,
               };
-            }) || [],
+            }),
             funcionariosCaixa,
           };
         });
@@ -401,16 +460,16 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         setLocations(locationsData);
         setProdutos(productsData);
         setProductLocations(productLocationsData);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Erro ao carregar dados iniciais:', error);
-        setAlert({ severity: 'error', message: 'Erro ao carregar dados iniciais!' });
+        setAlert({ severity: 'error', message: 'Erro ao carregar dados iniciais: ' + (error.message || 'Tente novamente.') });
       }
     };
 
     if (loggedInFuncionarioId) {
       fetchInitialData();
     }
-  }, [loggedInFuncionarioId]);
+  }, [loggedInFuncionarioId, funcionarios]);
 
   const fetchProductsAndLocations = async () => {
     try {
@@ -420,9 +479,9 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       ]);
       setProdutos(productsData);
       setProductLocations(productLocationsData);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao buscar produtos e localizações:', error);
-      setAlert({ severity: 'error', message: 'Erro ao buscar produtos e localizações!' });
+      setAlert({ severity: 'error', message: 'Erro ao buscar produtos e localizações: ' + (error.message || 'Tente novamente.') });
     }
   };
 
@@ -439,216 +498,157 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   const calcularTotal = (
     produtosSelecionados: { id: string; quantidade: number }[],
     produtos: Produto[],
-  ) => {
+  ): number => {
     return produtosSelecionados.reduce((acc, curr) => {
       const produto = produtos.find((p) => p.id === curr.id);
-      return acc + (produto ? produto.precoVenda * curr.quantidade : 0);
+      return acc + (produto ? Number(produto.precoVenda) * curr.quantidade : 0);
     }, 0);
   };
 
-  const calcularTotalFatura = (fatura: Fatura) => {
-    return fatura.produtos.reduce(
-      (acc, curr) => acc + (Number(curr.produto.precoVenda) || 0) * curr.quantidade,
-      0,
-    );
-  };
-
-  const validateFaturaForm = (
-    state: FaturaState,
-    produtos: Produto[],
-    funcionariosCaixa: FuncionarioCaixa[],
-    productLocations: ProdutoLocalizacao[],
-    locations: Localizacao[],
-  ) => {
-    const newErrors: { [key: string]: string } = {};
-    if (!state.cliente.trim()) newErrors.cliente = 'Nome do cliente é obrigatório';
-    if (state.produtosSelecionados.length === 0) {
-      newErrors.produtos = 'Adicione pelo menos um produto';
-    }
-    if (!state.funcionariosCaixaId) {
-      newErrors.funcionariosCaixaId = 'Nenhum caixa aberto encontrado. Abra um caixa primeiro.';
-    } else if (
-      !funcionariosCaixa.some((fc) => fc.id === state.funcionariosCaixaId && fc.estadoCaixa)
-    ) {
-      newErrors.funcionariosCaixaId = 'O caixa selecionado não está aberto.';
-    }
-    state.produtosSelecionados.forEach((p, index) => {
-      if (!p.id) {
-        newErrors[`produto_${index}`] = 'Selecione um produto';
-      } else {
-        const lojaLocation = locations.find((loc) =>
-          loc.nomeLocalizacao.toLowerCase().includes('loja'),
-        );
-        const produtoLocation = productLocations.find(
-          (loc) => loc.id_produto === p.id && loc.id_localizacao === lojaLocation?.id,
-        );
-        if (produtoLocation && p.quantidade > (produtoLocation.quantidadeProduto ?? 0)) {
-          newErrors[`produto_${index}`] =
-            `Quantidade indisponível. Estoque na loja: ${produtoLocation.quantidadeProduto ?? 0}`;
-        }
-      }
-    });
-    return newErrors;
-  };
-
-  const validateCaixaForm = (
-    state: CaixaState,
-    funcionarios: Funcionario[],
-    caixas: Caixa[],
-    funcionariosCaixa: FuncionarioCaixa[],
-  ) => {
-    const newErrors: { [key: string]: string } = {};
-    if (!state.funcionarioId) {
-      newErrors.funcionarioId = 'Funcionário é obrigatório. Faça login novamente.';
-    } else if (!funcionarios.some((f) => f.id === state.funcionarioId)) {
-      newErrors.funcionarioId = 'Funcionário inválido ou não encontrado.';
-    }
-    if (!state.caixaId) {
-      newErrors.caixaId = 'Selecione um caixa';
-    } else if (!caixas.some((c) => c.id === state.caixaId)) {
-      newErrors.caixaId = 'Caixa não encontrado';
-    }
-    if (
-      funcionariosCaixa.some((fc) => fc.id_funcionario === state.funcionarioId && fc.estadoCaixa)
-    ) {
-      newErrors.funcionarioId = 'Este funcionário já tem um caixa aberto';
-    }
-    return newErrors;
+  const calcularTotalFatura = (fatura: Fatura): number => {
+    return fatura.produtos.reduce((acc, curr) => {
+      const precoVenda = Number(curr.produto.precoVenda) || 0;
+      return acc + precoVenda * curr.quantidade;
+    }, 0);
   };
 
   const generatePDF = (fatura: Fatura) => {
-    const doc = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4',
-    });
-
-    doc.setFont('helvetica', 'normal');
-    const blueColor = '#1E90FF';
-    const blackColor = '#000000';
-    const whiteColor = '#FFFFFF';
-
-    doc.setFillColor(blueColor);
-    doc.rect(0, 0, 210, 20, 'F');
-    doc.setTextColor(whiteColor);
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('SISTEMA UNIFICADO DE FATURAÇÃO E GESTÃO', 10, 10);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.text('LUANDA- ANGOLA', 10, 18);
-    doc.text('SUFGGERAL@EMAIL.COM', 150, 10, { align: 'right' });
-
-    doc.setTextColor(blackColor);
-    doc.setFontSize(40);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Fatura.', 10, 35);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Fatura: ${fatura.id.padStart(10, '00-0000')}`, 150, 30, {
-      align: 'right',
-    });
-    doc.text(`Data: ${new Date(fatura.data).toLocaleDateString('pt-BR')}`, 150, 35, {
-      align: 'right',
-    });
-
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Emitido Para', 10, 50);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.text(fatura.cliente, 10, 55);
-    doc.text(`Tel: ${fatura.telefone || 'N/A'}`, 10, 60);
-    doc.text(`${fatura.localizacao || 'N/A'}`, 10, 65);
-    doc.setFontSize(20);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 150, 55, { align: 'right' });
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-
-    doc.setFontSize(12);
-    doc.setFillColor(blueColor);
-    doc.rect(10, 75, 190, 10, 'F');
-    doc.setTextColor(whiteColor);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Descrição do Produto', 15, 81);
-    doc.text('Qtd', 90, 81, { align: 'center' });
-    doc.text('Preço', 130, 81, { align: 'center' });
-    doc.text('Total', 170, 81, { align: 'center' });
-
-    const produtosTable = fatura.produtos.map((p) => {
-      const precoVenda = Number(p.produto.precoVenda) || 0;
-      return [
-        p.produto.nomeProduto || 'Produto sem nome',
-        p.quantidade.toString(),
-        `Kzs ${precoVenda.toFixed(2)}`,
-        `Kzs ${(precoVenda * p.quantidade).toFixed(2)}`,
-      ];
-    });
-
-    let finalY = 85;
-    if (produtosTable.length > 0) {
-      autoTable(doc, {
-        startY: 85,
-        head: [['', '', '', '']],
-        body: produtosTable,
-        theme: 'plain',
-        styles: {
-          fontSize: 10,
-          cellPadding: 2,
-          textColor: blackColor,
-        },
-        columnStyles: {
-          0: { cellWidth: 75 },
-          1: { cellWidth: 40, halign: 'center' },
-          2: { cellWidth: 40, halign: 'center' },
-          3: { cellWidth: 35, halign: 'right' },
-        },
+    try {
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
       });
-      finalY = (doc as any).lastAutoTable.finalY;
+
+      doc.setFont('helvetica', 'normal');
+      const blueColor = '#1E90FF';
+      const blackColor = '#000000';
+      const whiteColor = '#FFFFFF';
+
+      doc.setFillColor(blueColor);
+      doc.rect(0, 0, 210, 20, 'F');
+      doc.setTextColor(whiteColor);
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('SISTEMA UNIFICADO DE FATURAÇÃO E GESTÃO', 10, 10);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text('LUANDA- ANGOLA', 10, 18);
+      doc.text('SUFGGERAL@EMAIL.COM', 150, 10, { align: 'right' });
+
+      doc.setTextColor(blackColor);
+      doc.setFontSize(40);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Fatura.', 10, 35);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Fatura: ${fatura.id.padStart(10, '00-0000')}`, 150, 30, {
+        align: 'right',
+      });
+      doc.text(`Data: ${new Date(fatura.data).toLocaleDateString('pt-BR')}`, 150, 35, {
+        align: 'right',
+      });
+
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Emitido Para', 10, 50);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.text(fatura.cliente, 10, 55);
+      doc.text(`Tel: ${fatura.telefone || 'N/A'}`, 10, 60);
+      doc.text(`${fatura.localizacao || 'N/A'}`, 10, 65);
+      doc.setFontSize(20);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 150, 55, { align: 'right' });
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+
+      doc.setFontSize(12);
+      doc.setFillColor(blueColor);
+      doc.rect(10, 75, 190, 10, 'F');
+      doc.setTextColor(whiteColor);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Descrição do Produto', 15, 81);
+      doc.text('Qtd', 90, 81, { align: 'center' });
+      doc.text('Preço', 130, 81, { align: 'center' });
+      doc.text('Total', 170, 81, { align: 'center' });
+
+      const produtosTable = fatura.produtos.map((p) => {
+        const precoVenda = Number(p.produto.precoVenda) || 0;
+        return [
+          p.produto.nomeProduto || 'Produto sem nome',
+          p.quantidade.toString(),
+          `Kzs ${precoVenda.toFixed(2)}`,
+          `Kzs ${(precoVenda * p.quantidade).toFixed(2)}`,
+        ];
+      });
+
+      let finalY = 85;
+      if (produtos.length > 0) {
+        autoTable(doc, {
+          startY: 85,
+          head: [['', '', '', '']],
+          body: produtosTable,
+          theme: 'plain',
+          styles: {
+            fontSize: 10,
+            cellPadding: 2,
+            textColor: blackColor,
+          },
+          columnStyles: {
+            0: { cellWidth: 75 },
+            1: { cellWidth: 40, halign: 'center' },
+            2: { cellWidth: 40, halign: 'center' },
+            3: { cellWidth: 35, halign: 'right' },
+          },
+        });
+        finalY = (doc as any).lastAutoTable.finalY || 85;
+      }
+
+      doc.setFontSize(12);
+      doc.setTextColor(blackColor);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Subtotal', 130, finalY + 10);
+      doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 170, finalY + 10, { align: 'right' });
+      doc.text('Imposto', 130, finalY + 15);
+      doc.text('Kzs 0.00', 170, finalY + 15, { align: 'right' });
+      doc.setFillColor(blueColor);
+      doc.rect(130, finalY + 20, 70, 10, 'F');
+      doc.setTextColor(whiteColor);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Total', 132, finalY + 26);
+      doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 170, finalY + 26, { align: 'right' });
+
+      doc.setFontSize(12);
+      doc.setTextColor(blackColor);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Informação de pagamento', 10, finalY + 40);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.text(
+        'Se você tiver alguma dúvida sobre esta fatura, favor entrar em contato:',
+        10,
+        finalY + 45,
+      );
+
+      doc.setFillColor(blueColor);
+      doc.rect(0, 270, 210, 27, 'F');
+      doc.setTextColor(whiteColor);
+      doc.setFontSize(10);
+      doc.text('+244 933081862', 10, 280);
+      doc.text('SUFGGERAL@EMAIL.COM', 70, 280);
+      doc.text('WWW.SUFGITEL.COM', 150, 280, { align: 'right' });
+
+      const pdfBlob = doc.output('blob');
+      const link = document.createElement('a');
+      link.href = window.URL.createObjectURL(pdfBlob);
+      link.download = `Fatura_${fatura.id}_${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error: any) {
+      setAlert({ severity: 'error', message: 'Erro ao gerar PDF: ' + (error.message || 'Tente novamente.') });
     }
-
-    doc.setFontSize(12);
-    doc.setTextColor(blackColor);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Subtotal', 130, finalY + 10);
-    doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 170, finalY + 10, { align: 'right' });
-    doc.text('Imposto', 130, finalY + 15);
-    doc.text('Kzs 0.00', 170, finalY + 15, { align: 'right' });
-    doc.setFillColor(blueColor);
-    doc.rect(130, finalY + 20, 70, 10, 'F');
-    doc.setTextColor(whiteColor);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Total', 132, finalY + 26);
-    doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 170, finalY + 26, { align: 'right' });
-
-    doc.setFontSize(12);
-    doc.setTextColor(blackColor);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Informação de pagamento', 10, finalY + 40);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.text(
-      'Se você tiver alguma dúvida sobre esta fatura, favor entrar em contato:',
-      10,
-      finalY + 45,
-    );
-
-    doc.setFillColor(blueColor);
-    doc.rect(0, 270, 210, 27, 'F');
-    doc.setTextColor(whiteColor);
-    doc.setFontSize(10);
-    doc.text('+244 933081862', 10, 280);
-    doc.text('SUFGGERAL@EMAIL.COM', 70, 280);
-    doc.text('WWW.SUFGITEL.COM', 150, 280, { align: 'right' });
-
-    const pdfBlob = doc.output('blob');
-    const link = document.createElement('a');
-    link.href = window.URL.createObjectURL(pdfBlob);
-    link.download = `Fatura_${fatura.id}_${new Date().toISOString().split('T')[0]}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   const handleOpenFaturaModal = (faturaId?: string) => {
@@ -660,21 +660,21 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
 
     if (faturaId) {
       const fatura = faturas.find((f) => f.id === faturaId);
-      if (fatura) {
+      if (fatura && fatura.id) {
         dispatchFatura({
           type: 'SET_FATURA',
           payload: {
             id: fatura.id,
             cliente: fatura.cliente,
-            nif: fatura.nif,
-            telefone: fatura.telefone,
-            localizacao: fatura.localizacao,
-            email: fatura.email,
+            nif: fatura.nif ?? '',
+            telefone: fatura.telefone ?? '',
+            localizacao: fatura.localizacao ?? '',
+            email: fatura.email ?? '',
             produtosSelecionados: fatura.produtos.map((p) => ({
-              id: p.produto.id!,
+              id: p.produto.id ?? '',
               quantidade: p.quantidade,
             })),
-            funcionariosCaixaId: fatura.funcionariosCaixa?.id || '',
+            funcionariosCaixaId: fatura.funcionariosCaixa?.id ?? '',
           },
         });
       }
@@ -718,7 +718,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     setFaturaToDelete(null);
   };
 
-  const handleTextFieldChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTextFieldChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     dispatchFatura({
       type: 'UPDATE_FIELD',
@@ -726,7 +726,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       value,
     });
 
-    // Busca cliente pelo NIF ao digitar
     if (name === 'nif') {
       const clienteEncontrado = clientes.find((c) => c.numeroContribuinte === value);
       if (clienteEncontrado) {
@@ -751,7 +750,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           value: clienteEncontrado.emailCliente ?? '',
         });
       } else {
-        // Limpa os campos se nenhum cliente for encontrado, exceto nif
         dispatchFatura({ type: 'UPDATE_FIELD', field: 'cliente', value: '' });
         dispatchFatura({ type: 'UPDATE_FIELD', field: 'telefone', value: '' });
         dispatchFatura({ type: 'UPDATE_FIELD', field: 'localizacao', value: '' });
@@ -808,7 +806,10 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     if (newValue) {
       if (typeof newValue === 'string') {
         dispatchFatura({ type: 'UPDATE_FIELD', field: 'nif', value: newValue });
-        // Não limpa os outros campos para preservar possíveis valores digitados
+        dispatchFatura({ type: 'UPDATE_FIELD', field: 'cliente', value: '' });
+        dispatchFatura({ type: 'UPDATE_FIELD', field: 'telefone', value: '' });
+        dispatchFatura({ type: 'UPDATE_FIELD', field: 'localizacao', value: '' });
+        dispatchFatura({ type: 'UPDATE_FIELD', field: 'email', value: '' });
       } else {
         dispatchFatura({
           type: 'UPDATE_FIELD',
@@ -852,26 +853,19 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       return;
     }
 
-    const errors = validateFaturaForm(
-      faturaState,
-      produtos,
-      funcionariosCaixa,
-      productLocations,
-      locations,
-    );
+    const errors = validateFatura(faturaState, produtos, funcionariosCaixa, productLocations, locations);
     dispatchFatura({ type: 'SET_ERRORS', errors });
     if (Object.keys(errors).length > 0) return;
 
     try {
+      setLoading(true);
       const dataEmissao = new Date();
       const dataValidade = new Date(dataEmissao);
       dataValidade.setDate(dataEmissao.getDate() + 30);
 
-      const clienteExistente = clientes.find((c) => c.nomeCliente === faturaState.cliente);
+      const clienteExistente = clientes.find((c) => c.numeroContribuinte === faturaState.nif);
 
-      if (!faturaState.cliente.trim()) {
-        throw new Error('Nome do cliente é obrigatório.');
-      }
+      const totalVenda = calcularTotal(faturaState.produtosSelecionados, produtos);
 
       const dadosWrapper: DadosWrapper = {
         Dados: {
@@ -881,10 +875,10 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
             id_funcionarioCaixa: faturaState.funcionariosCaixaId,
             numeroDocumento: `FAT-${Date.now()}`,
             tipoDocumento: TipoDocumento.FATURA,
-            valorTotal: calcularTotal(faturaState.produtosSelecionados, produtos),
+            valorTotal: totalVenda,
             vendasProdutos: faturaState.produtosSelecionados.map((p) => ({
               id_produto: p.id,
-              quantidade: Button
+              quantidade: Number(p.quantidade),
             })),
             id_cliente: clienteExistente?.id,
           },
@@ -902,21 +896,46 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         },
       };
 
-      console.log('Dados enviados para createSale:', JSON.stringify(dadosWrapper, null, 2));
-
+      // Criar a venda
       const createdVenda = await createSale(dadosWrapper);
+      if (!createdVenda.id) {
+        throw new Error('ID da venda não retornado pela API.');
+      }
+
+      // Atualizar quantidadaFaturada no FuncionarioCaixa
+      const funcionarioCaixa = funcionariosCaixa.find(fc => fc.id === faturaState.funcionariosCaixaId);
+      if (!funcionarioCaixa || !funcionarioCaixa.id) {
+        throw new Error('Caixa do funcionário não encontrado.');
+      }
+
+      const currentQuantidadaFaturada = Number(funcionarioCaixa.quantidadaFaturada) || 0;
+      const updatedFuncionarioCaixa: FuncionarioCaixa = {
+        ...funcionarioCaixa,
+        quantidadaFaturada: currentQuantidadaFaturada + totalVenda,
+      };
+
+      try {
+        await updateEmployeeCashRegister(funcionarioCaixa.id, updatedFuncionarioCaixa);
+        setFuncionariosCaixa(prev =>
+          prev.map(fc => (fc.id === funcionarioCaixa.id ? updatedFuncionarioCaixa : fc))
+        );
+      } catch (error: any) {
+        console.error('Erro ao atualizar quantidadaFaturada:', error);
+        throw new Error('Falha ao atualizar o total faturado do caixa: ' + (error.message || 'Tente novamente.'));
+      }
 
       const lojaLocation = locations.find((loc) => isStoreLocation(loc.id, locations));
-      if (!lojaLocation) {
+      if (!lojaLocation || !lojaLocation.id) {
         throw new Error('Localização "Loja" não encontrada.');
       }
 
-      for (const produtoSelecionado of faturaState.produtosSelecionados) {
+      // Atualizar localizações dos produtos e estoque
+      const updates = faturaState.produtosSelecionados.map(async (produtoSelecionado) => {
         const produtoLocation = productLocations.find(
           (loc) => loc.id_produto === produtoSelecionado.id && loc.id_localizacao === lojaLocation.id,
         );
 
-        if (!produtoLocation || !produtoLocation.id_produto) {
+        if (!produtoLocation || !produtoLocation.id || !produtoLocation.id_produto) {
           throw new Error(`Localização do produto ${produtoSelecionado.id} não encontrada na loja.`);
         }
 
@@ -927,12 +946,17 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           );
         }
 
-        const updatedLocation: ProdutoLocalizacao = {
-          ...produtoLocation,
-          quantidadeProduto: newQuantity,
-          id_produto: produtoLocation.id_produto,
-        };
-        await updateProductLocation(produtoLocation.id ?? '', updatedLocation);
+        try {
+          const updatedLocation: ProdutoLocalizacao = {
+            ...produtoLocation,
+            quantidadeProduto: newQuantity,
+            id_produto: produtoLocation.id_produto,
+          };
+          await updateProductLocation(produtoLocation.id, updatedLocation);
+        } catch (error: any) {
+          console.error(`Erro ao atualizar localização do produto ${produtoSelecionado.id}:`, error);
+          throw new Error(`Falha ao atualizar localização do produto ${produtoSelecionado.id}: ${error.message || 'Tente novamente.'}`);
+        }
 
         const armazemLocation = locations.find((loc) =>
           loc.nomeLocalizacao.toLowerCase().includes('armazém'),
@@ -949,8 +973,11 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         const armazemQuantity = Number(armazemProdutoLocation?.quantidadeProduto) || 0;
         const estoqueGeral = lojaQuantity + armazemQuantity;
 
-        const existingStock = await getStockByProduct(produtoSelecionado.id);
-        if (existingStock && existingStock.id) {
+        try {
+          const existingStock = await getStockByProduct(produtoSelecionado.id);
+          if (!existingStock || !existingStock.id) {
+            throw new Error(`Nenhum estoque encontrado para o produto ${produtoSelecionado.id}.`);
+          }
           const updatedStockData = {
             id_produto: produtoSelecionado.id,
             quantidadeAtual: estoqueGeral,
@@ -958,23 +985,34 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
             dataValidadeLote: existingStock.dataValidadeLote || new Date().toISOString(),
           };
           await updateStock(existingStock.id, updatedStockData);
-        } else {
-          throw new Error(`Nenhum estoque encontrado para o produto ${produtoSelecionado.id}.`);
+        } catch (error: any) {
+          console.error(`Erro ao atualizar estoque do produto ${produtoSelecionado.id}:`, error);
+          throw new Error(`Falha ao atualizar estoque do produto ${produtoSelecionado.id}: ${error.message || 'Tente novamente.'}`);
         }
 
         const produto = produtos.find((p) => p.id === produtoSelecionado.id);
-        if (produto && produto.id) {
+        if (!produto || !produto.id) {
+          throw new Error(`Produto ${produtoSelecionado.id} não encontrado.`);
+        }
+
+        try {
           const updatedProduto: Produto = {
             ...produto,
             quantidadePorUnidade: estoqueGeral,
           };
           await updateProduct(produto.id, updatedProduto);
+        } catch (error: any) {
+          console.error(`Erro ao atualizar produto ${produto.id}:`, error);
+          throw new Error(`Falha ao atualizar produto ${produto.id}: ${error.message || 'Tente novamente.'}`);
         }
-      }
+      });
 
+      await Promise.all(updates);
+
+      // Mapear produtos para a nova fatura
       const novosProdutosFatura = faturaState.produtosSelecionados.map((p) => {
         const produto = produtos.find((prod) => prod.id === p.id);
-        if (!produto) {
+        if (!produto || !produto.id) {
           throw new Error(`Produto com ID ${p.id} não encontrado.`);
         }
         return {
@@ -986,29 +1024,22 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         };
       });
 
+      // Criar nova fatura para o estado local
       const newFatura: Fatura = {
-        id: createdVenda.id || `temp-${faturas.length + 1}`,
+        id: createdVenda.id,
         cliente: faturaState.cliente,
-        nif: faturaState.nif || '',
-        telefone: faturaState.telefone || '',
-        localizacao: faturaState.localizacao || '',
-        email: faturaState.email || '',
+        nif: faturaState.nif || null,
+        telefone: faturaState.telefone || null,
+        localizacao: faturaState.localizacao || null,
+        email: faturaState.email || null,
         data: dataEmissao.toISOString().split('T')[0],
         produtos: novosProdutosFatura,
         funcionariosCaixa: {
-          ...funcionariosCaixa.find((fc) => fc.id === faturaState.funcionariosCaixaId)!,
-          id_caixa: faturaState.funcionariosCaixaId
-            ? funcionariosCaixa.find((fc) => fc.id === faturaState.funcionariosCaixaId)?.id_caixa || ''
-            : '',
+          ...funcionarioCaixa,
+          id_caixa: funcionarioCaixa.id_caixa ?? '',
           id_funcionario: loggedInFuncionarioId,
-          caixas: caixas.find(
-            (c) =>
-              c.id ===
-              (faturaState.funcionariosCaixaId
-                ? funcionariosCaixa.find((fc) => fc.id === faturaState.funcionariosCaixaId)?.id_caixa
-                : ''),
-          ),
-        } as FuncionarioCaixa,
+          quantidadaFaturada: currentQuantidadaFaturada + totalVenda,
+        },
       };
 
       setFaturas((prev) => [...prev, newFatura]);
@@ -1017,9 +1048,9 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           const produtoSelecionado = faturaState.produtosSelecionados.find(
             (p) => p.id === produto.id,
           );
-          if (produtoSelecionado) {
+          if (produtoSelecionado && produto.id) {
             const lojaLoc = productLocations.find(
-              (loc) => loc.id_produto === produto.id && loc.id_localizacao === lojaLocation?.id,
+              (loc) => loc.id_produto === produto.id && loc.id_localizacao === lojaLocation.id,
             );
             const armazemLoc = productLocations.find(
               (loc) =>
@@ -1051,13 +1082,18 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       handleCloseFaturaModal();
       await fetchProductsAndLocations();
     } catch (error: any) {
-      console.error('Erro ao criar fatura:', error.response?.data || error);
-      setAlert({ severity: 'error', message: 'Falha ao cadastrar fatura. Tente novamente.' });
+      console.error('Erro ao criar fatura:', error);
+      setAlert({
+        severity: 'error',
+        message: error.message || 'Falha ao cadastrar fatura. Tente novamente.',
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
   const excluirFatura = async () => {
-    if (faturaToDelete === null) {
+    if (!faturaToDelete) {
       setAlert({ severity: 'error', message: 'Nenhuma fatura selecionada para exclusão!' });
       return;
     }
@@ -1065,66 +1101,123 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
     try {
       setLoading(true);
       const fatura = faturas.find((f) => f.id === faturaToDelete);
-      if (!fatura) {
+      if (!fatura || !fatura.id) {
         throw new Error(`Fatura com ID ${faturaToDelete} não encontrada`);
       }
 
-      await deleteSale(fatura.id);
+      // Reverter quantidadaFaturada no FuncionarioCaixa
+      const funcionarioCaixa = funcionariosCaixa.find(fc => fc.id === fatura.funcionariosCaixa?.id);
+      if (funcionarioCaixa && funcionarioCaixa.id) {
+        const totalFatura = calcularTotalFatura(fatura);
+        const currentQuantidadaFaturada = Number(funcionarioCaixa.quantidadaFaturada) || 0;
+        const updatedFuncionarioCaixa: FuncionarioCaixa = {
+          ...funcionarioCaixa,
+          quantidadaFaturada: Math.max(currentQuantidadaFaturada - totalFatura, 0),
+        };
 
-      const lojaLocation = locations.find((loc) => isStoreLocation(loc.id, locations));
-      if (lojaLocation) {
-        for (const produtoFatura of fatura.produtos) {
-          const produtoLocation = productLocations.find(
-            (loc) =>
-              loc.id_produto === produtoFatura.produto.id && loc.id_localizacao === lojaLocation.id,
+        try {
+          await updateEmployeeCashRegister(funcionarioCaixa.id, updatedFuncionarioCaixa);
+          setFuncionariosCaixa(prev =>
+            prev.map(fc => (fc.id === funcionarioCaixa.id ? updatedFuncionarioCaixa : fc))
           );
-
-          if (produtoLocation && produtoLocation.id_produto) {
-            const newQuantity = (produtoLocation.quantidadeProduto ?? 0) + produtoFatura.quantidade;
-            const updatedLocation: ProdutoLocalizacao = {
-              ...produtoLocation,
-              quantidadeProduto: newQuantity,
-              id_produto: produtoLocation.id_produto,
-            };
-            await updateProductLocation(produtoLocation.id ?? '', updatedLocation);
-
-            const armazemLocation = locations.find((loc) =>
-              loc.nomeLocalizacao.toLowerCase().includes('armazém'),
-            );
-            const armazemProdutoLocation = armazemLocation
-              ? productLocations.find(
-                  (loc) =>
-                    loc.id_produto === produtoFatura.produto.id &&
-                    loc.id_localizacao === armazemLocation.id,
-                )
-              : null;
-
-            const lojaQuantity = Number(produtoLocation.quantidadeProduto) || 0;
-            const armazemQuantity = Number(armazemProdutoLocation?.quantidadeProduto) || 0;
-            const estoqueGeral = lojaQuantity + armazemQuantity;
-
-            const existingStock = await getStockByProduct(produtoFatura.produto.id!);
-            if (existingStock) {
-              const updatedStockData = {
-                id_produto: produtoFatura.produto.id,
-                quantidadeAtual: estoqueGeral,
-                lote: existingStock.lote,
-                dataValidadeLote: existingStock.dataValidadeLote,
-              };
-              await updateStock(existingStock.id!, updatedStockData);
-            }
-
-            const produto = produtos.find((p) => p.id === produtoFatura.produto.id);
-            if (produto) {
-              const updatedProduto: Produto = {
-                ...produto,
-                quantidadePorUnidade: estoqueGeral,
-              };
-              await updateProduct(produto.id!, updatedProduto);
-            }
-          }
+        } catch (error: any) {
+          console.error('Erro ao reverter quantidadaFaturada:', error);
+          throw new Error('Falha ao reverter o total faturado do caixa: ' + (error.message || 'Tente novamente.'));
         }
       }
+
+      // Excluir a venda
+      try {
+        await deleteSale(fatura.id);
+      } catch (error: any) {
+        console.error('Erro ao excluir venda:', error);
+        throw new Error('Falha ao excluir a venda: ' + (error.message || 'Tente novamente.'));
+      }
+
+      const lojaLocation = locations.find((loc) => isStoreLocation(loc.id, locations));
+      if (!lojaLocation || !lojaLocation.id) {
+        throw new Error('Localização "Loja" não encontrada.');
+      }
+
+      // Reverter localizações dos produtos e estoque
+      const updates = fatura.produtos.map(async (produtoFatura) => {
+        if (!produtoFatura.produto.id) {
+          throw new Error(`Produto com ID inválido na fatura ${fatura.id}.`);
+        }
+
+        const produtoLocation = productLocations.find(
+          (loc) =>
+            loc.id_produto === produtoFatura.produto.id && loc.id_localizacao === lojaLocation.id,
+        );
+
+        if (!produtoLocation || !produtoLocation.id || !produtoLocation.id_produto) {
+          throw new Error(`Localização do produto ${produtoFatura.produto.id} não encontrada na loja.`);
+        }
+
+        const newQuantity = (produtoLocation.quantidadeProduto ?? 0) + produtoFatura.quantidade;
+
+        try {
+          const updatedLocation: ProdutoLocalizacao = {
+            ...produtoLocation,
+            quantidadeProduto: newQuantity,
+            id_produto: produtoLocation.id_produto,
+          };
+          await updateProductLocation(produtoLocation.id, updatedLocation);
+        } catch (error: any) {
+          console.error(`Erro ao atualizar localização do produto ${produtoFatura.produto.id}:`, error);
+          throw new Error(`Falha ao atualizar localização do produto ${produtoFatura.produto.id}: ${error.message || 'Tente novamente.'}`);
+        }
+
+        const armazemLocation = locations.find((loc) =>
+          loc.nomeLocalizacao.toLowerCase().includes('armazém'),
+        );
+        const armazemProdutoLocation = armazemLocation
+          ? productLocations.find(
+              (loc) =>
+                loc.id_produto === produtoFatura.produto.id &&
+                loc.id_localizacao === armazemLocation.id,
+            )
+          : null;
+
+        const lojaQuantity = Number(produtoLocation.quantidadeProduto) || 0;
+        const armazemQuantity = Number(armazemProdutoLocation?.quantidadeProduto) || 0;
+        const estoqueGeral = lojaQuantity + armazemQuantity;
+
+        try {
+          const existingStock = await getStockByProduct(produtoFatura.produto.id);
+          if (!existingStock || !existingStock.id) {
+            throw new Error(`Nenhum estoque encontrado para o produto ${produtoFatura.produto.id}.`);
+          }
+          const updatedStockData = {
+            id_produto: produtoFatura.produto.id,
+            quantidadeAtual: estoqueGeral,
+            lote: existingStock.lote || '',
+            dataValidadeLote: existingStock.dataValidadeLote || new Date().toISOString(),
+          };
+          await updateStock(existingStock.id, updatedStockData);
+        } catch (error: any) {
+          console.error(`Erro ao atualizar estoque do produto ${produtoFatura.produto.id}:`, error);
+          throw new Error(`Falha ao atualizar estoque do produto ${produtoFatura.produto.id}: ${error.message || 'Tente novamente.'}`);
+        }
+
+        const produto = produtos.find((p) => p.id === produtoFatura.produto.id);
+        if (!produto || !produto.id) {
+          throw new Error(`Produto ${produtoFatura.produto.id} não encontrado.`);
+        }
+
+        try {
+          const updatedProduto: Produto = {
+            ...produto,
+            quantidadePorUnidade: estoqueGeral,
+          };
+          await updateProduct(produto.id, updatedProduto);
+        } catch (error: any) {
+          console.error(`Erro ao atualizar produto ${produto.id}:`, error);
+          throw new Error(`Falha ao atualizar produto ${produto.id}: ${error.message || 'Tente novamente.'}`);
+        }
+      });
+
+      await Promise.all(updates);
 
       setFaturas((prev) => prev.filter((f) => f.id !== faturaToDelete));
       setAlert({ severity: 'success', message: 'Fatura excluída com sucesso!' });
@@ -1133,9 +1226,12 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       if (page >= totalPages && page > 0) {
         setPage(page - 1);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao excluir fatura:', error);
-      setAlert({ severity: 'error', message: 'Erro ao excluir fatura!' });
+      setAlert({
+        severity: 'error',
+        message: error.message || 'Erro ao excluir fatura!',
+      });
     } finally {
       setLoading(false);
       handleCloseConfirmModal();
@@ -1176,11 +1272,12 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       return;
     }
 
-    const errors = validateCaixaForm(caixaState, funcionarios, caixas, funcionariosCaixa);
+    const errors = validateCaixa(caixaState, funcionarios, caixas, funcionariosCaixa);
     dispatchCaixa({ type: 'SET_ERRORS', errors });
     if (Object.keys(errors).length > 0) return;
 
     try {
+      setLoading(true);
       const newFuncionarioCaixa: FuncionarioCaixa = {
         id_caixa: caixaState.caixaId,
         id_funcionario: loggedInFuncionarioId,
@@ -1191,63 +1288,58 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       };
 
       const createdCaixa = await createEmployeeCashRegister(newFuncionarioCaixa);
+      if (!createdCaixa.id) {
+        throw new Error('ID do caixa não retornado pela API.');
+      }
+
       const updatedFuncionariosCaixa = await getAllEmployeeCashRegisters();
       setFuncionariosCaixa(updatedFuncionariosCaixa);
       setAlert({ severity: 'success', message: 'Caixa aberto com sucesso!' });
       handleCloseCaixaModal();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao abrir caixa:', error);
-      setAlert({ severity: 'error', message: 'Falha ao abrir o caixa. Tente novamente.' });
+      setAlert({
+        severity: 'error',
+        message: error.message || 'Falha ao abrir o caixa. Tente novamente.',
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleFecharCaixa = async (caixaId: string) => {
     try {
+      setLoading(true);
       const caixaAtual = funcionariosCaixa.find((c) => c.id === caixaId);
-      if (!caixaAtual) {
-        setAlert({ severity: 'error', message: 'Caixa não encontrado.' });
-        return;
+      if (!caixaAtual || !caixaAtual.id) {
+        throw new Error('Caixa não encontrado.');
       }
 
       if (!caixaAtual.horarioAbertura) {
-        setAlert({ severity: 'error', message: 'Erro: Horário de abertura não definido.' });
-        return;
+        throw new Error('Erro: Horário de abertura não definido.');
       }
-
-      const faturasDoCaixa = faturas.filter((f) => {
-        const dataFatura = new Date(f.data);
-        const abertura = caixaAtual.horarioAbertura;
-        const fechamento = caixaAtual.horarioFechamento
-          ? new Date(caixaAtual.horarioFechamento)
-          : new Date();
-        return (
-          f.funcionariosCaixa?.id === caixaId &&
-          dataFatura >= abertura &&
-          (!caixaAtual.horarioFechamento || dataFatura <= fechamento)
-        );
-      });
-
-      const totalFaturado = faturasDoCaixa.reduce(
-        (acc, fatura) => acc + calcularTotalFatura(fatura),
-        0,
-      );
 
       const updatedCaixa: FuncionarioCaixa = {
         ...caixaAtual,
         estadoCaixa: false,
-        quantidadaFaturada: totalFaturado,
         horarioFechamento: new Date(),
         caixas: caixaAtual.caixas,
+        quantidadaFaturada: Number(caixaAtual.quantidadaFaturada) || 0,
       };
 
-      const response = await updateEmployeeCashRegister(caixaId, updatedCaixa);
+      await updateEmployeeCashRegister(caixaId, updatedCaixa);
       const updatedFuncionariosCaixa = await getAllEmployeeCashRegisters();
       setFuncionariosCaixa(updatedFuncionariosCaixa);
       setAlert({ severity: 'success', message: 'Caixa fechado com sucesso!' });
       handleCloseCaixaListModal();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao fechar o caixa:', error);
-      setAlert({ severity: 'error', message: 'Falha ao fechar o caixa. Tente novamente.' });
+      setAlert({
+        severity: 'error',
+        message: error.message || 'Falha ao fechar o caixa. Tente novamente.',
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1342,11 +1434,9 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                 {faturaState.funcionariosCaixaId ? (
                   <>
                     Caixa Selecionado:{' '}
-                    {funcionariosCaixa.find((fc) => fc.id === faturaState.funcionariosCaixaId)
-                      ?.caixas?.nomeCaixa || 'Caixa Sem Nome'}{' '}
+                    {funcionariosCaixa.find((fc) => fc.id === faturaState.funcionariosCaixaId)?.caixas?.nomeCaixa || 'Caixa Sem Nome'}{' '}
                     -{' '}
-                    {funcionariosCaixa.find((fc) => fc.id === faturaState.funcionariosCaixaId)
-                      ?.Funcionarios?.nomeFuncionario || 'Funcionário Desconhecido'}
+                    {funcionariosCaixa.find((fc) => fc.id === faturaState.funcionariosCaixaId)?.Funcionarios?.nomeFuncionario || 'Funcionário Desconhecido'}
                   </>
                 ) : (
                   'Nenhum caixa aberto disponível. Abra um caixa primeiro.'
@@ -1377,12 +1467,11 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                       fullWidth
                       variant="outlined"
                       label="Selecione ou Digite o NIF/BI"
+                      name="nif"
                       error={Boolean(faturaState.errors.nif)}
                       helperText={faturaState.errors.nif}
                       sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
-                      onChange={(e) =>
-                        handleTextFieldChange({ target: { name: 'nif', value: e.target.value } })
-                      }
+                      onChange={handleTextFieldChange}
                     />
                   )}
                 />
@@ -1466,7 +1555,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                         const quantidade = produtoLocation?.quantidadeProduto ?? 0;
                         return (
                           <MenuItem key={p.id} value={p.id}>
-                            {p.nomeProduto} - {p.precoVenda}kzs (Estoque: {quantidade})
+                            {p.nomeProduto} - {Number(p.precoVenda).toFixed(2)}kzs (Estoque: {quantidade})
                           </MenuItem>
                         );
                       })}
@@ -1493,7 +1582,11 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   />
                 </Grid>
                 <Grid item xs={4} sm={2} md={2}>
-                  <IconButton color="error" onClick={() => removerProdutoInput(index)}>
+                  <IconButton
+                    color="error"
+                    onClick={() => removerProdutoInput(index)}
+                    size="small"
+                  >
                     <Delete />
                   </IconButton>
                 </Grid>
@@ -1518,15 +1611,16 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                 Adicionar Produto
               </Button>
               <Typography variant="h6" color="text.primary">
-                Total a Pagar: {calcularTotal(faturaState.produtosSelecionados, produtos)} Kz
+                Total a Pagar: {calcularTotal(faturaState.produtosSelecionados, produtos).toFixed(2)} Kz
               </Typography>
               <Button
                 variant="contained"
                 color="secondary"
                 onClick={onAddFaturaSubmit}
                 sx={{ borderRadius: 1, px: 4 }}
+                disabled={loading}
               >
-                Finalizar Venda
+                {loading ? 'Processando...' : 'Finalizar Venda'}
               </Button>
             </Stack>
           </Stack>
@@ -1585,9 +1679,9 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
               color="primary"
               onClick={onAddCaixaSubmit}
               sx={{ alignSelf: 'flex-end', borderRadius: 1 }}
-              disabled={!loggedInFuncionarioId}
+              disabled={!loggedInFuncionarioId || loading}
             >
-              Abrir Caixa
+              {loading ? 'Abrindo...' : 'Abrir Caixa'}
             </Button>
           </Stack>
         </Box>
@@ -1613,20 +1707,21 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
               <TableBody>
                 {funcionariosCaixa.map((item) => (
                   <TableRow key={item.id}>
-                    <TableCell>{item.id}</TableCell>
+                    <TableCell>{item.id ?? 'N/A'}</TableCell>
                     <TableCell>{item.caixas?.nomeCaixa || 'N/A'}</TableCell>
                     <TableCell>{item.Funcionarios?.nomeFuncionario || 'N/A'}</TableCell>
                     <TableCell>{item.estadoCaixa ? 'Aberto' : 'Fechado'}</TableCell>
-                    <TableCell>{item.quantidadaFaturada} kz</TableCell>
+                    <TableCell>{(Number(item.quantidadaFaturada) || 0).toFixed(2)} kz</TableCell>
                     <TableCell>
-                      {item.estadoCaixa && (
+                      {item.estadoCaixa && item.id && (
                         <Button
                           variant="contained"
                           color="error"
-                          onClick={() => handleFecharCaixa(item.id!)}
+                          onClick={() => handleFecharCaixa(item.id ?? '')}
                           size="small"
+                          disabled={loading}
                         >
-                          Fechar
+                          {loading ? 'Fechando...' : 'Fechar'}
                         </Button>
                       )}
                     </TableCell>
@@ -1655,7 +1750,12 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
             >
               Cancelar
             </Button>
-            <Button variant="contained" color="error" onClick={excluirFatura} disabled={loading}>
+            <Button
+              variant="contained"
+              color="error"
+              onClick={excluirFatura}
+              disabled={loading}
+            >
               {loading ? 'Excluindo...' : 'Excluir'}
             </Button>
           </Stack>
@@ -1677,54 +1777,47 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
               </TableHead>
               <TableBody>
                 {paginatedFaturas.length > 0 ? (
-                  paginatedFaturas.map((item) => {
-                    console.log('Fatura:', item.id, 'Cliente:', item.cliente, 'FuncionariosCaixa:', item.funcionariosCaixa);
-                    return (
-                      <TableRow key={item.id}>
-                        <TableCell>{item.cliente}</TableCell>
-                        <TableCell>
-                          {new Intl.DateTimeFormat('pt-BR').format(new Date(item.data))}
-                        </TableCell>
-                        <TableCell>{calcularTotalFatura(item)}kzs</TableCell>
-                        <TableCell>
-                          {item.funcionariosCaixa?.caixas?.nomeCaixa
-                            ? item.funcionariosCaixa.caixas.nomeCaixa
-                            : item.funcionariosCaixa
-                            ? 'Caixa Não Especificado'
-                            : 'Caixa Não Informado'}
-                        </TableCell>
-                        <TableCell align="right">
-                          <Stack direction="row" spacing={0.5}>
-                            <IconButton
-                              color="primary"
-                              onClick={() => handleOpenFaturaModal(item.id)}
-                              size="small"
-                            >
-                              <Edit />
-                            </IconButton>
-                            <IconButton
-                              color="error"
-                              onClick={() => handleOpenConfirmModal(item.id)}
-                              size="small"
-                            >
-                              <Delete />
-                            </IconButton>
-                            <IconButton
-                              color="secondary"
-                              onClick={() => generatePDF(item)}
-                              size="small"
-                            >
-                              <IconifyIcon icon="mdi:file-pdf" />
-                            </IconButton>
-                          </Stack>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
+                  paginatedFaturas.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell>{item.cliente}</TableCell>
+                      <TableCell>
+                        {new Intl.DateTimeFormat('pt-BR').format(new Date(item.data))}
+                      </TableCell>
+                      <TableCell>{calcularTotalFatura(item).toFixed(2)}kzs</TableCell>
+                      <TableCell>
+                        {item.funcionariosCaixa?.caixas?.nomeCaixa || 'Caixa Não Informado'}
+                      </TableCell>
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={0.5}>
+                          <IconButton
+                            color="primary"
+                            onClick={() => handleOpenFaturaModal(item.id)}
+                            size="small"
+                          >
+                            <Edit />
+                          </IconButton>
+                          <IconButton
+                            color="error"
+                            onClick={() => handleOpenConfirmModal(item.id)}
+                            size="small"
+                          >
+                            <Delete />
+                          </IconButton>
+                          <IconButton
+                            color="secondary"
+                            onClick={() => generatePDF(item)}
+                            size="small"
+                          >
+                            <IconifyIcon icon="mdi:file-pdf" />
+                          </IconButton>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  ))
                 ) : (
                   <TableRow>
                     <TableCell colSpan={5} align="center">
-                      Nenhuma fatura encontrada.
+                      Nenhuma fatura encontrada
                     </TableCell>
                   </TableRow>
                 )}
@@ -1739,10 +1832,8 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
             page={page}
             onPageChange={handleChangePage}
             onRowsPerPageChange={handleChangeRowsPerPage}
-            labelRowsPerPage="Linhas por página:"
-            labelDisplayedRows={({ from, to, count }) =>
-              `${from}–${to} de ${count !== -1 ? count : `mais de ${to}`}`
-            }
+            labelRowsPerPage="Linhas por página"
+            labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
           />
         </CardContent>
       </Card>
