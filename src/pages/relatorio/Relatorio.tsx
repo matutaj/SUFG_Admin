@@ -14,27 +14,40 @@ import {
   Box,
   Alert,
   CircularProgress,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
 } from '@mui/material';
 import { SelectChangeEvent } from '@mui/material';
 import { getAllCashRegisters } from '../../api/methods';
 import { Caixa } from '../../types/models';
 import axios, { AxiosError } from 'axios';
 
-// Mapeamento dos tipos de relatórios para endpoints do back-end
+// Mapeamento ajustado para corresponder aos endpoints do backend
 const reportTypeToEndpoint: { [key: string]: string } = {
-  ListarVendasPorPeriodo: '/relatorio/vendas-periodo',
-  ListarProdutosMaisVendidos: '/relatorio/produtos-mais-vendidos',
-  ListarFaturamentoPorPeriodo: '/relatorio/faturamento-periodo',
-  ListarQuantidadeFaturadaPorCaixa: '/relatorio/faturamento-caixa',
-  ListarCaixas: '/relatorio/caixas',
-  ListarTransferenciasPorPeriodo: '/relatorio/transferencias',
-  ListarProdutosAbaixoMinimo: '/relatorio/produtos-abaixo-minimo',
-  ListarAtividadeFuncionariosCaixa: '/relatorio/atividade-caixa',
-  ListarPeriodoMaisVendidoPorProduto: '/relatorio/periodo-mais-vendido',
-  ListarAtividadesCaixas: '/relatorio/atividades-caixas',
-  ListarRelatorioProdutos: '/relatorio/relatorio-produtos',
-  ListarRelatorioProdutoLocalizacao: '/relatorio/relatorio-produto-localizacao',
-  ListarAtividadesDoDia: '/relatorio/atividades-do-dia',
+  ListarVendasPorPeriodo: 'vendas-periodo',
+  ListarVendasPorCliente: 'vendas-cliente',
+  ListarProdutosMaisVendidos: 'produtos-mais-vendidos',
+  ListarFaturamentoPorPeriodo: 'faturamento-periodo',
+  ListarQuantidadeFaturadaPorCaixa: 'faturamento-caixa',
+  ListarEstoqueAtual: 'estoque-atual',
+  ListarEntradasEstoquePorPeriodo: 'entradas-estoque',
+  ListarTransferenciasPorPeriodo: 'transferencias',
+  ListarProdutosAbaixoMinimo: 'produtos-abaixo-minimo',
+  ListarAtividadeFuncionariosCaixa: 'atividade-caixa',
+  ListarPeriodoMaisVendidoPorProduto: 'periodo-mais-vendido',
+  ListarAtividadesCaixas: 'atividades-caixas',
+  ListarTarefas: 'tarefas',
+  ListarRelatorioVendas: 'relatorio-vendas',
+  ListarRelatorioEstoque: 'relatorio-estoque',
+  ListarRelatorioEntradasEstoque: 'relatorio-entradas-estoque',
+  ListarRelatorioProdutos: 'relatorio-produtos',
+  ListarRelatorioProdutoLocalizacao: 'relatorio-produto-localizacao',
+  ListarAtividadesDoDia: 'atividades-do-dia',
+  ListarRelatorioCaixas: 'caixas',
 };
 
 const Relatorio = () => {
@@ -44,6 +57,7 @@ const Relatorio = () => {
   const [endDate, setEndDate] = useState<string>('');
   const [dateError, setDateError] = useState<string>('');
   const [productId, setProductId] = useState<string>('');
+  const [clientId, setClientId] = useState<string>('');
   const [cashRegisterId, setCashRegisterId] = useState<string>('');
   const [cashRegisters, setCashRegisters] = useState<Caixa[]>([]);
   const [usuarioId, setUserId] = useState<string | null>(null);
@@ -51,6 +65,7 @@ const Relatorio = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [pdfUrl, setPdfUrl] = useState<string>('');
   const [pdfError, setPdfError] = useState<string>('');
+  const [reportData, setReportData] = useState<any[]>([]);
 
   useEffect(() => {
     const loadUserId = async () => {
@@ -94,10 +109,22 @@ const Relatorio = () => {
   }, [navigate]);
 
   useEffect(() => {
-    if (usuarioId && reportType === 'ListarCaixas') {
+    if (usuarioId && reportType === 'ListarRelatorioCaixas') {
       fetchCashRegisters();
     }
   }, [reportType, usuarioId]);
+
+  useEffect(() => {
+    if (
+      usuarioId &&
+      reportType &&
+      (reportType === 'ListarRelatorioCaixas' ||
+        reportType === 'ListarAtividadesDoDia' ||
+        (startDate && endDate && !dateError))
+    ) {
+      fetchReportData();
+    }
+  }, [reportType, startDate, endDate, productId, clientId, cashRegisterId, usuarioId]);
 
   const fetchCashRegisters = async () => {
     try {
@@ -115,8 +142,10 @@ const Relatorio = () => {
     setEndDate('');
     setDateError('');
     setProductId('');
+    setClientId('');
     setCashRegisterId('');
     setPdfUrl('');
+    setReportData([]);
   };
 
   const handleStartDateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -128,6 +157,7 @@ const Relatorio = () => {
       setDateError('');
     }
     setPdfUrl('');
+    setReportData([]);
   };
 
   const handleEndDateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -139,11 +169,102 @@ const Relatorio = () => {
       setDateError('');
     }
     setPdfUrl('');
+    setReportData([]);
   };
 
   const handleCashRegisterChange = (event: SelectChangeEvent<string>) => {
     setCashRegisterId(event.target.value);
     setPdfUrl('');
+    setReportData([]);
+  };
+
+  const handleClientIdChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setClientId(event.target.value);
+    setPdfUrl('');
+    setReportData([]);
+  };
+
+  const handleProductIdChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setProductId(event.target.value);
+    setPdfUrl('');
+    setReportData([]);
+  };
+
+  const fetchReportData = async () => {
+    try {
+      setPdfError('');
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Token não encontrado.');
+      }
+
+      if (
+        reportType !== 'ListarRelatorioCaixas' &&
+        reportType !== 'ListarAtividadesDoDia' &&
+        (!startDate || !endDate)
+      ) {
+        return;
+      }
+
+      if (
+        [
+          'ListarPeriodoMaisVendidoPorProduto',
+          'ListarAtividadesCaixas',
+          'ListarRelatorioVendas',
+          'ListarRelatorioEstoque',
+          'ListarRelatorioEntradasEstoque',
+          'ListarRelatorioProdutoLocalizacao',
+        ].includes(reportType) &&
+        !productId
+      ) {
+        return;
+      }
+
+      if (reportType === 'ListarVendasPorCliente' && !clientId) {
+        return;
+      }
+
+      const endpoint = reportTypeToEndpoint[reportType];
+      if (!endpoint) {
+        throw new Error('Tipo de relatório não suportado.');
+      }
+
+      const queryParams = new URLSearchParams({
+        ...(startDate && { dataInicio: startDate }),
+        ...(endDate && { dataFim: endDate }),
+        ...(productId && { idProduto: productId }),
+        ...(clientId && { idCliente: clientId }),
+        ...(cashRegisterId && { idCaixa: cashRegisterId }),
+      });
+
+      const url = `http://localhost:3333/relatorio/${endpoint}?${queryParams.toString()}`;
+      console.log('Buscando dados JSON:', url);
+
+      const response = await axios.get(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      console.log('Dados recebidos:', response.data);
+      const data = response.data.data || [];
+      setReportData(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Erro ao buscar dados:', error);
+      if (error instanceof AxiosError && error.response) {
+        try {
+          const errorData = (await error.response.data.text?.()) || error.response.data;
+          setPdfError(errorData || 'Erro ao buscar os dados. Tente novamente.');
+        } catch (jsonError) {
+          setPdfError('Erro ao buscar os dados: resposta inválida do servidor.');
+        }
+      } else {
+        setPdfError(
+          error instanceof Error ? error.message : 'Erro ao buscar os dados. Tente novamente.',
+        );
+      }
+    }
   };
 
   const exportPDF = async () => {
@@ -154,16 +275,21 @@ const Relatorio = () => {
         throw new Error('Token não encontrado.');
       }
 
-      // Validar datas obrigatórias
-      if (!startDate || !endDate) {
+      if (
+        reportType !== 'ListarRelatorioCaixas' &&
+        reportType !== 'ListarAtividadesDoDia' &&
+        (!startDate || !endDate)
+      ) {
         throw new Error('Datas de início e fim são obrigatórias.');
       }
 
-      // Validar idProduto para relatórios específicos
       if (
         [
           'ListarPeriodoMaisVendidoPorProduto',
           'ListarAtividadesCaixas',
+          'ListarRelatorioVendas',
+          'ListarRelatorioEstoque',
+          'ListarRelatorioEntradasEstoque',
           'ListarRelatorioProdutoLocalizacao',
         ].includes(reportType) &&
         !productId
@@ -171,68 +297,63 @@ const Relatorio = () => {
         throw new Error('ID do produto é obrigatório para este relatório.');
       }
 
-      let endpoint = reportTypeToEndpoint[reportType];
-      const body: any = {
-        dataInicio: startDate, // String YYYY-MM-DD
-        dataFim: endDate, // String YYYY-MM-DD
-      };
-
-      // Adicionar idProduto ao body
-      if (productId) {
-        body.idProduto = productId;
+      if (reportType === 'ListarVendasPorCliente' && !clientId) {
+        throw new Error('ID do cliente é obrigatório para este relatório.');
       }
 
-      // Adicionar idCaixa ao body
-      if (cashRegisterId) {
-        body.idCaixa = cashRegisterId;
-      }
-
-      // Ajustar endpoint para parâmetros na URL
-      if (productId && reportType === 'ListarPeriodoMaisVendidoPorProduto') {
-        endpoint = `${endpoint}/${productId}`;
-        delete body.idProduto; // Remover do body, pois está na URL
-      }
-      if (cashRegisterId && reportType === 'ListarCaixas') {
-        endpoint = `${endpoint}/${cashRegisterId}`;
-        delete body.idCaixa; // Remover do body, pois está na URL
-      }
-
+      const endpoint = reportTypeToEndpoint[reportType];
       if (!endpoint) {
         throw new Error('Tipo de relatório não suportado.');
       }
 
-      console.log('Enviando requisição POST:', { endpoint, body });
+      const queryParams = new URLSearchParams({
+        ...(startDate && { dataInicio: startDate }),
+        ...(endDate && { dataFim: endDate }),
+        ...(productId && { idProduto: productId }),
+        ...(clientId && { idCliente: clientId }),
+        ...(cashRegisterId && { idCaixa: cashRegisterId }),
+        format: 'pdf',
+      });
 
-      const response = await axios.get(`http://localhost:3333${endpoint}`, body);
+      const url = `http://localhost:3333/relatorio/${endpoint}?${queryParams.toString()}`;
+      console.log('Exportando PDF:', url);
+
+      const response = await axios.get(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        responseType: 'blob',
+      });
+
+      console.log('Resposta PDF:', response);
 
       const pdfBlob = response.data;
       const newPdfUrl = URL.createObjectURL(pdfBlob);
       setPdfUrl(newPdfUrl);
 
-      // Download do PDF
       const link = document.createElement('a');
       link.href = newPdfUrl;
-      link.download = `relatorio_${reportType}.pdf`;
+      link.download = `relatorio_${endpoint}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
 
-      // Revogar URLs antigas
       if (pdfUrl) {
         URL.revokeObjectURL(pdfUrl);
       }
     } catch (error) {
-      console.error('Erro ao buscar PDF:', error);
-      if (error instanceof AxiosError && error.response && error.response.data) {
+      console.error('Erro ao exportar PDF:', error);
+      if (error instanceof AxiosError && error.response) {
         try {
-          const errorData = await new Response(error.response.data).json();
-          setPdfError(errorData.message || 'Erro ao buscar o PDF. Tente novamente.');
+          const errorData = (await error.response.data.text?.()) || error.response.data;
+          setPdfError(errorData || 'Erro ao exportar o PDF. Tente novamente.');
         } catch (jsonError) {
-          setPdfError('Erro ao buscar o PDF: resposta inválida do servidor.');
+          setPdfError('Erro ao exportar o PDF: resposta inválida do servidor.');
         }
       } else {
         setPdfError(
-          error instanceof Error ? error.message : 'Erro ao buscar o PDF. Tente novamente.',
+          error instanceof Error ? error.message : 'Erro ao exportar o PDF. Tente novamente.',
         );
       }
     }
@@ -279,12 +400,16 @@ const Relatorio = () => {
                 <InputLabel>Tipo de Relatório</InputLabel>
                 <Select value={reportType} onChange={handleReportTypeChange}>
                   <MenuItem value="ListarVendasPorPeriodo">Vendas por Período</MenuItem>
+                  <MenuItem value="ListarVendasPorCliente">Vendas por Cliente</MenuItem>
                   <MenuItem value="ListarProdutosMaisVendidos">Produtos Mais Vendidos</MenuItem>
                   <MenuItem value="ListarFaturamentoPorPeriodo">Faturamento por Período</MenuItem>
                   <MenuItem value="ListarQuantidadeFaturadaPorCaixa">
                     Quantidade Faturada por Caixa
                   </MenuItem>
-                  <MenuItem value="ListarCaixas">Caixas</MenuItem>
+                  <MenuItem value="ListarEstoqueAtual">Estoque Atual</MenuItem>
+                  <MenuItem value="ListarEntradasEstoquePorPeriodo">
+                    Entradas de Estoque por Período
+                  </MenuItem>
                   <MenuItem value="ListarTransferenciasPorPeriodo">
                     Transferências por Período
                   </MenuItem>
@@ -296,11 +421,18 @@ const Relatorio = () => {
                     Período Mais Vendido por Produto
                   </MenuItem>
                   <MenuItem value="ListarAtividadesCaixas">Atividades de Caixas</MenuItem>
+                  <MenuItem value="ListarTarefas">Tarefas</MenuItem>
+                  <MenuItem value="ListarRelatorioVendas">Relatório de Vendas</MenuItem>
+                  <MenuItem value="ListarRelatorioEstoque">Relatório de Estoque</MenuItem>
+                  <MenuItem value="ListarRelatorioEntradasEstoque">
+                    Relatório de Entradas de Estoque
+                  </MenuItem>
                   <MenuItem value="ListarRelatorioProdutos">Relatório de Produtos</MenuItem>
                   <MenuItem value="ListarRelatorioProdutoLocalizacao">
                     Relatório de Localização de Produtos
                   </MenuItem>
                   <MenuItem value="ListarAtividadesDoDia">Atividades do Dia</MenuItem>
+                  <MenuItem value="ListarRelatorioCaixas">Caixas</MenuItem>
                 </Select>
               </FormControl>
 
@@ -313,7 +445,9 @@ const Relatorio = () => {
                 sx={{ width: { xs: '100%', sm: 180 } }}
                 error={!!dateError}
                 disabled={reportType === 'ListarAtividadesDoDia'}
-                required
+                required={
+                  reportType !== 'ListarAtividadesDoDia' && reportType !== 'ListarRelatorioCaixas'
+                }
               />
               <TextField
                 type="date"
@@ -324,10 +458,12 @@ const Relatorio = () => {
                 sx={{ width: { xs: '100%', sm: 180 } }}
                 error={!!dateError}
                 disabled={reportType === 'ListarAtividadesDoDia'}
-                required
+                required={
+                  reportType !== 'ListarAtividadesDoDia' && reportType !== 'ListarRelatorioCaixas'
+                }
               />
 
-              {reportType === 'ListarCaixas' && (
+              {reportType === 'ListarRelatorioCaixas' && (
                 <FormControl sx={{ width: { xs: '100%', sm: 180 } }}>
                   <InputLabel>Caixa</InputLabel>
                   <Select value={cashRegisterId} onChange={handleCashRegisterChange} label="Caixa">
@@ -343,15 +479,28 @@ const Relatorio = () => {
                 </FormControl>
               )}
 
+              {reportType === 'ListarVendasPorCliente' && (
+                <TextField
+                  label="ID do Cliente"
+                  value={clientId}
+                  onChange={handleClientIdChange}
+                  sx={{ width: { xs: '100%', sm: 180 } }}
+                  required
+                />
+              )}
+
               {[
                 'ListarPeriodoMaisVendidoPorProduto',
                 'ListarAtividadesCaixas',
+                'ListarRelatorioVendas',
+                'ListarRelatorioEstoque',
+                'ListarRelatorioEntradasEstoque',
                 'ListarRelatorioProdutoLocalizacao',
               ].includes(reportType) && (
                 <TextField
                   label="ID do Produto"
                   value={productId}
-                  onChange={(e) => setProductId(e.target.value)}
+                  onChange={handleProductIdChange}
                   sx={{ width: { xs: '100%', sm: 180 } }}
                   required
                 />
@@ -368,17 +517,44 @@ const Relatorio = () => {
             <Button
               variant="contained"
               color="primary"
-              onClick={exportPDF}
+              onClick={fetchReportData}
               disabled={
-                !startDate ||
-                !endDate ||
-                !!dateError ||
+                (reportType !== 'ListarRelatorioCaixas' &&
+                  reportType !== 'ListarAtividadesDoDia' &&
+                  (!startDate || !endDate || !!dateError)) ||
+                (reportType === 'ListarVendasPorCliente' && !clientId) ||
                 ([
                   'ListarPeriodoMaisVendidoPorProduto',
                   'ListarAtividadesCaixas',
+                  'ListarRelatorioVendas',
+                  'ListarRelatorioEstoque',
+                  'ListarRelatorioEntradasEstoque',
                   'ListarRelatorioProdutoLocalizacao',
                 ].includes(reportType) &&
                   !productId)
+              }
+            >
+              Buscar Dados
+            </Button>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={exportPDF}
+              disabled={
+                (reportType !== 'ListarRelatorioCaixas' &&
+                  reportType !== 'ListarAtividadesDoDia' &&
+                  (!startDate || !endDate || !!dateError)) ||
+                (reportType === 'ListarVendasPorCliente' && !clientId) ||
+                ([
+                  'ListarPeriodoMaisVendidoPorProduto',
+                  'ListarAtividadesCaixas',
+                  'ListarRelatorioVendas',
+                  'ListarRelatorioEstoque',
+                  'ListarRelatorioEntradasEstoque',
+                  'ListarRelatorioProdutoLocalizacao',
+                ].includes(reportType) &&
+                  !productId) ||
+                reportData.length === 0
               }
             >
               Exportar PDF
@@ -387,6 +563,40 @@ const Relatorio = () => {
               Imprimir
             </Button>
           </Stack>
+
+          {reportData.length > 0 ? (
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                Dados do Relatório
+              </Typography>
+              <TableContainer component={Paper}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      {Object.keys(reportData[0] || {}).map((key) => (
+                        <TableCell key={key}>{key}</TableCell>
+                      ))}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {reportData.map((row, index) => (
+                      <TableRow key={index}>
+                        {Object.values(row).map((value, i) => (
+                          <TableCell key={i}>{String(value)}</TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+          ) : (
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="body1" color="textSecondary">
+                Nenhum dado disponível. Preencha os filtros e clique em "Buscar Dados".
+              </Typography>
+            </Box>
+          )}
 
           {pdfUrl && (
             <Box
