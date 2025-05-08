@@ -55,5 +55,8 @@
     "typescript": "^5.5.3",
     "vite": "^5.2.0",
     "vite-tsconfig-paths": "^4.3.2"
-  }
+  },
+  "resolutions": {
+  "file-saver": "2.0.5"
+}
 }
