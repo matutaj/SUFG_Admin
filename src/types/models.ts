@@ -146,11 +146,16 @@ export interface Prateleira {
   createdAt?: string;
   updatedAt?: string;
 }
+export enum tipo {
+  Armazem,
+  Loja
+}
 
 export interface Localizacao {
   id?: string;
   nomeLocalizacao: string;
   descricao?: string | null;
+  tipo: tipo;
   produtosLocalizacoes?: ProdutoLocalizacao[];
   transferencias?: Transferencia[];
   createdAt?: string;
