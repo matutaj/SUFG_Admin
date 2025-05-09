@@ -18,19 +18,25 @@ import {
   Modal,
   Alert,
   TablePagination,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  FormHelperText,
+  Chip,
 } from '@mui/material';
 import React from 'react';
 import IconifyIcon from 'components/base/IconifyIcon';
 import Edit from 'components/icons/factor/Edit';
 import Delete from 'components/icons/factor/Delete';
-import { Localizacao } from '../../types/models';
+import { Localizacao, tipo } from '../../types/models';
 import { getAllLocations, createLocation, deleteLocation, updateLocation } from '../../api/methods';
 
 interface CollapsedItemProps {
   open: boolean;
 }
 
-const style = {
+const modalStyle = {
   position: 'absolute' as const,
   top: '50%',
   left: '50%',
@@ -48,8 +54,6 @@ const style = {
   backgroundColor: '#f9f9f9',
   p: 4,
   overflowY: 'auto' as const,
-  scrollbarWidth: 'thin' as const,
-  scrollbarColor: '#6c63ff #f1f1f1',
 };
 
 const confirmModalStyle = {
@@ -70,18 +74,19 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const [deleteWarehouseId, setDeleteWarehouseId] = React.useState<string | null>(null);
   const [editWarehouseId, setEditWarehouseId] = React.useState<string | null>(null);
   const [nomeLocalizacao, setNomeLocalizacao] = React.useState('');
-  const [descricao, setDescricao] = React.useState<string | null>('');
-  const [warehouses, setWarehouses] = React.useState<Localizacao[]>([]);
-  const [filteredWarehouses, setFilteredWarehouses] = React.useState<Localizacao[]>([]);
+  const [descricao, setDescricao] = React.useState<string>('');
+  const [tipoSelecionado, setTipoSelecionado] = React.useState<tipo | null>(null);
+  const [localizacoes, setLocalizacoes] = React.useState<Localizacao[]>([]);
+  const [localizacoesFiltradas, setLocalizacoesFiltradas] = React.useState<Localizacao[]>([]);
   const [searchQuery, setSearchQuery] = React.useState('');
-  const [errors, setErrors] = React.useState<{ nomeLocalizacao?: string; descricao?: string }>({});
+  const [errors, setErrors] = React.useState<{ nomeLocalizacao?: string; descricao?: string; tipo?: string }>({});
   const [loading, setLoading] = React.useState(false);
   const [alert, setAlert] = React.useState<{
     severity: 'success' | 'error' | 'info' | 'warning';
     message: string;
   } | null>(null);
   const [page, setPage] = React.useState(0);
-  const [rowsPerPage] = React.useState(6);
+  const rowsPerPage = 6;
 
   const handleOpen = () => setOpenWarehouseModal(true);
   const handleClose = () => {
@@ -89,6 +94,7 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     setEditWarehouseId(null);
     setNomeLocalizacao('');
     setDescricao('');
+    setTipoSelecionado(null);
     setErrors({});
   };
 
@@ -102,15 +108,12 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     setDeleteWarehouseId(null);
   };
 
-  const fetchWarehouses = async () => {
+  const fetchLocalizacoes = async () => {
     try {
       setLoading(true);
       const data = await getAllLocations();
-      if (!Array.isArray(data)) {
-        throw new Error('A resposta de getAllLocations não é um array');
-      }
-      setWarehouses(data);
-      setFilteredWarehouses(data);
+      setLocalizacoes(data);
+      setLocalizacoesFiltradas(data);
     } catch (error) {
       console.error('Erro ao buscar localizações:', error);
       setAlert({ severity: 'error', message: 'Erro ao carregar localizações!' });
@@ -121,13 +124,25 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   };
 
   React.useEffect(() => {
-    fetchWarehouses();
+    fetchLocalizacoes();
   }, []);
 
-  const handleAddWarehouse = async () => {
-    const newErrors: { nomeLocalizacao?: string; descricao?: string } = {};
+  const getTipoLabel = (tipoValue: tipo | null | undefined): string => {
+    switch (tipoValue) {
+      case tipo.Armazem:
+        return 'Armazém';
+      case tipo.Loja:
+        return 'Loja';
+      default:
+        return 'Sem tipo';
+    }
+  };
+
+  const handleAddLocation = async () => {
+    const newErrors: { nomeLocalizacao?: string; descricao?: string; tipo?: string } = {};
     if (!nomeLocalizacao.trim()) newErrors.nomeLocalizacao = 'O nome da localização é obrigatório.';
-    if (!descricao?.trim()) newErrors.descricao = 'A descrição é obrigatória.';
+    if (!descricao.trim()) newErrors.descricao = 'A descrição é obrigatória.';
+    if (tipoSelecionado === null) newErrors.tipo = 'O tipo de localização é obrigatório.';
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -136,71 +151,70 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
     try {
       setLoading(true);
+      const locationData = { 
+        nomeLocalizacao, 
+        descricao, 
+        tipo: tipoSelecionado as tipo 
+      };
+
       if (editWarehouseId) {
-        await updateLocation(editWarehouseId, { nomeLocalizacao, descricao });
+        await updateLocation(editWarehouseId, locationData);
         setAlert({ severity: 'success', message: 'Localização atualizada com sucesso!' });
       } else {
-        await createLocation({ nomeLocalizacao, descricao });
+        await createLocation(locationData);
         setAlert({ severity: 'success', message: 'Localização cadastrada com sucesso!' });
       }
-      await fetchWarehouses();
+      
+      await fetchLocalizacoes();
       handleClose();
-      setTimeout(() => setAlert(null), 3000);
     } catch (error) {
       console.error('Erro ao salvar localização:', error);
       setAlert({ severity: 'error', message: 'Erro ao salvar localização!' });
-      setErrors({ nomeLocalizacao: 'Erro ao salvar. Tente novamente.' });
-      setTimeout(() => setAlert(null), 3000);
     } finally {
       setLoading(false);
     }
   };
 
   const handleEdit = (id: string) => {
-    const warehouseToEdit = warehouses.find((w) => w.id === id);
-    if (warehouseToEdit) {
-      setNomeLocalizacao(warehouseToEdit.nomeLocalizacao || '');
-      setDescricao(warehouseToEdit.descricao || '');
+    const locationToEdit = localizacoes.find((loc) => loc.id === id);
+    if (locationToEdit) {
+      setNomeLocalizacao(locationToEdit.nomeLocalizacao || '');
+      setDescricao(locationToEdit.descricao || '');
+      setTipoSelecionado(locationToEdit.tipo || null);
       setEditWarehouseId(id);
       handleOpen();
     }
   };
 
   const handleDelete = async () => {
-    if (deleteWarehouseId) {
-      try {
-        setLoading(true);
-        await deleteLocation(deleteWarehouseId);
-        setAlert({ severity: 'success', message: 'Localização excluída com sucesso!' });
-        await fetchWarehouses();
-        handleCloseConfirmDelete();
-      } catch (error) {
-        console.error('Erro ao excluir localização:', error);
-        setAlert({
-          severity: 'error',
-          message: 'Falha ao excluir localização. Verifique o console.',
-        });
-      } finally {
-        setLoading(false);
-      }
-    } else {
-      console.error('Nenhuma localização selecionada para exclusão');
-      setAlert({ severity: 'error', message: 'Erro: Nenhuma localização selecionada.' });
+    if (!deleteWarehouseId) return;
+
+    try {
+      setLoading(true);
+      await deleteLocation(deleteWarehouseId);
+      setAlert({ severity: 'success', message: 'Localização excluída com sucesso!' });
+      await fetchLocalizacoes();
+      handleCloseConfirmDelete();
+    } catch (error) {
+      console.error('Erro ao excluir localização:', error);
+      setAlert({ severity: 'error', message: 'Erro ao excluir localização!' });
+    } finally {
+      setLoading(false);
     }
-    setTimeout(() => setAlert(null), 3000);
   };
 
   const handleSearch = () => {
     const query = searchQuery.toLowerCase().trim();
-    if (query === '') {
-      setFilteredWarehouses(warehouses);
+    if (!query) {
+      setLocalizacoesFiltradas(localizacoes);
     } else {
-      const filtered = warehouses.filter(
-        (warehouse) =>
-          warehouse.nomeLocalizacao?.toLowerCase().includes(query) ||
-          warehouse.descricao?.toLowerCase().includes(query),
+      const filtered = localizacoes.filter(
+        (loc) =>
+          (loc.nomeLocalizacao?.toLowerCase().includes(query) || '') ||
+          (loc.descricao?.toLowerCase().includes(query) || '') ||
+          getTipoLabel(loc.tipo).toLowerCase().includes(query)
       );
-      setFilteredWarehouses(filtered);
+      setLocalizacoesFiltradas(filtered);
     }
     setPage(0);
   };
@@ -212,9 +226,9 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     setPage(newPage);
   };
 
-  const paginatedWarehouses = filteredWarehouses.slice(
+  const paginatedLocations = localizacoesFiltradas.slice(
     page * rowsPerPage,
-    page * rowsPerPage + rowsPerPage,
+    page * rowsPerPage + rowsPerPage
   );
 
   return (
@@ -263,7 +277,7 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       </Paper>
 
       <Modal open={openWarehouseModal} onClose={handleClose}>
-        <Box sx={style} component="form" noValidate autoComplete="off">
+        <Box sx={modalStyle} component="form" noValidate autoComplete="off">
           <Typography variant="h5" mb={2}>
             {editWarehouseId ? 'Editar Localização' : 'Cadastrar Localização'}
           </Typography>
@@ -277,21 +291,38 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               disabled={loading}
               variant="filled"
               fullWidth
+              required
             />
             <TextField
               label="Descrição"
-              value={descricao || ''}
+              value={descricao}
               onChange={(e) => setDescricao(e.target.value)}
               error={Boolean(errors.descricao)}
               helperText={errors.descricao}
               disabled={loading}
               variant="filled"
               fullWidth
+              required
             />
+            <FormControl variant="filled" fullWidth error={Boolean(errors.tipo)} required>
+              <InputLabel>Tipo de Localização</InputLabel>
+              <Select
+                value={tipoSelecionado || ''}
+                onChange={(e) => setTipoSelecionado(e.target.value as tipo)}
+                disabled={loading}
+              >
+                <MenuItem value="" disabled>
+                  Selecione o tipo
+                </MenuItem>
+                <MenuItem value={tipo.Armazem}>Armazém</MenuItem>
+                <MenuItem value={tipo.Loja}>Loja</MenuItem>
+              </Select>
+              {errors.tipo && <FormHelperText>{errors.tipo}</FormHelperText>}
+            </FormControl>
             <Button
               variant="contained"
               color="secondary"
-              onClick={handleAddWarehouse}
+              onClick={handleAddLocation}
               disabled={loading}
               fullWidth
             >
@@ -310,40 +341,42 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>
-                    <strong>Nome</strong>
-                  </TableCell>
-                  <TableCell>
-                    <strong>Descrição</strong>
-                  </TableCell>
-                  <TableCell align="right">
-                    <strong>Ações</strong>
-                  </TableCell>
+                  <TableCell><strong>Nome</strong></TableCell>
+                  <TableCell><strong>Descrição</strong></TableCell>
+                  <TableCell><strong>Tipo</strong></TableCell>
+                  <TableCell align="right"><strong>Ações</strong></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={3} align="center">
+                    <TableCell colSpan={4} align="center">
                       Carregando...
                     </TableCell>
                   </TableRow>
-                ) : paginatedWarehouses.length > 0 ? (
-                  paginatedWarehouses.map((warehouse) => (
-                    <TableRow key={warehouse.id}>
-                      <TableCell>{warehouse.nomeLocalizacao || 'Sem nome'}</TableCell>
-                      <TableCell>{warehouse.descricao || 'Sem descrição'}</TableCell>
+                ) : paginatedLocations.length > 0 ? (
+                  paginatedLocations.map((location) => (
+                    <TableRow key={location.id}>
+                      <TableCell>{location.nomeLocalizacao || 'Sem nome'}</TableCell>
+                      <TableCell>{location.descricao || 'Sem descrição'}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={getTipoLabel(location.tipo)}
+                          color={location.tipo === tipo.Armazem ? 'primary' : 'secondary'}
+                          variant="outlined"
+                        />
+                      </TableCell>
                       <TableCell align="right">
                         <IconButton
                           color="primary"
-                          onClick={() => handleEdit(warehouse.id!)}
+                          onClick={() => handleEdit(location.id!)}
                           disabled={loading}
                         >
                           <Edit />
                         </IconButton>
                         <IconButton
                           color="error"
-                          onClick={() => handleOpenConfirmDelete(warehouse.id!)}
+                          onClick={() => handleOpenConfirmDelete(location.id!)}
                           disabled={loading}
                         >
                           <Delete />
@@ -353,7 +386,7 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={3} align="center">
+                    <TableCell colSpan={4} align="center">
                       Nenhuma localização encontrada.
                     </TableCell>
                   </TableRow>
@@ -362,9 +395,9 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             </Table>
           </TableContainer>
           <TablePagination
-            rowsPerPageOptions={[6]}
+            rowsPerPageOptions={[rowsPerPage]}
             component="div"
-            count={filteredWarehouses.length}
+            count={localizacoesFiltradas.length}
             rowsPerPage={rowsPerPage}
             page={page}
             onPageChange={handleChangePage}
@@ -396,7 +429,12 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             >
               Cancelar
             </Button>
-            <Button variant="contained" color="error" onClick={handleDelete} disabled={loading}>
+            <Button
+              variant="contained"
+              color="error"
+              onClick={handleDelete}
+              disabled={loading}
+            >
               {loading ? 'Excluindo...' : 'Excluir'}
             </Button>
           </Stack>
