@@ -34,6 +34,7 @@
     "react-dom": "^18.2.0",
     "react-hook-form": "^7.51.3",
     "react-router-dom": "^6.22.3",
+    "react-toastify": "^11.0.5",
     "vite-plugin-checker": "^0.6.4",
     "xlsx": "^0.18.5",
     "yup": "^1.6.1"
@@ -57,6 +58,6 @@
     "vite-tsconfig-paths": "^4.3.2"
   },
   "resolutions": {
-  "file-saver": "2.0.5"
-}
+    "file-saver": "2.0.5"
+  }
 }
