@@ -1086,11 +1086,26 @@ export const removeTaskAssignment = async (
     throw new ApiError(`Falha ao remover atribuição para tarefa ${tarefaId}`);
   }
 };
+
 export const getReportData = async (endpoint: string, queryParams: string): Promise<any> => {
   try {
     const response = await api.get(`/relatorio/${endpoint}?${queryParams}`);
     return response.data;
   } catch (error) {
     throw new ApiError(`Falha ao buscar dados do relatório ${endpoint}`);
+  }
+};
+
+export const getSalesByPeriod = async (
+  startDate: string,
+  endDate: string,
+): Promise<FaturamentoPorPeriodo[]> => {
+  try {
+    const response = await api.get(
+      `/relatorio/faturamentoPorPeriodo?startDate=${startDate}&endDate=${endDate}`,
+    );
+    return response.data;
+  } catch (error) {
+    throw new ApiError('Falha ao buscar faturamento por período');
   }
 };
