@@ -33,8 +33,8 @@ export interface DadosWrapper {
 }
 
 export interface Funcionario {
-  roles: never[];
   id?: string;
+  id_funcao: string;
   numeroBI: string;
   nomeFuncionario: string;
   senha: string;
@@ -147,8 +147,8 @@ export interface Prateleira {
   updatedAt?: string;
 }
 export enum tipo {
-  Armazem,
-  Loja
+  Armazem = 'Armazem',
+  Loja = 'Loja',
 }
 
 export interface Localizacao {
@@ -157,7 +157,6 @@ export interface Localizacao {
   descricao?: string | null;
   tipo: tipo;
   produtosLocalizacoes?: ProdutoLocalizacao[];
-  transferencias?: Transferencia[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -171,6 +170,7 @@ export interface ProdutoLocalizacao {
   id_corredor: string;
   quantidadeProduto: number;
   quantidadeMinimaProduto: number;
+  transferencias?: Transferencia[];
   produtos?: Produto;
   localizacoes?: Localizacao;
   seccoes?: Seccao;
@@ -184,12 +184,12 @@ export interface Transferencia {
   id?: string;
   id_produto: string;
   id_funcionario: string;
-  id_localizacao: string;
+  id_produtoLocalizacao?: string;
   dataTransferencia: string;
   quantidadeTransferida: number;
   funcionarios?: Funcionario;
   produtos?: Produto;
-  localizacoes?: Localizacao;
+  produtosLocalizacoes?: ProdutoLocalizacao;
   createdAt?: string;
   updatedAt?: string;
 }

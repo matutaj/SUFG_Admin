@@ -21,28 +21,19 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Chip,
+  SelectChangeEvent,
 } from '@mui/material';
 import IconifyIcon from 'components/base/IconifyIcon';
 import Delete from 'components/icons/factor/Delete';
 import Edit from 'components/icons/factor/Edit';
 import React from 'react';
-import {
-  Funcionario,
-  Funcao,
-  Permissao,
-  FuncionarioFuncao,
-  FuncionarioPermissao,
-} from 'types/models';
+import { Funcionario, Funcao } from 'types/models';
 import {
   getAllEmployees,
   createEmployee,
   updateEmployee,
   deleteEmployee,
   getAllFunctions,
-  getAllPermissions,
-  createEmployeeFunction,
-  createEmployeePermission,
 } from '../../api/methods';
 
 interface CollapsedItemProps {
@@ -74,21 +65,17 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const [openModal, setOpenModal] = React.useState(false);
   const [isEditing, setIsEditing] = React.useState(false);
   const [editId, setEditId] = React.useState<string | null>(null);
-  const [form, setForm] = React.useState<
-    Partial<Funcionario> & { funcaoId?: string; permissoesIds?: string[] }
-  >({
+  const [form, setForm] = React.useState<Omit<Funcionario, 'id'>>({
+    id_funcao: '',
     numeroBI: '',
     nomeFuncionario: '',
     senha: '',
     moradaFuncionario: '',
     telefoneFuncionario: '',
     emailFuncionario: '',
-    funcaoId: '',
-    permissoesIds: [],
   });
   const [funcionarios, setFuncionarios] = React.useState<Funcionario[]>([]);
   const [funcoes, setFuncoes] = React.useState<Funcao[]>([]);
-  const [permissoes, setPermissoes] = React.useState<Permissao[]>([]);
   const [errors, setErrors] = React.useState<{ [key: string]: string }>({});
   const [currentPage, setCurrentPage] = React.useState<number>(1);
   const itemsPerPage = 5;
@@ -96,14 +83,12 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   React.useEffect(() => {
     const fetchData = async () => {
       try {
-        const [employeesData, functionsData, permissionsData] = await Promise.all([
+        const [employeesData, functionsData] = await Promise.all([
           getAllEmployees(),
           getAllFunctions(),
-          getAllPermissions(),
         ]);
         setFuncionarios(employeesData);
         setFuncoes(functionsData);
-        setPermissoes(permissionsData);
         setCurrentPage(1);
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -116,14 +101,13 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     setIsEditing(false);
     setEditId(null);
     setForm({
+      id_funcao: '',
       numeroBI: '',
       nomeFuncionario: '',
       senha: '',
       moradaFuncionario: '',
       telefoneFuncionario: '',
       emailFuncionario: '',
-      funcaoId: '',
-      permissoesIds: [],
     });
     setErrors({});
     setOpenModal(true);
@@ -131,25 +115,26 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const handleClose = () => setOpenModal(false);
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | { name?: string; value: unknown }>,
-  ) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setForm((prev) => ({
       ...prev,
-      [name as string]: value,
+      [name]: value,
     }));
-    if (errors[name as string]) {
-      setErrors((prev) => ({ ...prev, [name as string]: '' }));
+    if (errors[name]) {
+      setErrors((prev) => ({ ...prev, [name]: '' }));
     }
   };
 
-  const handlePermissionsChange = (event: React.ChangeEvent<{ value: unknown }>) => {
-    const value = event.target.value as string[];
+  const handleSelectChange = (e: SelectChangeEvent<string>) => {
+    const { name, value } = e.target;
     setForm((prev) => ({
       ...prev,
-      permissoesIds: value,
+      [name]: value,
     }));
+    if (errors[name]) {
+      setErrors((prev) => ({ ...prev, [name]: '' }));
+    }
   };
 
   const validateForm = () => {
@@ -157,7 +142,7 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     if (!form.nomeFuncionario?.trim()) newErrors.nomeFuncionario = 'Nome é obrigatório';
     if (!form.telefoneFuncionario?.trim()) newErrors.telefoneFuncionario = 'Telefone é obrigatório';
     if (!form.numeroBI?.trim()) newErrors.numeroBI = 'NIF/BI é obrigatório';
-    if (!form.funcaoId) newErrors.funcaoId = 'Função é obrigatória';
+    if (!form.id_funcao) newErrors.id_funcao = 'Função é obrigatória';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -166,66 +151,32 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     if (!validateForm()) return;
 
     try {
-      let employeeId: string;
-      const employeeData: Funcionario = {
-        numeroBI: form.numeroBI!,
-        nomeFuncionario: form.nomeFuncionario!,
-        senha: form.senha!,
-        moradaFuncionario: form.moradaFuncionario!,
-        telefoneFuncionario: form.telefoneFuncionario!,
-        emailFuncionario: form.emailFuncionario!,
-        roles: [],
-      };
-
       if (isEditing && editId) {
-        const updatedEmployee = await updateEmployee(editId, employeeData);
-        employeeId = editId;
+        const updatedEmployee = await updateEmployee(editId, form);
         setFuncionarios((prev) =>
           prev.map((item) => (item.id === editId ? updatedEmployee : item)),
         );
       } else {
-        const newEmployee = await createEmployee(employeeData);
-        employeeId = newEmployee.id!;
+        const newEmployee = await createEmployee(form);
         setFuncionarios((prev) => [...prev, newEmployee]);
       }
 
-      // Create FuncionarioFuncao
-      if (form.funcaoId) {
-        const funcionarioFuncao: FuncionarioFuncao = {
-          id_funcionario: employeeId,
-          id_funcao: form.funcaoId,
-        };
-        await createEmployeeFunction(funcionarioFuncao);
-      }
-
-      // Create FuncionarioPermissao for each selected permission
-      if (form.permissoesIds && form.permissoesIds.length > 0) {
-        for (const permissaoId of form.permissoesIds) {
-          const funcionarioPermissao: FuncionarioPermissao = {
-            id_funcionario: employeeId,
-            id_permissao: permissaoId,
-          };
-          await createEmployeePermission(funcionarioPermissao);
-        }
-      }
-
       setForm({
+        id_funcao: '',
         numeroBI: '',
         nomeFuncionario: '',
         senha: '',
         moradaFuncionario: '',
         telefoneFuncionario: '',
         emailFuncionario: '',
-        funcaoId: '',
-        permissoesIds: [],
       });
       setOpenModal(false);
       setIsEditing(false);
       setEditId(null);
       setCurrentPage(1);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error submitting employee:', error);
-      alert('Erro ao salvar funcionário');
+      alert(`Erro ao salvar funcionário: ${error.message || 'Tente novamente'}`);
     }
   };
 
@@ -241,6 +192,7 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         }
       } catch (error) {
         console.error('Error deleting employee:', error);
+        alert('Erro ao excluir funcionário');
       }
     }
   };
@@ -249,14 +201,13 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     setIsEditing(true);
     setEditId(funcionario.id || null);
     setForm({
+      id_funcao: funcionario.id_funcao,
       numeroBI: funcionario.numeroBI,
       nomeFuncionario: funcionario.nomeFuncionario,
       senha: funcionario.senha,
       moradaFuncionario: funcionario.moradaFuncionario,
       telefoneFuncionario: funcionario.telefoneFuncionario,
       emailFuncionario: funcionario.emailFuncionario,
-      funcaoId: '',
-      permissoesIds: [],
     });
     setErrors({});
     setOpenModal(true);
@@ -321,7 +272,7 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 variant="filled"
                 fullWidth
                 value={form.numeroBI}
-                onChange={handleChange}
+                onChange={handleInputChange}
                 error={!!errors.numeroBI}
                 helperText={errors.numeroBI}
               />
@@ -333,7 +284,7 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 variant="filled"
                 fullWidth
                 value={form.nomeFuncionario}
-                onChange={handleChange}
+                onChange={handleInputChange}
                 error={!!errors.nomeFuncionario}
                 helperText={errors.nomeFuncionario}
               />
@@ -346,7 +297,7 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 type="tel"
                 fullWidth
                 value={form.telefoneFuncionario}
-                onChange={handleChange}
+                onChange={handleInputChange}
                 error={!!errors.telefoneFuncionario}
                 helperText={errors.telefoneFuncionario}
               />
@@ -359,7 +310,7 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 variant="filled"
                 fullWidth
                 value={form.emailFuncionario}
-                onChange={handleChange}
+                onChange={handleInputChange}
               />
             </Grid>
             <Grid item xs={12}>
@@ -369,13 +320,17 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 variant="filled"
                 fullWidth
                 value={form.moradaFuncionario}
-                onChange={handleChange}
+                onChange={handleInputChange}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <FormControl variant="filled" fullWidth error={!!errors.funcaoId}>
+              <FormControl variant="filled" fullWidth error={!!errors.id_funcao}>
                 <InputLabel>Função</InputLabel>
-                <Select name="funcaoId" value={form.funcaoId} onChange={handleChange}>
+                <Select 
+                  name="id_funcao" 
+                  value={form.id_funcao} 
+                  onChange={handleSelectChange}
+                >
                   <MenuItem value="">
                     <em>Selecione uma função</em>
                   </MenuItem>
@@ -385,38 +340,11 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                     </MenuItem>
                   ))}
                 </Select>
-               {/*  {errors.funcaoId && (
+                {errors.id_funcao && (
                   <Typography color="error" variant="caption">
-                    {errors.funcaoId}
+                    {errors.id_funcao}
                   </Typography>
-                )} */}
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <FormControl variant="filled" fullWidth>
-                <InputLabel>Permissões</InputLabel>
-                <Select
-                  multiple
-                  name="permissoesIds"
-                  value={form.permissoesIds}
-                  onChange={handlePermissionsChange}
-                  renderValue={(selected) => (
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                      {(selected as string[]).map((value) => (
-                        <Chip
-                          key={value}
-                          label={permissoes.find((p) => p.id === value)?.nome || value}
-                        />
-                      ))}
-                    </Box>
-                  )}
-                >
-                  {permissoes.map((permissao) => (
-                    <MenuItem key={permissao.id} value={permissao.id}>
-                      {permissao.nome}
-                    </MenuItem>
-                  ))}
-                </Select>
+                )}
               </FormControl>
             </Grid>
             {!isEditing && (
@@ -428,7 +356,7 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                   variant="filled"
                   fullWidth
                   value={form.senha}
-                  onChange={handleChange}
+                  onChange={handleInputChange}
                 />
               </Grid>
             )}

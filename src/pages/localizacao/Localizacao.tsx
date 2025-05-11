@@ -114,10 +114,11 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       const data = await getAllLocations();
       setLocalizacoes(data);
       setLocalizacoesFiltradas(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao buscar localizações:', error);
-      setAlert({ severity: 'error', message: 'Erro ao carregar localizações!' });
-      setTimeout(() => setAlert(null), 3000);
+      const errorMessage = error.message || 'Erro ao carregar localizações';
+      setAlert({ severity: 'error', message: errorMessage });
+      setTimeout(() => setAlert(null), 5000);
     } finally {
       setLoading(false);
     }
@@ -129,12 +130,9 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const getTipoLabel = (tipoValue: tipo | null | undefined): string => {
     switch (tipoValue) {
-      case tipo.Armazem:
-        return 'Armazém';
-      case tipo.Loja:
-        return 'Loja';
-      default:
-        return 'Sem tipo';
+      case tipo.Armazem: return 'Armazém';
+      case tipo.Loja: return 'Loja';
+      default: return 'Sem tipo';
     }
   };
 
@@ -152,8 +150,8 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     try {
       setLoading(true);
       const locationData = { 
-        nomeLocalizacao, 
-        descricao, 
+        nomeLocalizacao: nomeLocalizacao.trim(), 
+        descricao: descricao.trim(), 
         tipo: tipoSelecionado as tipo 
       };
 
@@ -167,9 +165,11 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       
       await fetchLocalizacoes();
       handleClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao salvar localização:', error);
-      setAlert({ severity: 'error', message: 'Erro ao salvar localização!' });
+      const errorMessage = error.message || 'Erro ao salvar localização';
+      setAlert({ severity: 'error', message: errorMessage });
+      setTimeout(() => setAlert(null), 5000);
     } finally {
       setLoading(false);
     }
@@ -183,21 +183,55 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       setTipoSelecionado(locationToEdit.tipo || null);
       setEditWarehouseId(id);
       handleOpen();
+    } else {
+      setAlert({ severity: 'error', message: 'Localização não encontrada para edição' });
+      setTimeout(() => setAlert(null), 5000);
     }
   };
 
   const handleDelete = async () => {
-    if (!deleteWarehouseId) return;
+    if (!deleteWarehouseId) {
+      setAlert({ severity: 'error', message: 'ID da localização não fornecido' });
+      setTimeout(() => setAlert(null), 5000);
+      return;
+    }
 
     try {
       setLoading(true);
+      
+      // Verifica se a localização existe localmente
+      const locationExists = localizacoes.some(loc => loc.id === deleteWarehouseId);
+      if (!locationExists) {
+        throw new Error('Localização não encontrada');
+      }
+
+      // Tenta excluir no servidor
       await deleteLocation(deleteWarehouseId);
+      
+      // Atualização otimista - remove do estado sem recarregar tudo
+      setLocalizacoes(prev => prev.filter(loc => loc.id !== deleteWarehouseId));
+      setLocalizacoesFiltradas(prev => prev.filter(loc => loc.id !== deleteWarehouseId));
+      
       setAlert({ severity: 'success', message: 'Localização excluída com sucesso!' });
-      await fetchLocalizacoes();
       handleCloseConfirmDelete();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao excluir localização:', error);
-      setAlert({ severity: 'error', message: 'Erro ao excluir localização!' });
+      
+      let errorMessage = 'Erro ao excluir localização';
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (error.response) {
+        if (error.response.status === 404) {
+          errorMessage = 'Localização não encontrada no servidor';
+        } else if (error.response.status === 400) {
+          errorMessage = error.response.data?.message || 'Localização não pode ser excluída (possivelmente em uso)';
+        } else if (error.response.status === 500) {
+          errorMessage = 'Erro interno no servidor ao tentar excluir';
+        }
+      }
+      
+      setAlert({ severity: 'error', message: errorMessage });
+      setTimeout(() => setAlert(null), 5000);
     } finally {
       setLoading(false);
     }

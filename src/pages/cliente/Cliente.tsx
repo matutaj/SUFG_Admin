@@ -116,10 +116,9 @@ const ClienteComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const onAddClienteSubmit = async () => {
     if (!validateForm()) return;
-
     try {
       if (isEditing && editId !== null) {
-        const updatedCliente = await updateClient(editId, form as Cliente); // editId is string
+        const updatedCliente = await updateClient(editId, form as Cliente);
         setClientes((prev) => prev.map((item) => (item.id === editId ? updatedCliente : item)));
       } else {
         const newCliente = await createClient(form as Cliente);
@@ -135,9 +134,9 @@ const ClienteComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       setOpenCliente(false);
       setIsEditing(false);
       setEditId(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error submitting client:', error);
-      alert('Erro ao salvar cliente');
+      alert(error.message || 'Erro ao salvar cliente');
     }
   };
 
