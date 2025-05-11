@@ -73,6 +73,8 @@ export interface Fornecedor {
 }
 
 export interface DadosEntradaEstoque {
+  funcionarioNome: string;
+  produtos: any;
   id?: string;
   id_fornecedor: string;
   id_produto: string;
@@ -371,6 +373,8 @@ export interface Tarefa {
 }
 
 export interface AtividadeDoDia {
+  tarefa: any;
+  funcionarios: any;
   id?: string;
   id_funcionario: string;
   id_tarefa: string;
