@@ -3,14 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { getAllEmployees, updateEmployee } from '../../api/methods';
 import { Funcionario } from 'types/models';
 import { jwtDecode } from 'jwt-decode';
-import './ProfilePage.css'; // Importa o arquivo CSS
+import './ProfilePage.css';
 
-interface UserData {
-  nome: string;
+interface DecodedToken {
+  userId: string;
   email: string;
-  telefone: string;
-  numeroBI: string;
-  roles: string[];
+  nome: string;
+  role: string | string[];
+  exp?: number; // Campo de expiração do token
 }
 
 export default function ProfilePage() {
@@ -37,50 +37,35 @@ export default function ProfilePage() {
           return;
         }
 
-        const userData = localStorage.getItem('user');
-        let parsedUser: UserData | null = null;
-        if (userData) {
-          try {
-            parsedUser = JSON.parse(userData);
-            console.log('UserData parseado:', parsedUser);
-          } catch (err) {
-            console.error('Erro ao parsear userData:', err);
-            throw new Error('Dados de usuário corrompidos');
-          }
-        }
-
-        if (!parsedUser || !parsedUser.numeroBI || !Array.isArray(parsedUser.roles)) {
-          console.warn('Dados de usuário inválidos ou ausentes:', parsedUser);
-          throw new Error('Dados de usuário inválidos');
-        }
-
-        let decoded: { userId?: string } = {};
+        let decoded: DecodedToken;
         try {
-          decoded = jwtDecode(token);
+          decoded = jwtDecode<DecodedToken>(token);
           console.log('Token decodificado:', decoded);
         } catch (err) {
           console.error('Erro ao decodificar token:', err);
           throw new Error('Token inválido');
         }
 
-        if (!decoded.userId) {
-          console.error('ID não encontrado no token:', decoded);
-          throw new Error('ID de usuário não encontrado');
+        // Verificar se o token está expirado
+        if (decoded.exp && decoded.exp * 1000 < Date.now()) {
+          console.error('Token expirado');
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          navigate('/login');
+          return;
+        }
+
+        if (!decoded.userId || !decoded.email || !decoded.nome) {
+          console.error('Dados obrigatórios ausentes no token:', decoded);
+          throw new Error('Dados do token inválidos');
         }
 
         const employees = await getAllEmployees();
         console.log('Funcionários recebidos:', employees);
-        const currentEmployee = employees.find(
-          (emp) => emp.id === decoded.userId || emp.numeroBI === parsedUser.numeroBI,
-        );
+        const currentEmployee = employees.find((emp) => emp.id === decoded.userId);
 
         if (!currentEmployee) {
-          console.error(
-            'Funcionário não encontrado para id:',
-            decoded.userId,
-            'ou numeroBI:',
-            parsedUser.numeroBI,
-          );
+          console.error('Funcionário não encontrado para id:', decoded.userId);
           throw new Error('Perfil não encontrado');
         }
 
@@ -96,6 +81,11 @@ export default function ProfilePage() {
         console.log('Perfil carregado com sucesso:', currentEmployee);
       } catch (err: any) {
         console.error('Erro ao carregar perfil:', err.message);
+        if (err.response?.status === 401) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          navigate('/login');
+        }
         setErrorMessage(err.message || 'Erro ao carregar perfil. Tente novamente.');
       } finally {
         setIsLoading(false);
@@ -184,12 +174,14 @@ export default function ProfilePage() {
           : prev,
       );
 
-      const updatedUser: UserData = {
+      const decoded: DecodedToken = jwtDecode(localStorage.getItem('token')!);
+      const updatedUser = {
         nome: formData.nomeFuncionario!,
         email: formData.emailFuncionario!,
         telefone: formData.telefoneFuncionario!,
         numeroBI: employee!.numeroBI,
-        roles: employee!.roles || [],
+        roles: employee!.id_funcao || [],
+        permissoes: employee!.permissoes || [],
       };
       localStorage.setItem('user', JSON.stringify(updatedUser));
 
@@ -199,8 +191,13 @@ export default function ProfilePage() {
       setPassword('');
       setConfirmPassword('');
       setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao atualizar perfil:', err);
+      if (err.response?.status === 401) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        navigate('/login');
+      }
       setErrorMessage('Erro ao atualizar perfil. Tente novamente.');
     }
   };
@@ -351,7 +348,11 @@ export default function ProfilePage() {
             </div>
             <div className="profile-info">
               <h2 className="profile-name">{employee?.nomeFuncionario || 'N/A'}</h2>
-              <p className="profile-role">{employee?.roles?.join(', ') || 'Funcionário'}</p>
+              <p className="profile-role">
+                {Array.isArray(employee?.id_funcao)
+                  ? employee?.id_funcao.join(', ')
+                  : employee?.id_funcao || 'Funcionário'}
+              </p>
             </div>
           </div>
 
@@ -538,8 +539,7 @@ function InfoField({
 
   return (
     <div className={`info-field ${className}`}>
-      {/*       <div className="info-icon-container">{icons[icon]}</div>
-       */}{' '}
+      {/*       <div className="info-icon-container">{icons[icon]}</div> */}
       <div className="info-text">
         <p className="info-label">{label}</p>
         <p className="info-value">{value}</p>

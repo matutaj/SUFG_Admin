@@ -33,6 +33,7 @@ export interface DadosWrapper {
 }
 
 export interface Funcionario {
+  permissoes: never[];
   id?: string;
   id_funcao: string;
   numeroBI: string;

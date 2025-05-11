@@ -18,6 +18,8 @@ import Secao from 'pages/seccao/Seccao';
 import Caixas from 'pages/caixa/caixa';
 import Perfil from 'pages/perfil/Perfil';
 import { StockProvider } from 'pages/stock/StockContext';
+import { Navigate } from 'react-router-dom';
+import { getUserData, hasAnyRole } from '../api/authUtils';
 
 const App = lazy(() => import('App'));
 const MainLayout = lazy(() => import('layouts/main-layout'));
@@ -28,6 +30,27 @@ const Armazem = lazy(() => import('pages/localizacao/Localizacao'));
 const Login = lazy(() => import('pages/authentication/Login'));
 const Signup = lazy(() => import('pages/authentication/Signup'));
 const ErrorPage = lazy(() => import('pages/errors/ErrorPage'));
+
+// Componente ProtectedRoute
+interface ProtectedRouteProps {
+  requiredRoles?: string[];
+  redirectTo?: string;
+}
+
+const ProtectedRoute = ({ requiredRoles, redirectTo = '/login' }: ProtectedRouteProps) => {
+  const user = getUserData();
+  const token = localStorage.getItem('token');
+
+  if (!token || !user) {
+    return <Navigate to={redirectTo} replace />;
+  }
+
+  if (requiredRoles && !hasAnyRole(requiredRoles)) {
+    return <Navigate to={paths.notFound} replace />;
+  }
+
+  return <Outlet />;
+};
 
 export const routes = [
   {
@@ -56,85 +79,89 @@ export const routes = [
         ],
       },
       {
-        path: rootPaths.pagesRoot,
-        element: (
-          <MainLayout>
-            <StockProvider>
-              <Suspense fallback={<LinearLoader />}>
-                <Outlet />
-              </Suspense>
-            </StockProvider>
-          </MainLayout>
-        ),
+        element: <ProtectedRoute />,
         children: [
           {
-            path: paths.dashboard,
-            element: <Dashboard />,
-          },
-          {
-            path: paths.tarefa,
-            element: <Tarefa />,
-          },
-          {
-            path: paths.perfil,
-            element: <Perfil />,
-          },
-          {
-            path: paths.loja,
-            element: <Loja open={true} />,
-          },
-
-          {
-            path: paths.localizacao,
-            element: <Armazem open={true} />,
-          },
-          {
-            path: paths.categorias,
-            element: <Categoria open={true} />,
-          },
-          {
-            path: paths.caixa,
-            element: <Caixas open={true} />,
-          },
-          {
-            path: paths.estoque,
-            element: <Stock />,
-          },
-          {
-            path: paths.corredor,
-            element: <Corredor open={true} />,
-          },
-          {
-            path: paths.prateleira,
-            element: <Prateleira open={true} />,
-          },
-          {
-            path: paths.seccao,
-            element: <Secao open={true} />,
-          },
-          {
-            path: paths.funcionarios,
-            element: <Funcionario open={true} />,
-          },
-          {
-            path: paths.vendas,
-            element: <Fornecedor open={true} />,
-          },
-          {
-            path: paths.localProduto,
-            element: <LocalProduto open={true} />,
-          },
-          {
-            path: paths.relatorio,
-            element: <Relatorio />,
-          },
-          {
-            path: paths.cliente,
-            element: <Cliente open={true} />,
-          },
-          {
-            path: paths.faturacao,
-            element: <Faturacao subItems={undefined} open={true} />,
+            path: rootPaths.pagesRoot,
+            element: (
+              <MainLayout>
+                <StockProvider>
+                  <Suspense fallback={<LinearLoader />}>
+                    <Outlet />
+                  </Suspense>
+                </StockProvider>
+              </MainLayout>
+            ),
+            children: [
+              {
+                path: paths.dashboard,
+                element: <Dashboard />,
+              },
+              {
+                path: paths.tarefa,
+                element: <Tarefa />,
+              },
+              {
+                path: paths.perfil,
+                element: <Perfil />,
+              },
+              {
+                path: paths.loja,
+                element: <Loja open={true} />,
+              },
+              {
+                path: paths.localizacao,
+                element: <Armazem open={true} />,
+              },
+              {
+                path: paths.categorias,
+                element: <Categoria open={true} />,
+              },
+              {
+                path: paths.caixa,
+                element: <Caixas open={true} />,
+              },
+              {
+                path: paths.estoque,
+                element: <Stock />,
+              },
+              {
+                path: paths.corredor,
+                element: <Corredor open={true} />,
+              },
+              {
+                path: paths.prateleira,
+                element: <Prateleira open={true} />,
+              },
+              {
+                path: paths.seccao,
+                element: <Secao open={true} />,
+              },
+              {
+                path: paths.funcionarios,
+                element: <Funcionario open={true} />,
+              },
+              {
+                path: paths.vendas,
+                element: <Fornecedor open={true} />,
+              },
+              {
+                path: paths.localProduto,
+                element: <LocalProduto open={true} />,
+              },
+              {
+                path: paths.relatorio,
+                element: <Relatorio />,
+              },
+              {
+                path: paths.cliente,
+                element: <Cliente open={true} />,
+              },
+              {
+                path: paths.faturacao,
+                element: <Faturacao subItems={undefined} open={true} />,
+              },
+            ],
           },
         ],
       },

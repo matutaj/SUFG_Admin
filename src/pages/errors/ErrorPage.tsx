@@ -6,8 +6,8 @@ const ErrorPage = () => {
   return (
     <Stack alignItems="center" justifyContent="center" spacing={3} sx={{ height: '100vh' }}>
       <Image src={errorImg} sx={{ width: 1 / 2, height: 1 / 2 }} />
-      <Button variant="contained" component={Link} href="/">
-        Go To Dashboard
+      <Button variant="contained" component={Link} href="/login">
+        Fazer Login
       </Button>
     </Stack>
   );
