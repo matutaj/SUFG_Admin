@@ -33,7 +33,6 @@ export interface DadosWrapper {
 }
 
 export interface Funcionario {
-  permissoes: never[];
   id?: string;
   id_funcao: string;
   numeroBI: string;
@@ -74,8 +73,6 @@ export interface Fornecedor {
 }
 
 export interface DadosEntradaEstoque {
-  funcionarioNome: string;
-  produtos: any;
   id?: string;
   id_fornecedor: string;
   id_produto: string;
@@ -165,6 +162,7 @@ export interface Localizacao {
 }
 
 export interface ProdutoLocalizacao {
+  lote?: string;
   id?: string;
   id_produto: string;
   id_localizacao: string;

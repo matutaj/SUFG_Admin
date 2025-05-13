@@ -380,7 +380,7 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             <Table>
               <TableHead>
                 <TableRow>
-                  {['NIF/BI', 'Nome', 'Telefone', 'Email', 'Endereço', 'Ações'].map((header) => (
+                  {['NIF/BI', 'Nome', 'Telefone', 'Email', 'Endereço', 'Função', 'Ações'].map((header) => (
                     <TableCell key={header}>
                       <strong>{header}</strong>
                     </TableCell>
@@ -389,26 +389,32 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               </TableHead>
               <TableBody>
                 {paginatedFuncionarios.length > 0 ? (
-                  paginatedFuncionarios.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>{item.numeroBI}</TableCell>
-                      <TableCell>{item.nomeFuncionario}</TableCell>
-                      <TableCell>{item.telefoneFuncionario}</TableCell>
-                      <TableCell>{item.emailFuncionario}</TableCell>
-                      <TableCell>{item.moradaFuncionario}</TableCell>
-                      <TableCell align="right">
-                        <IconButton color="primary" onClick={() => handleEdit(item)}>
-                          <Edit />
-                        </IconButton>
-                        <IconButton color="error" onClick={() => handleDelete(item.id!)}>
-                          <Delete />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  paginatedFuncionarios.map((item) => {
+                    const funcao = funcoes.find(f => f.id === item.id_funcao);
+                    const nomeFuncao = funcao ? funcao.nome : 'Sem função no sistema';
+                    
+                    return (
+                      <TableRow key={item.id}>
+                        <TableCell>{item.numeroBI}</TableCell>
+                        <TableCell>{item.nomeFuncionario}</TableCell>
+                        <TableCell>{item.telefoneFuncionario}</TableCell>
+                        <TableCell>{item.emailFuncionario}</TableCell>
+                        <TableCell>{item.moradaFuncionario}</TableCell>
+                        <TableCell>{nomeFuncao}</TableCell>
+                        <TableCell align="right">
+                          <IconButton color="primary" onClick={() => handleEdit(item)}>
+                            <Edit />
+                          </IconButton>
+                          <IconButton color="error" onClick={() => handleDelete(item.id!)}>
+                            <Delete />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} align="center">
+                    <TableCell colSpan={7} align="center">
                       Nenhum funcionário encontrado
                     </TableCell>
                   </TableRow>
