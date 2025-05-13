@@ -32,7 +32,6 @@ import {
   updateProduct,
   deleteProduct,
   getAllProductCategories,
-  getTotalStockByProduct,
 } from '../../api/methods';
 
 interface CollapsedItemProps {
@@ -106,7 +105,6 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const [unidadeConteudo, setUnidadeConteudo] = React.useState('');
   const [searchTerm, setSearchTerm] = React.useState('');
   const [products, setProducts] = React.useState<Produto[]>([]);
-  const [productStockQuantities, setProductStockQuantities] = React.useState<{ [key: string]: number }>({});
   const [categories, setCategories] = React.useState<CategoriaProduto[]>([]);
   const [errors, setErrors] = React.useState<{
     nomeProduto?: string;
@@ -157,21 +155,11 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     setProductToDelete(null);
   };
 
-  const fetchProductsAndStock = async () => {
+  const fetchProducts = async () => {
     try {
       setLoading(true);
       const productsData = await getAllProducts();
-      const stockQuantities: { [key: string]: number } = {};
-      for (const product of productsData) {
-        try {
-          const totalQuantity = await getTotalStockByProduct(product.referenciaProduto);
-          stockQuantities[product.referenciaProduto] = totalQuantity;
-        } catch (error) {
-          stockQuantities[product.referenciaProduto] = 0;
-        }
-      }
       setProducts(productsData);
-      setProductStockQuantities(stockQuantities);
     } catch (error) {
       setAlert({ severity: 'error', message: 'Erro ao carregar produtos!' });
     } finally {
@@ -189,7 +177,7 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   };
 
   React.useEffect(() => {
-    fetchProductsAndStock();
+    fetchProducts();
     fetchCategories();
   }, []);
 
@@ -256,14 +244,9 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       } else {
         const newProduct = await createProduct(productData);
         setProducts([...products, newProduct]);
-        setProductStockQuantities({
-          ...productStockQuantities,
-          [newProduct.referenciaProduto]: 0,
-        });
         setAlert({ severity: 'success', message: 'Produto cadastrado com sucesso!' });
       }
 
-      await fetchProductsAndStock(); // Atualiza para refletir mudanças no estoque
       handleCloseProduct();
       setPage(0);
     } catch (error: any) {
@@ -295,8 +278,6 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         setLoading(true);
         await deleteProduct(productToDelete);
         setProducts(products.filter((p) => p.id !== productToDelete));
-        const { [productToDelete]: _, ...remainingQuantities } = productStockQuantities;
-        setProductStockQuantities(remainingQuantities);
         setAlert({ severity: 'success', message: 'Produto excluído com sucesso!' });
         const totalPages = Math.ceil(filteredProducts.length / rowsPerPage);
         if (page >= totalPages && page > 0) {
@@ -355,7 +336,7 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       <Paper sx={{ p: 2, width: '100%' }}>
         <Collapse in={open}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-            <Typography variant="h5">Produtos</Typography>
+            <Typography variant="h5">Cadastrar Produtos</Typography>
             <TextField
               label="Pesquisar Produtos"
               value={searchTerm}
@@ -550,9 +531,6 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                     <strong>Preço Venda</strong>
                   </TableCell>
                   <TableCell>
-                    <strong>Quantidade em Estoque</strong>
-                  </TableCell>
-                  <TableCell>
                     <strong>Unidade de Medida</strong>
                   </TableCell>
                   <TableCell>
@@ -566,7 +544,7 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
+                    <TableCell colSpan={7} align="center">
                       Carregando...
                     </TableCell>
                   </TableRow>
@@ -580,9 +558,6 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                           ?.nomeCategoria || 'N/A'}
                       </TableCell>
                       <TableCell>{product.precoVenda || 0}</TableCell>
-                      <TableCell>
-                        {productStockQuantities[product?.quantidadePorUnidade!] || 0}
-                      </TableCell>
                       <TableCell>{getUnidadeMedidaLabel(product.unidadeMedida)}</TableCell>
                       <TableCell>{getUnidadeConteudoLabel(product.unidadeConteudo)}</TableCell>
                       <TableCell align="right">
@@ -607,7 +582,7 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
+                    <TableCell colSpan={7} align="center">
                       Nenhum produto encontrado.
                     </TableCell>
                   </TableRow>

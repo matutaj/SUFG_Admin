@@ -41,7 +41,7 @@ export const drawerItems: DrawerItem[] = [
       },
       {
         id: 39,
-        title: 'Local Produto',
+        title: 'Local. Produto',
         path: `/${rootPaths.pagesRoot}/produt/produtoLocalizacao`, // '/pages/estoque'
         active: true,
       },
@@ -57,7 +57,7 @@ export const drawerItems: DrawerItem[] = [
   {
     id: 5,
     icon: ShoppingBag,
-    title: 'Zona SCRL',
+    title: 'Zona SCPL',
     collapsible: true,
     active: true,
     subList: [
@@ -103,7 +103,7 @@ export const drawerItems: DrawerItem[] = [
 
       {
         id: 4,
-        title: 'caixa',
+        title: 'Caixa',
         path: `/${rootPaths.pagesRoot}/caixa`, // '/pages/categorias'
         active: true,
       },
