@@ -49,7 +49,8 @@ import {
   FuncionarioCaixa,
 } from '../../types/models';
 
-const ITEMS_PER_PAGE = 10;
+// Changed from 10 to 5 items per page
+const ITEMS_PER_PAGE = 5;
 
 interface ProdutoLocalizacaoDisplay {
   id: string | undefined;
@@ -99,150 +100,208 @@ const DashboardPage = () => {
   const [endDate, setEndDate] = useState<string>('');
   const [periodoFaturamento, setPeriodoFaturamento] = useState<PeriodoFaturamento>('dia');
   const [faturamentoPorPeriodo, setFaturamentoPorPeriodo] = useState<FaturamentoPorPeriodo[]>([]);
+  const [selectedMonth, setSelectedMonth] = useState<string>(
+    new Date().toISOString().slice(0, 7), // Default to current YYYY-MM
+  );
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Fetch data in parallel
+      const [
+        vendas,
+        produtosLocalizacoes,
+        produtos,
+        localizacoes,
+        entradasEstoque,
+        atividades,
+        funcionariosCaixa,
+      ] = await Promise.all([
+        getAllSales().catch(() => []),
+        getAllProductLocations().catch(() => []),
+        getAllProducts().catch(() => []),
+        getAllLocations().catch(() => []),
+        getAllStockEntries().catch(() => []),
+        getAllDailyActivities().catch(() => []),
+        getAllEmployeeCashRegisters().catch(() => []),
+      ]);
+
+      // Create lookup maps
+      const produtoMap = new Map(produtos.map((p: Produto) => [p.id, p.nomeProduto]));
+      const localizacaoMap = new Map(
+        localizacoes.map((l: Localizacao) => [l.id, l.nomeLocalizacao]),
+      );
+      const caixaMap = new Map(
+        funcionariosCaixa.map((fc: FuncionarioCaixa) => [
+          fc.id_funcionario,
+          fc.caixas?.nomeCaixa || 'Desconhecido',
+        ]),
+      );
+
+      // Map produtosLocalizacoes
+      const produtosLocalizacoesMapped: ProdutoLocalizacaoDisplay[] = produtosLocalizacoes.map(
+        (loc: ProdutoLocalizacao) => ({
+          id: loc.id,
+          nomeProduto: produtoMap.get(loc.id_produto) || 'Desconhecido',
+          nomeLocalizacao: localizacaoMap.get(loc.id_localizacao) || 'Desconhecido',
+          quantidadeProduto: loc.quantidadeProduto,
+          quantidadeMinimaProduto: loc.quantidadeMinimaProduto,
+        }),
+      );
+
+      // Map entradasEstoque
+      const entradasEstoqueMapped: EntradaEstoqueDisplay[] = entradasEstoque.map(
+        (entrada: DadosEntradaEstoque) => {
+          const dataEntrada =
+            entrada.dataEntrada instanceof Date
+              ? entrada.dataEntrada
+              : new Date(entrada.dataEntrada);
+          return {
+            id: entrada.id,
+            nomeProduto: produtoMap.get(entrada.id_produto) || 'Desconhecido',
+            quantidadeRecebida: entrada.quantidadeRecebida,
+            dataEntrada: dataEntrada.toLocaleDateString('pt-AO'),
+            nomeFuncionario: entrada.funcionarioNome || 'Desconhecido',
+            lote: entrada.lote,
+          };
+        },
+      );
+
+      // Calculate faturamento por caixa
+      const faturamentoMap = new Map<string, { nomeCaixa: string; quantidadeFaturada: number }>();
+      vendas.forEach((venda: Venda) => {
+        if (venda.id_funcionarioCaixa) {
+          const nomeCaixa = caixaMap.get(venda.id_funcionarioCaixa) || 'Desconhecido';
+          const current = faturamentoMap.get(venda.id_funcionarioCaixa) || {
+            nomeCaixa,
+            quantidadeFaturada: 0,
+          };
+          current.quantidadeFaturada += Number(venda.valorTotal || 0);
+          faturamentoMap.set(venda.id_funcionarioCaixa, current);
+        }
+      });
+      const faturamentoPorCaixa: FaturamentoPorCaixa[] = Array.from(faturamentoMap.entries()).map(
+        ([idCaixa, data]) => ({
+          idCaixa,
+          nomeCaixa: data.nomeCaixa,
+          quantidadeFaturada: data.quantidadeFaturada,
+        }),
+      );
+
+      // Count pending tasks
+      const tarefasPendentes = atividades.filter(
+        (atividade: AtividadeDoDia) => atividade.status === 'Pendente',
+      ).length;
+
+      setDashboardData({
+        vendas,
+        faturamentoPorCaixa,
+        produtosLocalizacoes: produtosLocalizacoesMapped,
+        entradasEstoque: entradasEstoqueMapped,
+        tarefasPendentes,
+      });
+
+      // Processar faturamento por período
+      processarFaturamentoPorPeriodo(vendas, periodoFaturamento, selectedMonth);
+    } catch (err) {
+      console.error('Erro ao carregar dashboard:', err);
+      setError('Erro ao carregar dados do dashboard.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        // Fetch data in parallel
-        const [
-          vendas,
-          produtosLocalizacoes,
-          produtos,
-          localizacoes,
-          entradasEstoque,
-          atividades,
-          funcionariosCaixa,
-        ] = await Promise.all([
-          getAllSales().catch(() => []),
-          getAllProductLocations().catch(() => []),
-          getAllProducts().catch(() => []),
-          getAllLocations().catch(() => []),
-          getAllStockEntries().catch(() => []),
-          getAllDailyActivities().catch(() => []),
-          getAllEmployeeCashRegisters().catch(() => []),
-        ]);
-
-        // Create lookup maps
-        const produtoMap = new Map(produtos.map((p: Produto) => [p.id, p.nomeProduto]));
-        const localizacaoMap = new Map(
-          localizacoes.map((l: Localizacao) => [l.id, l.nomeLocalizacao]),
-        );
-        const caixaMap = new Map(
-          funcionariosCaixa.map((fc: FuncionarioCaixa) => [
-            fc.id_funcionario,
-            fc.caixas?.nomeCaixa || 'Desconhecido',
-          ]),
-        );
-
-        // Map produtosLocalizacoes
-        const produtosLocalizacoesMapped: ProdutoLocalizacaoDisplay[] = produtosLocalizacoes.map(
-          (loc: ProdutoLocalizacao) => ({
-            id: loc.id,
-            nomeProduto: produtoMap.get(loc.id_produto) || 'Desconhecido',
-            nomeLocalizacao: localizacaoMap.get(loc.id_localizacao) || 'Desconhecido',
-            quantidadeProduto: loc.quantidadeProduto,
-            quantidadeMinimaProduto: loc.quantidadeMinimaProduto,
-          }),
-        );
-
-        // Map entradasEstoque
-        const entradasEstoqueMapped: EntradaEstoqueDisplay[] = entradasEstoque.map(
-          (entrada: DadosEntradaEstoque) => {
-            const dataEntrada =
-              entrada.dataEntrada instanceof Date
-                ? entrada.dataEntrada
-                : new Date(entrada.dataEntrada);
-            return {
-              id: entrada.id,
-              nomeProduto: produtoMap.get(entrada.id_produto) || 'Desconhecido',
-              quantidadeRecebida: entrada.quantidadeRecebida,
-              dataEntrada: dataEntrada.toLocaleDateString('pt-AO'),
-              nomeFuncionario: entrada.funcionarioNome || 'Desconhecido',
-              lote: entrada.lote,
-            };
-          },
-        );
-
-        // Calculate faturamento por caixa
-        const faturamentoMap = new Map<string, { nomeCaixa: string; quantidadeFaturada: number }>();
-        vendas.forEach((venda: Venda) => {
-          if (venda.id_funcionarioCaixa) {
-            const nomeCaixa = caixaMap.get(venda.id_funcionarioCaixa) || 'Desconhecido';
-            const current = faturamentoMap.get(venda.id_funcionarioCaixa) || {
-              nomeCaixa,
-              quantidadeFaturada: 0,
-            };
-            current.quantidadeFaturada += Number(venda.valorTotal || 0);
-            faturamentoMap.set(venda.id_funcionarioCaixa, current);
-          }
-        });
-        const faturamentoPorCaixa: FaturamentoPorCaixa[] = Array.from(faturamentoMap.entries()).map(
-          ([idCaixa, data]) => ({
-            idCaixa,
-            nomeCaixa: data.nomeCaixa,
-            quantidadeFaturada: data.quantidadeFaturada,
-          }),
-        );
-
-        // Count pending tasks
-        const tarefasPendentes = atividades.filter(
-          (atividade: AtividadeDoDia) => atividade.status === 'Pendente',
-        ).length;
-
-        setDashboardData({
-          vendas,
-          faturamentoPorCaixa,
-          produtosLocalizacoes: produtosLocalizacoesMapped,
-          entradasEstoque: entradasEstoqueMapped,
-          tarefasPendentes,
-        });
-
-        // Processar faturamento por período
-        processarFaturamentoPorPeriodo(vendas, periodoFaturamento);
-      } catch (err) {
-        console.error('Erro ao carregar dashboard:', err);
-        setError('Erro ao carregar dados do dashboard.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchDashboardData();
+
+    // Set up interval to refresh data every 60 seconds
+    const intervalId = setInterval(fetchDashboardData, 60000);
+
+    // Cleanup interval on component unmount
+    return () => clearInterval(intervalId);
   }, []);
 
   useEffect(() => {
     if (dashboardData) {
-      processarFaturamentoPorPeriodo(dashboardData.vendas, periodoFaturamento);
+      processarFaturamentoPorPeriodo(dashboardData.vendas, periodoFaturamento, selectedMonth);
     }
-  }, [periodoFaturamento, dashboardData]);
+  }, [periodoFaturamento, dashboardData, selectedMonth]);
 
-  const processarFaturamentoPorPeriodo = (vendas: Venda[], periodo: PeriodoFaturamento) => {
+  const processarFaturamentoPorPeriodo = (
+    vendas: Venda[],
+    periodo: PeriodoFaturamento,
+    selectedMonth: string,
+  ) => {
     const faturamentoMap = new Map<string, number>();
     const hoje = new Date();
     const nomesDiasSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
-    // Inicializar períodos com zero
     if (periodo === 'dia') {
-      // Últimos 7 dias
-      for (let i = 6; i >= 0; i--) {
-        const date = new Date(hoje);
-        date.setDate(date.getDate() - i);
-        const diaSemana = date.getDay(); // 0=Domingo, 1=Segunda, etc.
+      // Current week (Monday to Sunday)
+      const startOfWeek = new Date(hoje);
+      startOfWeek.setDate(hoje.getDate() - hoje.getDay() + (hoje.getDay() === 0 ? -6 : 1)); // Start on Monday
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6); // End on Sunday
+
+      // Initialize days of the week
+      for (let i = 0; i < 7; i++) {
+        const currentDay = new Date(startOfWeek);
+        currentDay.setDate(startOfWeek.getDate() + i);
+        const diaSemana = currentDay.getDay();
         faturamentoMap.set(nomesDiasSemana[diaSemana], 0);
       }
-    } else if (periodo === 'mes') {
-      // Semanas do mês atual
-      const primeiroDiaMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-      const ultimoDiaMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
 
-      let semanaAtual = 1;
-      for (let d = new Date(primeiroDiaMes); d <= ultimoDiaMes; d.setDate(d.getDate() + 1)) {
-        const semana = Math.ceil((d.getDate() + primeiroDiaMes.getDay()) / 7);
-        faturamentoMap.set(`Semana ${semana}`, 0);
+      // Aggregate sales for the current week
+      vendas.forEach((venda) => {
+        if (!venda.dataEmissao) return;
+        const dataVenda = new Date(venda.dataEmissao);
+        if (dataVenda >= startOfWeek && dataVenda <= endOfWeek) {
+          const diaSemana = dataVenda.getDay();
+          const chavePeriodo = nomesDiasSemana[diaSemana];
+          const valorAtual = faturamentoMap.get(chavePeriodo) || 0;
+          faturamentoMap.set(chavePeriodo, valorAtual + Number(venda.valorTotal || 0));
+        }
+      });
+    } else if (periodo === 'mes') {
+      // Weeks of the selected month
+      const [year, month] = selectedMonth.split('-').map(Number);
+      const primeiroDiaMes = new Date(year, month - 1, 1);
+      const ultimoDiaMes = new Date(year, month, 0);
+
+      // Initialize weeks
+      const weeks: string[] = [];
+      let currentDate = new Date(primeiroDiaMes);
+      let weekNumber = 1;
+
+      while (currentDate <= ultimoDiaMes) {
+        weeks.push(`Semana ${weekNumber}`);
+        faturamentoMap.set(`Semana ${weekNumber}`, 0);
+        weekNumber++;
+        currentDate.setDate(currentDate.getDate() + 7);
       }
+
+      // Aggregate sales by week
+      vendas.forEach((venda) => {
+        if (!venda.dataEmissao) return;
+        const dataVenda = new Date(venda.dataEmissao);
+        if (
+          dataVenda.getFullYear() === year &&
+          dataVenda.getMonth() === month - 1 &&
+          dataVenda >= primeiroDiaMes &&
+          dataVenda <= ultimoDiaMes
+        ) {
+          const daysSinceMonthStart =
+            (dataVenda.getTime() - primeiroDiaMes.getTime()) / (1000 * 60 * 60 * 24);
+          const weekIndex = Math.floor(daysSinceMonthStart / 7) + 1;
+          const chavePeriodo = `Semana ${weekIndex}`;
+          if (faturamentoMap.has(chavePeriodo)) {
+            const valorAtual = faturamentoMap.get(chavePeriodo) || 0;
+            faturamentoMap.set(chavePeriodo, valorAtual + Number(venda.valorTotal || 0));
+          }
+        }
+      });
     } else if (periodo === 'ano') {
       // Meses do ano
       const meses = [
@@ -260,38 +319,17 @@ const DashboardPage = () => {
         'Dezembro',
       ];
       meses.forEach((mes) => faturamentoMap.set(mes, 0));
+
+      vendas.forEach((venda) => {
+        if (!venda.dataEmissao) return;
+        const dataVenda = new Date(venda.dataEmissao);
+        const chavePeriodo = dataVenda.toLocaleDateString('pt-AO', { month: 'long' });
+        if (faturamentoMap.has(chavePeriodo)) {
+          const valorAtual = faturamentoMap.get(chavePeriodo) || 0;
+          faturamentoMap.set(chavePeriodo, valorAtual + Number(venda.valorTotal || 0));
+        }
+      });
     }
-
-    // Preencher com valores reais
-    vendas.forEach((venda) => {
-      if (!venda.dataEmissao) return;
-
-      const dataVenda = new Date(venda.dataEmissao);
-      let chavePeriodo = '';
-
-      switch (periodo) {
-        case 'dia':
-          const diaSemana = dataVenda.getDay();
-          chavePeriodo = nomesDiasSemana[diaSemana];
-          break;
-        case 'mes':
-          const semanaMes = Math.ceil(
-            (dataVenda.getDate() +
-              new Date(dataVenda.getFullYear(), dataVenda.getMonth(), 1).getDay()) /
-              7,
-          );
-          chavePeriodo = `Semana ${semanaMes}`;
-          break;
-        case 'ano':
-          chavePeriodo = dataVenda.toLocaleDateString('pt-AO', { month: 'long' });
-          break;
-      }
-
-      if (faturamentoMap.has(chavePeriodo)) {
-        const valorAtual = faturamentoMap.get(chavePeriodo) || 0;
-        faturamentoMap.set(chavePeriodo, valorAtual + Number(venda.valorTotal || 0));
-      }
-    });
 
     const faturamentoArray: FaturamentoPorPeriodo[] = Array.from(faturamentoMap.entries())
       .map(([periodo, quantidadeFaturada]) => ({
@@ -299,7 +337,6 @@ const DashboardPage = () => {
         quantidadeFaturada,
       }))
       .sort((a, b) => {
-        // Ordenar por ordem cronológica
         if (periodo === 'dia') {
           return nomesDiasSemana.indexOf(a.periodo) - nomesDiasSemana.indexOf(b.periodo);
         } else if (periodo === 'mes') {
@@ -526,22 +563,36 @@ const DashboardPage = () => {
             <Typography variant="h5" sx={{ fontWeight: 'medium', color: '#333' }}>
               Faturamento por Período
             </Typography>
-            <ToggleButtonGroup
-              value={periodoFaturamento}
-              exclusive
-              onChange={handlePeriodoFaturamentoChange}
-              aria-label="Período de faturamento"
-            >
-              <ToggleButton value="dia" aria-label="Dia">
-                Dia da Semana
-              </ToggleButton>
-              <ToggleButton value="mes" aria-label="Mês">
-                Semana do Mês
-              </ToggleButton>
-              <ToggleButton value="ano" aria-label="Ano">
-                Mês do Ano
-              </ToggleButton>
-            </ToggleButtonGroup>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              {periodoFaturamento === 'mes' && (
+                <TextField
+                  label="Selecionar Mês"
+                  type="month"
+                  variant="outlined"
+                  size="small"
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  sx={{ maxWidth: 200 }}
+                  InputLabelProps={{ shrink: true }}
+                />
+              )}
+              <ToggleButtonGroup
+                value={periodoFaturamento}
+                exclusive
+                onChange={handlePeriodoFaturamentoChange}
+                aria-label="Período de faturamento"
+              >
+                <ToggleButton value="dia" aria-label="Dia">
+                  Semana Atual
+                </ToggleButton>
+                <ToggleButton value="mes" aria-label="Mês">
+                  Semanas do Mês
+                </ToggleButton>
+                <ToggleButton value="ano" aria-label="Ano">
+                  Mês do Ano
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
           </Box>
           <Paper sx={{ p: 3, borderRadius: 2, bgcolor: '#fff' }}>
             {faturamentoPorPeriodo.length > 0 ? (
