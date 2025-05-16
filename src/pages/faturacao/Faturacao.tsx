@@ -68,7 +68,6 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { DadosWrapper } from '../../types/models';
 
-// Interface para decodificação do token
 interface DecodedToken {
   userId?: string;
   sub?: string;
@@ -220,7 +219,6 @@ const confirmModalStyle = {
   borderRadius: 1,
 };
 
-// Função utilitária para validação de fatura
 const validateFatura = (
   state: FaturaState,
   produtos: Produto[],
@@ -233,30 +231,34 @@ const validateFatura = (
   if (state.produtosSelecionados.length === 0) errors.produtos = 'Adicione pelo menos um produto';
   if (!state.funcionariosCaixaId) {
     errors.funcionariosCaixaId = 'Nenhum caixa aberto encontrado. Abra um caixa primeiro.';
-  } else if (!funcionariosCaixa.some(fc => fc.id === state.funcionariosCaixaId && fc.estadoCaixa)) {
+  } else if (
+    !funcionariosCaixa.some((fc) => fc.id === state.funcionariosCaixaId && fc.estadoCaixa)
+  ) {
     errors.funcionariosCaixaId = 'O caixa selecionado não está aberto.';
   }
   if (!locations.length) errors.locations = 'Nenhuma localização encontrada.';
   state.produtosSelecionados.forEach((p, index) => {
     if (!p.id) errors[`produto_${index}`] = 'Selecione um produto';
-    const lojaLocation = locations.find(loc => loc.nomeLocalizacao.toLowerCase().includes('loja'));
+    const lojaLocation = locations.find((loc) =>
+      loc.nomeLocalizacao.toLowerCase().includes('loja'),
+    );
     if (!lojaLocation) {
       errors[`produto_${index}`] = 'Localização "Loja" não encontrada.';
     } else {
       const produtoLocation = productLocations.find(
-        loc => loc.id_produto === p.id && loc.id_localizacao === lojaLocation.id,
+        (loc) => loc.id_produto === p.id && loc.id_localizacao === lojaLocation.id,
       );
       if (!produtoLocation) {
         errors[`produto_${index}`] = 'Produto não encontrado na loja.';
       } else if (p.quantidade > (produtoLocation.quantidadeProduto ?? 0)) {
-        errors[`produto_${index}`] = `Quantidade indisponível. Estoque na loja: ${produtoLocation.quantidadeProduto ?? 0}`;
+        errors[`produto_${index}`] =
+          `Quantidade indisponível. Estoque na loja: ${produtoLocation.quantidadeProduto ?? 0}`;
       }
     }
   });
   return errors;
 };
 
-// Função utilitária para validação de caixa
 const validateCaixa = (
   state: CaixaState,
   funcionarios: Funcionario[],
@@ -266,15 +268,15 @@ const validateCaixa = (
   const errors: { [key: string]: string } = {};
   if (!state.funcionarioId) {
     errors.funcionarioId = 'Funcionário é obrigatório. Faça login novamente.';
-  } else if (!funcionarios.some(f => f.id === state.funcionarioId)) {
+  } else if (!funcionarios.some((f) => f.id === state.funcionarioId)) {
     errors.funcionarioId = 'Funcionário inválido ou não encontrado.';
   }
   if (!state.caixaId) {
     errors.caixaId = 'Selecione um caixa';
-  } else if (!caixas.some(c => c.id === state.caixaId)) {
+  } else if (!caixas.some((c) => c.id === state.caixaId)) {
     errors.caixaId = 'Caixa não encontrado';
   }
-  if (funcionariosCaixa.some(fc => fc.id_funcionario === state.funcionarioId && fc.estadoCaixa)) {
+  if (funcionariosCaixa.some((fc) => fc.id_funcionario === state.funcionarioId && fc.estadoCaixa)) {
     errors.funcionarioId = 'Este funcionário já tem um caixa aberto';
   }
   return errors;
@@ -307,6 +309,13 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
   const [loggedInFuncionarioId, setLoggedInFuncionarioId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
 
+  const [isAdmin, setIsAdmin] = useState(false);
+  interface DecodedToken {
+    userId?: string;
+    sub?: string;
+    role?: string; // Adiciona o campo role ao token
+  }
+
   // Função para carregar e validar os dados do usuário logado
   const loadUserData = (): string => {
     try {
@@ -328,6 +337,9 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       if (!id) {
         throw new Error('ID de usuário não encontrado no token.');
       }
+
+      // Configura isAdmin com base no role do token, se disponível
+      setIsAdmin(decoded.role === 'admin');
 
       return id;
     } catch (error: any) {
@@ -353,6 +365,8 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           throw new Error('Funcionário não encontrado. Verifique suas credenciais.');
         }
 
+        // Se o role não estiver no token, verifica na API (supondo que o objeto Funcionario tenha um campo role ou isAdmin)
+        setIsAdmin(currentEmployee.isAdmin || currentEmployee.role === 'admin');
         setLoggedInFuncionarioId(id);
         dispatchCaixa({ type: 'UPDATE_FIELD', field: 'funcionarioId', value: id });
         setFuncionarios(employees);
@@ -373,8 +387,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       window.removeEventListener('storage', handleStorageChange);
     };
   }, [navigate]);
-
-  // Efeito para carregar dados iniciais
   useEffect(() => {
     const fetchInitialData = async () => {
       if (!loggedInFuncionarioId) return;
@@ -411,15 +423,20 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
 
           let funcionariosCaixa: FuncionarioCaixa | null = null;
           if (venda.id_funcionarioCaixa) {
-            const funcionarioCaixa = funcionariosCaixaData.find((fc: FuncionarioCaixa) => fc.id === venda.id_funcionarioCaixa);
+            const funcionarioCaixa = funcionariosCaixaData.find(
+              (fc: FuncionarioCaixa) => fc.id === venda.id_funcionarioCaixa,
+            );
             if (funcionarioCaixa && funcionarioCaixa.id) {
               funcionariosCaixa = {
                 ...funcionarioCaixa,
                 id_caixa: funcionarioCaixa.id_caixa ?? '',
                 id_funcionario: funcionarioCaixa.id_funcionario ?? '',
                 quantidadaFaturada: Number(funcionarioCaixa.quantidadaFaturada) || 0,
-                caixas: caixasData.find((c: Caixa) => c.id === funcionarioCaixa.id_caixa) ?? undefined,
-                Funcionarios: funcionarios.find((f: Funcionario) => f.id === funcionarioCaixa.id_funcionario) ?? undefined,
+                caixas:
+                  caixasData.find((c: Caixa) => c.id === funcionarioCaixa.id_caixa) ?? undefined,
+                Funcionarios:
+                  funcionarios.find((f: Funcionario) => f.id === funcionarioCaixa.id_funcionario) ??
+                  undefined,
               };
             }
           }
@@ -462,7 +479,10 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         setProductLocations(productLocationsData);
       } catch (error: any) {
         console.error('Erro ao carregar dados iniciais:', error);
-        setAlert({ severity: 'error', message: 'Erro ao carregar dados iniciais: ' + (error.message || 'Tente novamente.') });
+        setAlert({
+          severity: 'error',
+          message: 'Erro ao carregar dados iniciais: ' + (error.message || 'Tente novamente.'),
+        });
       }
     };
 
@@ -481,7 +501,10 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       setProductLocations(productLocationsData);
     } catch (error: any) {
       console.error('Erro ao buscar produtos e localizações:', error);
-      setAlert({ severity: 'error', message: 'Erro ao buscar produtos e localizações: ' + (error.message || 'Tente novamente.') });
+      setAlert({
+        severity: 'error',
+        message: 'Erro ao buscar produtos e localizações: ' + (error.message || 'Tente novamente.'),
+      });
     }
   };
 
@@ -609,7 +632,9 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       doc.setTextColor(blackColor);
       doc.setFont('helvetica', 'normal');
       doc.text('Subtotal', 130, finalY + 10);
-      doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 170, finalY + 10, { align: 'right' });
+      doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 170, finalY + 10, {
+        align: 'right',
+      });
       doc.text('Imposto', 130, finalY + 15);
       doc.text('Kzs 0.00', 170, finalY + 15, { align: 'right' });
       doc.setFillColor(blueColor);
@@ -617,7 +642,9 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       doc.setTextColor(whiteColor);
       doc.setFont('helvetica', 'bold');
       doc.text('Total', 132, finalY + 26);
-      doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 170, finalY + 26, { align: 'right' });
+      doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 170, finalY + 26, {
+        align: 'right',
+      });
 
       doc.setFontSize(12);
       doc.setTextColor(blackColor);
@@ -647,7 +674,10 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       link.click();
       document.body.removeChild(link);
     } catch (error: any) {
-      setAlert({ severity: 'error', message: 'Erro ao gerar PDF: ' + (error.message || 'Tente novamente.') });
+      setAlert({
+        severity: 'error',
+        message: 'Erro ao gerar PDF: ' + (error.message || 'Tente novamente.'),
+      });
     }
   };
 
@@ -853,7 +883,13 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       return;
     }
 
-    const errors = validateFatura(faturaState, produtos, funcionariosCaixa, productLocations, locations);
+    const errors = validateFatura(
+      faturaState,
+      produtos,
+      funcionariosCaixa,
+      productLocations,
+      locations,
+    );
     dispatchFatura({ type: 'SET_ERRORS', errors });
     if (Object.keys(errors).length > 0) return;
 
@@ -903,7 +939,9 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       }
 
       // Atualizar quantidadaFaturada no FuncionarioCaixa
-      const funcionarioCaixa = funcionariosCaixa.find(fc => fc.id === faturaState.funcionariosCaixaId);
+      const funcionarioCaixa = funcionariosCaixa.find(
+        (fc) => fc.id === faturaState.funcionariosCaixaId,
+      );
       if (!funcionarioCaixa || !funcionarioCaixa.id) {
         throw new Error('Caixa do funcionário não encontrado.');
       }
@@ -916,12 +954,14 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
 
       try {
         await updateEmployeeCashRegister(funcionarioCaixa.id, updatedFuncionarioCaixa);
-        setFuncionariosCaixa(prev =>
-          prev.map(fc => (fc.id === funcionarioCaixa.id ? updatedFuncionarioCaixa : fc))
+        setFuncionariosCaixa((prev) =>
+          prev.map((fc) => (fc.id === funcionarioCaixa.id ? updatedFuncionarioCaixa : fc)),
         );
       } catch (error: any) {
         console.error('Erro ao atualizar quantidadaFaturada:', error);
-        throw new Error('Falha ao atualizar o total faturado do caixa: ' + (error.message || 'Tente novamente.'));
+        throw new Error(
+          'Falha ao atualizar o total faturado do caixa: ' + (error.message || 'Tente novamente.'),
+        );
       }
 
       const lojaLocation = locations.find((loc) => isStoreLocation(loc.id, locations));
@@ -932,14 +972,18 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       // Atualizar localizações dos produtos e estoque
       const updates = faturaState.produtosSelecionados.map(async (produtoSelecionado) => {
         const produtoLocation = productLocations.find(
-          (loc) => loc.id_produto === produtoSelecionado.id && loc.id_localizacao === lojaLocation.id,
+          (loc) =>
+            loc.id_produto === produtoSelecionado.id && loc.id_localizacao === lojaLocation.id,
         );
 
         if (!produtoLocation || !produtoLocation.id || !produtoLocation.id_produto) {
-          throw new Error(`Localização do produto ${produtoSelecionado.id} não encontrada na loja.`);
+          throw new Error(
+            `Localização do produto ${produtoSelecionado.id} não encontrada na loja.`,
+          );
         }
 
-        const newQuantity = (produtoLocation.quantidadeProduto ?? 0) - produtoSelecionado.quantidade;
+        const newQuantity =
+          (produtoLocation.quantidadeProduto ?? 0) - produtoSelecionado.quantidade;
         if (newQuantity < 0) {
           throw new Error(
             `Quantidade insuficiente na loja para o produto ${produtoSelecionado.id}`,
@@ -954,8 +998,13 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           };
           await updateProductLocation(produtoLocation.id, updatedLocation);
         } catch (error: any) {
-          console.error(`Erro ao atualizar localização do produto ${produtoSelecionado.id}:`, error);
-          throw new Error(`Falha ao atualizar localização do produto ${produtoSelecionado.id}: ${error.message || 'Tente novamente.'}`);
+          console.error(
+            `Erro ao atualizar localização do produto ${produtoSelecionado.id}:`,
+            error,
+          );
+          throw new Error(
+            `Falha ao atualizar localização do produto ${produtoSelecionado.id}: ${error.message || 'Tente novamente.'}`,
+          );
         }
 
         const armazemLocation = locations.find((loc) =>
@@ -987,7 +1036,9 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           await updateStock(existingStock.id, updatedStockData);
         } catch (error: any) {
           console.error(`Erro ao atualizar estoque do produto ${produtoSelecionado.id}:`, error);
-          throw new Error(`Falha ao atualizar estoque do produto ${produtoSelecionado.id}: ${error.message || 'Tente novamente.'}`);
+          throw new Error(
+            `Falha ao atualizar estoque do produto ${produtoSelecionado.id}: ${error.message || 'Tente novamente.'}`,
+          );
         }
 
         const produto = produtos.find((p) => p.id === produtoSelecionado.id);
@@ -1003,7 +1054,9 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           await updateProduct(produto.id, updatedProduto);
         } catch (error: any) {
           console.error(`Erro ao atualizar produto ${produto.id}:`, error);
-          throw new Error(`Falha ao atualizar produto ${produto.id}: ${error.message || 'Tente novamente.'}`);
+          throw new Error(
+            `Falha ao atualizar produto ${produto.id}: ${error.message || 'Tente novamente.'}`,
+          );
         }
       });
 
@@ -1058,7 +1111,8 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                 loc.id_localizacao ===
                   locations.find((l) => l.nomeLocalizacao.toLowerCase().includes('armazém'))?.id,
             );
-            const newStock = (lojaLoc?.quantidadeProduto ?? 0) + (armazemLoc?.quantidadeProduto ?? 0);
+            const newStock =
+              (lojaLoc?.quantidadeProduto ?? 0) + (armazemLoc?.quantidadeProduto ?? 0);
             return { ...produto, quantidadePorUnidade: newStock };
           }
           return produto;
@@ -1106,7 +1160,9 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
       }
 
       // Reverter quantidadaFaturada no FuncionarioCaixa
-      const funcionarioCaixa = funcionariosCaixa.find(fc => fc.id === fatura.funcionariosCaixa?.id);
+      const funcionarioCaixa = funcionariosCaixa.find(
+        (fc) => fc.id === fatura.funcionariosCaixa?.id,
+      );
       if (funcionarioCaixa && funcionarioCaixa.id) {
         const totalFatura = calcularTotalFatura(fatura);
         const currentQuantidadaFaturada = Number(funcionarioCaixa.quantidadaFaturada) || 0;
@@ -1117,12 +1173,14 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
 
         try {
           await updateEmployeeCashRegister(funcionarioCaixa.id, updatedFuncionarioCaixa);
-          setFuncionariosCaixa(prev =>
-            prev.map(fc => (fc.id === funcionarioCaixa.id ? updatedFuncionarioCaixa : fc))
+          setFuncionariosCaixa((prev) =>
+            prev.map((fc) => (fc.id === funcionarioCaixa.id ? updatedFuncionarioCaixa : fc)),
           );
         } catch (error: any) {
           console.error('Erro ao reverter quantidadaFaturada:', error);
-          throw new Error('Falha ao reverter o total faturado do caixa: ' + (error.message || 'Tente novamente.'));
+          throw new Error(
+            'Falha ao reverter o total faturado do caixa: ' + (error.message || 'Tente novamente.'),
+          );
         }
       }
 
@@ -1151,7 +1209,9 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         );
 
         if (!produtoLocation || !produtoLocation.id || !produtoLocation.id_produto) {
-          throw new Error(`Localização do produto ${produtoFatura.produto.id} não encontrada na loja.`);
+          throw new Error(
+            `Localização do produto ${produtoFatura.produto.id} não encontrada na loja.`,
+          );
         }
 
         const newQuantity = (produtoLocation.quantidadeProduto ?? 0) + produtoFatura.quantidade;
@@ -1164,8 +1224,13 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           };
           await updateProductLocation(produtoLocation.id, updatedLocation);
         } catch (error: any) {
-          console.error(`Erro ao atualizar localização do produto ${produtoFatura.produto.id}:`, error);
-          throw new Error(`Falha ao atualizar localização do produto ${produtoFatura.produto.id}: ${error.message || 'Tente novamente.'}`);
+          console.error(
+            `Erro ao atualizar localização do produto ${produtoFatura.produto.id}:`,
+            error,
+          );
+          throw new Error(
+            `Falha ao atualizar localização do produto ${produtoFatura.produto.id}: ${error.message || 'Tente novamente.'}`,
+          );
         }
 
         const armazemLocation = locations.find((loc) =>
@@ -1186,7 +1251,9 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
         try {
           const existingStock = await getStockByProduct(produtoFatura.produto.id);
           if (!existingStock || !existingStock.id) {
-            throw new Error(`Nenhum estoque encontrado para o produto ${produtoFatura.produto.id}.`);
+            throw new Error(
+              `Nenhum estoque encontrado para o produto ${produtoFatura.produto.id}.`,
+            );
           }
           const updatedStockData = {
             id_produto: produtoFatura.produto.id,
@@ -1197,7 +1264,9 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           await updateStock(existingStock.id, updatedStockData);
         } catch (error: any) {
           console.error(`Erro ao atualizar estoque do produto ${produtoFatura.produto.id}:`, error);
-          throw new Error(`Falha ao atualizar estoque do produto ${produtoFatura.produto.id}: ${error.message || 'Tente novamente.'}`);
+          throw new Error(
+            `Falha ao atualizar estoque do produto ${produtoFatura.produto.id}: ${error.message || 'Tente novamente.'}`,
+          );
         }
 
         const produto = produtos.find((p) => p.id === produtoFatura.produto.id);
@@ -1213,7 +1282,9 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
           await updateProduct(produto.id, updatedProduto);
         } catch (error: any) {
           console.error(`Erro ao atualizar produto ${produto.id}:`, error);
-          throw new Error(`Falha ao atualizar produto ${produto.id}: ${error.message || 'Tente novamente.'}`);
+          throw new Error(
+            `Falha ao atualizar produto ${produto.id}: ${error.message || 'Tente novamente.'}`,
+          );
         }
       });
 
@@ -1434,9 +1505,11 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                 {faturaState.funcionariosCaixaId ? (
                   <>
                     Caixa Selecionado:{' '}
-                    {funcionariosCaixa.find((fc) => fc.id === faturaState.funcionariosCaixaId)?.caixas?.nomeCaixa || 'Caixa Sem Nome'}{' '}
+                    {funcionariosCaixa.find((fc) => fc.id === faturaState.funcionariosCaixaId)
+                      ?.caixas?.nomeCaixa || 'Caixa Sem Nome'}{' '}
                     -{' '}
-                    {funcionariosCaixa.find((fc) => fc.id === faturaState.funcionariosCaixaId)?.Funcionarios?.nomeFuncionario || 'Funcionário Desconhecido'}
+                    {funcionariosCaixa.find((fc) => fc.id === faturaState.funcionariosCaixaId)
+                      ?.Funcionarios?.nomeFuncionario || 'Funcionário Desconhecido'}
                   </>
                 ) : (
                   'Nenhum caixa aberto disponível. Abra um caixa primeiro.'
@@ -1453,7 +1526,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                 <Autocomplete
                   options={clientes}
                   getOptionLabel={(option) =>
-                    typeof option === 'string' ? option : option.numeroContribuinte ?? ''
+                    typeof option === 'string' ? option : (option.numeroContribuinte ?? '')
                   }
                   onChange={handleClientSelect}
                   value={
@@ -1555,7 +1628,8 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                         const quantidade = produtoLocation?.quantidadeProduto ?? 0;
                         return (
                           <MenuItem key={p.id} value={p.id}>
-                            {p.nomeProduto} - {Number(p.precoVenda).toFixed(2)}kzs (Estoque: {quantidade})
+                            {p.nomeProduto} - {Number(p.precoVenda).toFixed(2)}kzs (Estoque:{' '}
+                            {quantidade})
                           </MenuItem>
                         );
                       })}
@@ -1582,11 +1656,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                   />
                 </Grid>
                 <Grid item xs={4} sm={2} md={2}>
-                  <IconButton
-                    color="error"
-                    onClick={() => removerProdutoInput(index)}
-                    size="small"
-                  >
+                  <IconButton color="error" onClick={() => removerProdutoInput(index)} size="small">
                     <Delete />
                   </IconButton>
                 </Grid>
@@ -1611,7 +1681,8 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                 Adicionar Produto
               </Button>
               <Typography variant="h6" color="text.primary">
-                Total a Pagar: {calcularTotal(faturaState.produtosSelecionados, produtos).toFixed(2)} Kz
+                Total a Pagar:{' '}
+                {calcularTotal(faturaState.produtosSelecionados, produtos).toFixed(2)} Kz
               </Typography>
               <Button
                 variant="contained"
@@ -1696,7 +1767,6 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 'bold' }}>ID</TableCell>
                   <TableCell sx={{ fontWeight: 'bold' }}>Caixa</TableCell>
                   <TableCell sx={{ fontWeight: 'bold' }}>Funcionário</TableCell>
                   <TableCell sx={{ fontWeight: 'bold' }}>Estado</TableCell>
@@ -1705,34 +1775,53 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {funcionariosCaixa.map((item) => (
+                {(isAdmin
+                  ? funcionariosCaixa
+                  : funcionariosCaixa.filter(
+                      (item) => item.id_funcionario === loggedInFuncionarioId,
+                    )
+                ).map((item) => (
                   <TableRow key={item.id}>
-                    <TableCell>{item.id ?? 'N/A'}</TableCell>
                     <TableCell>{item.caixas?.nomeCaixa || 'N/A'}</TableCell>
                     <TableCell>{item.Funcionarios?.nomeFuncionario || 'N/A'}</TableCell>
                     <TableCell>{item.estadoCaixa ? 'Aberto' : 'Fechado'}</TableCell>
                     <TableCell>{(Number(item.quantidadaFaturada) || 0).toFixed(2)} kz</TableCell>
                     <TableCell>
-                      {item.estadoCaixa && item.id && (
-                        <Button
-                          variant="contained"
-                          color="error"
-                          onClick={() => handleFecharCaixa(item.id ?? '')}
-                          size="small"
-                          disabled={loading}
-                        >
-                          {loading ? 'Fechando...' : 'Fechar'}
-                        </Button>
-                      )}
+                      {item.estadoCaixa &&
+                        item.id &&
+                        (isAdmin || item.id_funcionario === loggedInFuncionarioId) && (
+                          <Button
+                            variant="contained"
+                            color="error"
+                            onClick={() => handleFecharCaixa(item.id ?? '')}
+                            size="small"
+                            disabled={loading}
+                          >
+                            {loading ? 'Fechando...' : 'Fechar'}
+                          </Button>
+                        )}
                     </TableCell>
                   </TableRow>
                 ))}
+                {(isAdmin
+                  ? funcionariosCaixa
+                  : funcionariosCaixa.filter(
+                      (item) => item.id_funcionario === loggedInFuncionarioId,
+                    )
+                ).length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} align="center">
+                      {isAdmin
+                        ? 'Nenhum caixa encontrado'
+                        : 'Nenhum caixa encontrado para este funcionário'}
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </TableContainer>
         </Box>
       </Modal>
-
       <Modal open={openConfirmModal} onClose={handleCloseConfirmModal}>
         <Box sx={confirmModalStyle}>
           <Typography variant="h6" gutterBottom>
@@ -1750,12 +1839,7 @@ const Faturacao: React.FC<CollapsedItemProps> = ({ open }) => {
             >
               Cancelar
             </Button>
-            <Button
-              variant="contained"
-              color="error"
-              onClick={excluirFatura}
-              disabled={loading}
-            >
+            <Button variant="contained" color="error" onClick={excluirFatura} disabled={loading}>
               {loading ? 'Excluindo...' : 'Excluir'}
             </Button>
           </Stack>
