@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getAllEmployees, updateEmployee } from '../../api/methods';
-import { Funcionario } from 'types/models';
+import { getAllEmployees, updateEmployee, getAllFunctions } from '../../api/methods'; // Adicionar getAllFunctions
+import { Funcionario, Funcao } from 'types/models';
 import { jwtDecode } from 'jwt-decode';
+import { getUserData } from '../../api/authUtils';
 import './ProfilePage.css';
 
 interface DecodedToken {
   userId: string;
   email: string;
   nome: string;
-  role: string | string[];
-  exp?: number; // Campo de expiração do token
+  role: string;
+  exp?: number;
 }
 
 export default function ProfilePage() {
@@ -24,6 +25,7 @@ export default function ProfilePage() {
   const [passwordError, setPasswordError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [roleName, setRoleName] = useState<string>('Funcionário'); // Estado para o nome da função
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -46,7 +48,7 @@ export default function ProfilePage() {
           throw new Error('Token inválido');
         }
 
-        // Verificar se o token está expirado
+        // Verificar expiração do token
         if (decoded.exp && decoded.exp * 1000 < Date.now()) {
           console.error('Token expirado');
           localStorage.removeItem('token');
@@ -60,6 +62,19 @@ export default function ProfilePage() {
           throw new Error('Dados do token inválidos');
         }
 
+        // Obter dados do usuário do authUtils
+        const userData = await getUserData();
+        if (!userData) {
+          console.error('Dados do usuário não encontrados');
+          navigate('/login');
+          return;
+        }
+
+        // Definir o nome da função a partir do token
+        const roles = decoded.role;
+        let displayRole = roles || 'Funcionário';
+
+        // Buscar funcionários
         const employees = await getAllEmployees();
         console.log('Funcionários recebidos:', employees);
         const currentEmployee = employees.find((emp) => emp.id === decoded.userId);
@@ -69,6 +84,22 @@ export default function ProfilePage() {
           throw new Error('Perfil não encontrado');
         }
 
+        // Se id_funcao for um ID, buscar o nome da função
+        if (currentEmployee.id_funcao && !isNaN(Number(currentEmployee.id_funcao))) {
+          try {
+            const functions = await getAllFunctions();
+            const funcao = functions.find((f) => f.id === currentEmployee.id_funcao);
+            /*     displayRole = funcao?.nome || displayRole; */
+          } catch (err) {
+            console.error('Erro ao buscar nome da função:', err);
+          }
+        } else if (currentEmployee.id_funcao) {
+          /*     displayRole = currentEmployee.id_funcao; */
+          // Usar id_funcao se já for o nome
+        }
+
+        setRoleName(displayRole);
+        console.log('DisplayRole:', displayRole);
         setEmployee(currentEmployee);
         setFormData({
           nomeFuncionario: currentEmployee.nomeFuncionario,
@@ -174,16 +205,18 @@ export default function ProfilePage() {
           : prev,
       );
 
-      const decoded: DecodedToken = jwtDecode(localStorage.getItem('token')!);
-      const updatedUser = {
-        nome: formData.nomeFuncionario!,
-        email: formData.emailFuncionario!,
-        telefone: formData.telefoneFuncionario!,
-        numeroBI: employee!.numeroBI,
-        roles: employee!.id_funcao || [],
-        permissoes: employee!.permissoes || [],
-      };
-      localStorage.setItem('user', JSON.stringify(updatedUser));
+      // Atualizar localStorage com os novos dados
+      const userData = await getUserData();
+      if (userData) {
+        const updatedUser = {
+          ...userData,
+          nome: formData.nomeFuncionario!,
+          email: formData.emailFuncionario!,
+          telefone: formData.telefoneFuncionario!,
+          numeroBI: employee!.numeroBI,
+        };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+      }
 
       setEditMode(false);
       setSuccessMessage('Perfil atualizado!');
@@ -261,7 +294,7 @@ export default function ProfilePage() {
               d={
                 successMessage
                   ? 'M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z'
-                  : 'M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1zm2 5a1 1 0 100-2 1 1 0 000 2z'
+                  : 'M10 18a8 8 0 100-16 8 8 0 0116 0zM8 7a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1zm2 5a1 1 0 100-2 1 1 0 000 2z'
               }
               clipRule="evenodd"
             />
@@ -348,11 +381,7 @@ export default function ProfilePage() {
             </div>
             <div className="profile-info">
               <h2 className="profile-name">{employee?.nomeFuncionario || 'N/A'}</h2>
-              <p className="profile-role">
-                {Array.isArray(employee?.id_funcao)
-                  ? employee?.id_funcao.join(', ')
-                  : employee?.id_funcao || 'Funcionário'}
-              </p>
+              <p className="profile-role">{roleName}</p>
             </div>
           </div>
 
@@ -539,7 +568,7 @@ function InfoField({
 
   return (
     <div className={`info-field ${className}`}>
-      {/*       <div className="info-icon-container">{icons[icon]}</div> */}
+      {/*  <div className="info-icon-container">{icons[icon]}</div> */}
       <div className="info-text">
         <p className="info-label">{label}</p>
         <p className="info-value">{value}</p>
