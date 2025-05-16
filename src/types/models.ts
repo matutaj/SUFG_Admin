@@ -33,6 +33,8 @@ export interface DadosWrapper {
 }
 
 export interface Funcionario {
+  role: string;
+  isAdmin: boolean;
   id?: string;
   id_funcao: string;
   numeroBI: string;
