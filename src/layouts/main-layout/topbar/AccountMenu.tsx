@@ -30,7 +30,7 @@ const AccountMenu = () => {
     email?: string;
     telefone?: string;
     morada?: string;
-    roles?: string[];
+    role?: string;
     profilePic?: string;
   } | null>(null);
   const open = Boolean(anchorEl);
@@ -47,7 +47,7 @@ const AccountMenu = () => {
           email: decoded.email,
           telefone: decoded.telefone,
           morada: decoded.morada,
-          roles: decoded.roles,
+          role: decoded.role,
           profilePic: localStorage.getItem('profilePic') || undefined,
         });
         console.log('Decoded token:', decoded);
@@ -63,7 +63,7 @@ const AccountMenu = () => {
     },
     {
       id: 1,
-      label: userData?.roles?.[0] || 'Função',
+      label: userData?.role || 'Função',
       icon: 'material-symbols:account-box-sharp',
     },
     {
@@ -89,7 +89,7 @@ const AccountMenu = () => {
       try {
         localStorage.removeItem('token');
         sessionStorage.removeItem('token');
-        navigate("/login");
+        navigate('/login');
       } catch (error) {
         console.error('Erro ao fazer logout:', error);
       }

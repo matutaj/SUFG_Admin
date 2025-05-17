@@ -365,13 +365,11 @@ const Caixas: React.FC<CollapsedItemProps> = ({ open }) => {
             <Table>
               <TableHead>
                 <TableRow>
-                  {['Nome do Caixa', 'Descrição', 'Funcionários', 'Alertas', 'Ações'].map(
-                    (header) => (
-                      <TableCell key={header} sx={{ fontWeight: 'bold' }}>
-                        {header}
-                      </TableCell>
-                    ),
-                  )}
+                  {['Nome do Caixa', 'Descrição', 'Ações'].map((header) => (
+                    <TableCell key={header} sx={{ fontWeight: 'bold' }}>
+                      {header}
+                    </TableCell>
+                  ))}
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -392,16 +390,7 @@ const Caixas: React.FC<CollapsedItemProps> = ({ open }) => {
                     <TableRow key={item.id}>
                       <TableCell>{item.nomeCaixa}</TableCell>
                       <TableCell>{item.descricao || '-'}</TableCell>
-                      <TableCell>
-                        {item.funcionariosCaixa && item.funcionariosCaixa.length > 0
-                          ? item.funcionariosCaixa.map((fc) => fc.id_funcionario).join(', ')
-                          : 'Nenhum'}
-                      </TableCell>
-                      <TableCell>
-                        {item.alertas && item.alertas.length > 0
-                          ? item.alertas.map((a) => a.nomeAlerta).join(', ')
-                          : 'Nenhum'}
-                      </TableCell>
+
                       <TableCell align="right">
                         <IconButton
                           color="primary"

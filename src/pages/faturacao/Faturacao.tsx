@@ -236,58 +236,28 @@ const validateFatura = (
 
   if (!state.funcionariosCaixaId) {
     errors.funcionariosCaixaId = 'Nenhum caixa aberto encontrado. Abra um caixa primeiro.';
-  } else if (!funcionariosCaixa.some(fc => fc.id === state.funcionariosCaixaId && fc.estadoCaixa)) {
+  } else if (
+    !funcionariosCaixa.some((fc) => fc.id === state.funcionariosCaixaId && fc.estadoCaixa)
+  ) {
     errors.funcionariosCaixaId = 'O caixa selecionado não está aberto.';
   }
-
-  if (!locations.length) {
-    errors.locations = 'Nenhuma localização encontrada.';
-  }
-
-  const lojaLocation = locations.filter(loc => loc.tipo === tipo.Loja);
-  console.log("🏪 Localização 'Loja' usada na validação:", lojaLocation);
-
-  if (!lojaLocation) {
-    errors.lojaLocation = 'Localização "Loja" não encontrada.';
-  } else {
-    state.produtosSelecionados.forEach((p, index) => {
-      console.log(`\n🧾 [Produto ${index}] ID selecionado:`, p.id);
-    
-      if (!p.id) {
-        errors[`produto_${index}`] = 'Selecione um produto';
-        return;
-      }
-    
-      const localizacoesDoProduto = productLocations.filter(loc => loc.id_produto === p.id);
-      console.log(`📍 Localizações encontradas para o produto ${p.id}:`, localizacoesDoProduto);
-    
-      const lojaLocations = locations.filter(loc => loc.tipo === tipo.Loja);
-      console.log("🏪 IDs de lojas disponíveis:", lojaLocations.map(l => l.id));
-    
-      const produtoLocations = localizacoesDoProduto.filter(loc =>
-        lojaLocations.some(loja => loja.id === loc.id_localizacao)
+  if (!locations.length) errors.locations = 'Nenhuma localização encontrada.';
+  state.produtosSelecionados.forEach((p, index) => {
+    if (!p.id) errors[`produto_${index}`] = 'Selecione um produto';
+    const lojaLocation = locations.find(loc => loc.nomeLocalizacao.toLowerCase().includes('loja'));
+    if (!lojaLocation) {
+      errors[`produto_${index}`] = 'Localização "Loja" não encontrada.';
+    } else {
+      const produtoLocation = productLocations.find(
+        loc => loc.id_produto === p.id && loc.id_localizacao === lojaLocation.id,
       );
-    
-      console.log(`✅ Localizações do produto ${p.id} em lojas:`, produtoLocations);
-    
-      if (produtoLocations.length === 0) {
-        console.warn(`❌ Produto ${p.id} não está registrado em nenhuma loja`);
-        errors[`produto_${index}`] = `Localização do produto ${p.id} não encontrada na loja.`;
-      } else {
-        const quantidadeDisponivel = produtoLocations.reduce(
-          (total, loc) => total + (loc.quantidadeProduto ?? 0),
-          0,
-        );
-        console.log(`📦 Estoque disponível para o produto ${p.id}:`, quantidadeDisponivel);
-    
-        if (p.quantidade > quantidadeDisponivel) {
-          errors[`produto_${index}`] = `Quantidade indisponível. Estoque: ${quantidadeDisponivel}`;
-        }
+      if (!produtoLocation) {
+        errors[`produto_${index}`] = 'Produto não encontrado na loja.';
+      } else if (p.quantidade > (produtoLocation.quantidadeProduto ?? 0)) {
+        errors[`produto_${index}`] = `Quantidade indisponível. Estoque na loja: ${produtoLocation.quantidadeProduto ?? 0}`;
       }
-    });
-    
-  }
-
+    }
+  });
   return errors;
 };
 
@@ -300,15 +270,15 @@ const validateCaixa = (
   const errors: { [key: string]: string } = {};
   if (!state.funcionarioId) {
     errors.funcionarioId = 'Funcionário é obrigatório. Faça login novamente.';
-  } else if (!funcionarios.some(f => f.id === state.funcionarioId)) {
+  } else if (!funcionarios.some((f) => f.id === state.funcionarioId)) {
     errors.funcionarioId = 'Funcionário inválido ou não encontrado.';
   }
   if (!state.caixaId) {
     errors.caixaId = 'Selecione um caixa';
-  } else if (!caixas.some(c => c.id === state.caixaId)) {
+  } else if (!caixas.some((c) => c.id === state.caixaId)) {
     errors.caixaId = 'Caixa não encontrado';
   }
-  if (funcionariosCaixa.some(fc => fc.id_funcionario === state.funcionarioId && fc.estadoCaixa)) {
+  if (funcionariosCaixa.some((fc) => fc.id_funcionario === state.funcionarioId && fc.estadoCaixa)) {
     errors.funcionarioId = 'Este funcionário já tem um caixa aberto';
   }
   return errors;
@@ -343,6 +313,13 @@ const Faturacao: React.FC = () => {
   const [loggedInFuncionarioId, setLoggedInFuncionarioId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
 
+  const [isAdmin, setIsAdmin] = useState(false);
+  interface DecodedToken {
+    userId?: string;
+    sub?: string;
+    role?: string; // Adiciona o campo role ao token
+  }
+
   const loadUserData = (): string => {
     try {
       const token = localStorage.getItem('token');
@@ -362,6 +339,9 @@ const Faturacao: React.FC = () => {
       if (!id) {
         throw new Error('ID de usuário não encontrado no token.');
       }
+
+      // Configura isAdmin com base no role do token, se disponível
+      setIsAdmin(decoded.role === 'admin');
 
       return id;
     } catch (error: any) {
@@ -386,6 +366,8 @@ const Faturacao: React.FC = () => {
           throw new Error('Funcionário não encontrado. Verifique suas credenciais.');
         }
 
+        // Se o role não estiver no token, verifica na API (supondo que o objeto Funcionario tenha um campo role ou isAdmin)
+        setIsAdmin(currentEmployee.isAdmin || currentEmployee.role === 'admin');
         setLoggedInFuncionarioId(id);
         dispatchCaixa({ type: 'UPDATE_FIELD', field: 'funcionarioId', value: id });
         setFuncionarios(employees);
@@ -407,9 +389,10 @@ const Faturacao: React.FC = () => {
     };
   }, [navigate]);
 
-    useEffect(() => {
-  const fetchInitialData = async () => {
-    if (!loggedInFuncionarioId) return;
+  // Efeito para carregar dados iniciais
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      if (!loggedInFuncionarioId) return;
 
     try {
       const [
@@ -441,25 +424,20 @@ const Faturacao: React.FC = () => {
           emailCliente: null,
         };
 
-        let funcionariosCaixa: FuncionarioCaixa | null = null;
-        if (venda.id_funcionarioCaixa) {
-          const funcionarioCaixa = funcionariosCaixaData.find(
-            (fc: FuncionarioCaixa) => fc.id === venda.id_funcionarioCaixa,
-          );
-          if (funcionarioCaixa && funcionarioCaixa.id) {
-            funcionariosCaixa = {
-              ...funcionarioCaixa,
-              id_caixa: funcionarioCaixa.id_caixa ?? '',
-              id_funcionario: funcionarioCaixa.id_funcionario ?? '',
-              quantidadaFaturada: Number(funcionarioCaixa.quantidadaFaturada) || 0,
-              caixas:
-                caixasData.find((c: Caixa) => c.id === funcionarioCaixa.id_caixa) ?? undefined,
-              Funcionarios:
-                funcionarios.find((f: Funcionario) => f.id === funcionarioCaixa.id_funcionario) ??
-                undefined,
-            };
+          let funcionariosCaixa: FuncionarioCaixa | null = null;
+          if (venda.id_funcionarioCaixa) {
+            const funcionarioCaixa = funcionariosCaixaData.find((fc: FuncionarioCaixa) => fc.id === venda.id_funcionarioCaixa);
+            if (funcionarioCaixa && funcionarioCaixa.id) {
+              funcionariosCaixa = {
+                ...funcionarioCaixa,
+                id_caixa: funcionarioCaixa.id_caixa ?? '',
+                id_funcionario: funcionarioCaixa.id_funcionario ?? '',
+                quantidadaFaturada: Number(funcionarioCaixa.quantidadaFaturada) || 0,
+                caixas: caixasData.find((c: Caixa) => c.id === funcionarioCaixa.id_caixa) ?? undefined,
+                Funcionarios: funcionarios.find((f: Funcionario) => f.id === funcionarioCaixa.id_funcionario) ?? undefined,
+              };
+            }
           }
-        }
 
         return {
           id: venda.id ?? `temp-${index + 1}`,
@@ -491,105 +469,36 @@ const Faturacao: React.FC = () => {
         };
       });
 
-      setFaturas(mappedFaturas);
-      setFuncionariosCaixa(funcionariosCaixaData);
-      setCaixas(caixasData);
-      setLocations(locationsData);
-      setProdutos(productsData);
-      setProductLocations(productLocationsData);
-
-      // Chamar fetchProductsAndLocations para processar productsInStore
-      await fetchProductsAndLocations();
-
-      // Marcar os dados como carregados
-      setDataLoaded(true);
-    } catch (error: any) {
-      console.error('Erro ao carregar dados iniciais:', error);
-      setAlert({
-        severity: 'error',
-        message: 'Erro ao carregar dados iniciais: ' + (error.message || 'Tente novamente.'),
-      });
-      setDataLoaded(false);
-    }
-  };
+        setFaturas(mappedFaturas);
+        setFuncionariosCaixa(funcionariosCaixaData);
+        setCaixas(caixasData);
+        setLocations(locationsData);
+        setProdutos(productsData);
+        setProductLocations(productLocationsData);
+      } catch (error: any) {
+        console.error('Erro ao carregar dados iniciais:', error);
+        setAlert({ severity: 'error', message: 'Erro ao carregar dados iniciais: ' + (error.message || 'Tente novamente.') });
+      }
+    };
 
   if (loggedInFuncionarioId) {
     fetchInitialData();
   }
 }, [loggedInFuncionarioId, funcionarios]);
 
-const fetchProductsAndLocations = async () => {
-  try {
-    const [productsData, productLocationsData, locationsData] = await Promise.all([
-      getAllProducts(),
-      getAllProductLocations(),
-      getAllLocations(),
-    ]);
-
-    // Atualizar o estado de localizações
-    setLocations(locationsData);
-
-    // Encontrar localizações do tipo "Loja"
-    const lojaLocations = locationsData.filter(loc => loc.tipo?.toString().toLowerCase() === 'loja');
-    
-    if (!lojaLocations.length) {
-      console.error("🚫 Nenhuma localização do tipo 'Loja' encontrada.");
-      setAlert({ severity: 'error', message: 'Nenhuma localização do tipo "Loja" encontrada.' });
-      setProductsInStore([]);
+  const fetchProductsAndLocations = async () => {
+    try {
+      const [productsData, productLocationsData] = await Promise.all([
+        getAllProducts(),
+        getAllProductLocations(),
+      ]);
       setProdutos(productsData);
       setProductLocations(productLocationsData);
-      return;
+    } catch (error: any) {
+      console.error('Erro ao buscar produtos e localizações:', error);
+      setAlert({ severity: 'error', message: 'Erro ao buscar produtos e localizações: ' + (error.message || 'Tente novamente.') });
     }
-
-    console.log("📦 Localizações do tipo 'Loja' encontradas:", lojaLocations);
-
-    // Filtrar localizações do tipo "Loja" que têm registros em produtoLocalizacao
-    const validLojaLocations = lojaLocations.filter(loja => {
-      const hasProductLocations = productLocationsData.some(
-        (location: ProdutoLocalizacao) => location.id_localizacao === loja.id
-      );
-      console.log(`🔎 Verificando loja ID: ${loja.id}, Tem registros em produtoLocalizacao: ${hasProductLocations}`);
-      return hasProductLocations;
-    });
-
-    if (!validLojaLocations.length) {
-      console.error("🚫 Nenhuma loja com registros em produtoLocalizacao encontrada.");
-      setAlert({ severity: 'warning', message: 'Nenhum produto disponível nas lojas.' });
-      setProductsInStore([]);
-      setProdutos(productsData);
-      setProductLocations(productLocationsData);
-      return;
-    }
-
-    console.log("📍 Lojas válidas com registros:", validLojaLocations);
-
-    // Filtrar produtos que têm estoque em pelo menos uma loja válida
-    const productsInStore = productsData.filter((product: Produto) => {
-      const productInLoja = validLojaLocations.some(loja => {
-        const productLocation = productLocationsData.find(
-          (location: ProdutoLocalizacao) => 
-            location.id_produto === product.id && 
-            location.id_localizacao === loja.id && 
-            (location.quantidadeProduto ?? 0) > 0
-        );
-        return productLocation !== undefined;
-      });
-      console.log(`🔍 Produto: ${product.nomeProduto}, ID: ${product.id}, Encontrado em loja válida: ${productInLoja}`);
-      return productInLoja;
-    });
-
-    console.log("🛒 Produtos na loja:", productsInStore);
-    setProductsInStore(productsInStore);
-    setProdutos(productsData);
-    setProductLocations(productLocationsData);
-  } catch (error: any) {
-    console.error("❌ Erro em fetchProductsAndLocations:", error);
-    setAlert({ severity: 'error', message: 'Erro ao buscar produtos e localizações: ' + (error.message || 'Tente novamente.') });
-    setProductsInStore([]);
-    setProdutos([]);
-    setProductLocations([]);
-  }
-};
+  };
 
   const isStoreLocation = (
     id_localizacao: string | undefined,
@@ -713,7 +622,9 @@ const fetchProductsAndLocations = async () => {
       doc.setTextColor(blackColor);
       doc.setFont('helvetica', 'normal');
       doc.text('Subtotal', 130, finalY + 10);
-      doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 170, finalY + 10, { align: 'right' });
+      doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 170, finalY + 10, {
+        align: 'right',
+      });
       doc.text('Imposto', 130, finalY + 15);
       doc.text('Kzs 0.00', 170, finalY + 15, { align: 'right' });
       doc.setFillColor(blueColor);
@@ -721,7 +632,9 @@ const fetchProductsAndLocations = async () => {
       doc.setTextColor(whiteColor);
       doc.setFont('helvetica', 'bold');
       doc.text('Total', 132, finalY + 26);
-      doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 170, finalY + 26, { align: 'right' });
+      doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 170, finalY + 26, {
+        align: 'right',
+      });
 
       doc.setFontSize(12);
       doc.setTextColor(blackColor);
@@ -751,7 +664,10 @@ const fetchProductsAndLocations = async () => {
       link.click();
       document.body.removeChild(link);
     } catch (error: any) {
-      setAlert({ severity: 'error', message: 'Erro ao gerar PDF: ' + (error.message || 'Tente novamente.') });
+      setAlert({
+        severity: 'error',
+        message: 'Erro ao gerar PDF: ' + (error.message || 'Tente novamente.'),
+      });
     }
   };
 
@@ -947,7 +863,7 @@ const fetchProductsAndLocations = async () => {
       return;
     }
 
-    const errors = validateFatura(faturaState, productsInStore, funcionariosCaixa, productLocations, locations);
+    const errors = validateFatura(faturaState, produtos, funcionariosCaixa, productLocations, locations);
     dispatchFatura({ type: 'SET_ERRORS', errors });
     if (Object.keys(errors).length > 0) return;
 
@@ -995,6 +911,7 @@ const fetchProductsAndLocations = async () => {
         throw new Error('ID da venda não retornado pela API.');
       }
 
+      // Atualizar quantidadaFaturada no FuncionarioCaixa
       const funcionarioCaixa = funcionariosCaixa.find(fc => fc.id === faturaState.funcionariosCaixaId);
       if (!funcionarioCaixa || !funcionarioCaixa.id) {
         throw new Error('Caixa do funcionário não encontrado.');
@@ -1008,10 +925,11 @@ const fetchProductsAndLocations = async () => {
 
       try {
         await updateEmployeeCashRegister(funcionarioCaixa.id, updatedFuncionarioCaixa);
-        setFuncionariosCaixa(prev =>
-          prev.map(fc => (fc.id === funcionarioCaixa.id ? updatedFuncionarioCaixa : fc))
+        setFuncionariosCaixa((prev) =>
+          prev.map((fc) => (fc.id === funcionarioCaixa.id ? updatedFuncionarioCaixa : fc)),
         );
       } catch (error: any) {
+        console.error('Erro ao atualizar quantidadaFaturada:', error);
         throw new Error('Falha ao atualizar o total faturado do caixa: ' + (error.message || 'Tente novamente.'));
       }
 
@@ -1022,14 +940,18 @@ const fetchProductsAndLocations = async () => {
 
       const updates = faturaState.produtosSelecionados.map(async (produtoSelecionado) => {
         const produtoLocation = productLocations.find(
-          (loc) => loc.id_produto === produtoSelecionado.id && loc.id_localizacao === lojaLocation.id,
+          (loc) =>
+            loc.id_produto === produtoSelecionado.id && loc.id_localizacao === lojaLocation.id,
         );
 
         if (!produtoLocation || !produtoLocation.id || !produtoLocation.id_produto) {
-          throw new Error(`Localização do produto ${produtoSelecionado.id} não encontrada na loja.`);
+          throw new Error(
+            `Localização do produto ${produtoSelecionado.id} não encontrada na loja.`,
+          );
         }
 
-        const newQuantity = (produtoLocation.quantidadeProduto ?? 0) - produtoSelecionado.quantidade;
+        const newQuantity =
+          (produtoLocation.quantidadeProduto ?? 0) - produtoSelecionado.quantidade;
         if (newQuantity < 0) {
           throw new Error(
             `Quantidade insuficiente na loja para o produto ${produtoSelecionado.id}`,
@@ -1044,6 +966,7 @@ const fetchProductsAndLocations = async () => {
           };
           await updateProductLocation(produtoLocation.id, updatedLocation);
         } catch (error: any) {
+          console.error(`Erro ao atualizar localização do produto ${produtoSelecionado.id}:`, error);
           throw new Error(`Falha ao atualizar localização do produto ${produtoSelecionado.id}: ${error.message || 'Tente novamente.'}`);
         }
 
@@ -1075,6 +998,7 @@ const fetchProductsAndLocations = async () => {
           };
           await updateStock(existingStock.id, updatedStockData);
         } catch (error: any) {
+          console.error(`Erro ao atualizar estoque do produto ${produtoSelecionado.id}:`, error);
           throw new Error(`Falha ao atualizar estoque do produto ${produtoSelecionado.id}: ${error.message || 'Tente novamente.'}`);
         }
 
@@ -1090,6 +1014,7 @@ const fetchProductsAndLocations = async () => {
           };
           await updateProduct(produto.id, updatedProduto);
         } catch (error: any) {
+          console.error(`Erro ao atualizar produto ${produto.id}:`, error);
           throw new Error(`Falha ao atualizar produto ${produto.id}: ${error.message || 'Tente novamente.'}`);
         }
       });
@@ -1143,7 +1068,8 @@ const fetchProductsAndLocations = async () => {
                 loc.id_localizacao ===
                   locations.find((l) => l.nomeLocalizacao.toLowerCase().includes('armazém'))?.id,
             );
-            const newStock = (lojaLoc?.quantidadeProduto ?? 0) + (armazemLoc?.quantidadeProduto ?? 0);
+            const newStock =
+              (lojaLoc?.quantidadeProduto ?? 0) + (armazemLoc?.quantidadeProduto ?? 0);
             return { ...produto, quantidadePorUnidade: newStock };
           }
           return produto;
@@ -1189,6 +1115,7 @@ const fetchProductsAndLocations = async () => {
         throw new Error(`Fatura com ID ${faturaToDelete} não encontrada`);
       }
 
+      // Reverter quantidadaFaturada no FuncionarioCaixa
       const funcionarioCaixa = funcionariosCaixa.find(fc => fc.id === fatura.funcionariosCaixa?.id);
       if (funcionarioCaixa && funcionarioCaixa.id) {
         const totalFatura = calcularTotalFatura(fatura);
@@ -1200,10 +1127,11 @@ const fetchProductsAndLocations = async () => {
 
         try {
           await updateEmployeeCashRegister(funcionarioCaixa.id, updatedFuncionarioCaixa);
-          setFuncionariosCaixa(prev =>
-            prev.map(fc => (fc.id === funcionarioCaixa.id ? updatedFuncionarioCaixa : fc))
+          setFuncionariosCaixa((prev) =>
+            prev.map((fc) => (fc.id === funcionarioCaixa.id ? updatedFuncionarioCaixa : fc)),
           );
         } catch (error: any) {
+          console.error('Erro ao reverter quantidadaFaturada:', error);
           throw new Error('Falha ao reverter o total faturado do caixa: ' + (error.message || 'Tente novamente.'));
         }
       }
@@ -1230,7 +1158,9 @@ const fetchProductsAndLocations = async () => {
         );
 
         if (!produtoLocation || !produtoLocation.id || !produtoLocation.id_produto) {
-          throw new Error(`Localização do produto ${produtoFatura.produto.id} não encontrada na loja.`);
+          throw new Error(
+            `Localização do produto ${produtoFatura.produto.id} não encontrada na loja.`,
+          );
         }
 
         const newQuantity = (produtoLocation.quantidadeProduto ?? 0) + produtoFatura.quantidade;
@@ -1243,6 +1173,7 @@ const fetchProductsAndLocations = async () => {
           };
           await updateProductLocation(produtoLocation.id, updatedLocation);
         } catch (error: any) {
+          console.error(`Erro ao atualizar localização do produto ${produtoFatura.produto.id}:`, error);
           throw new Error(`Falha ao atualizar localização do produto ${produtoFatura.produto.id}: ${error.message || 'Tente novamente.'}`);
         }
 
@@ -1264,7 +1195,9 @@ const fetchProductsAndLocations = async () => {
         try {
           const existingStock = await getStockByProduct(produtoFatura.produto.id);
           if (!existingStock || !existingStock.id) {
-            throw new Error(`Nenhum estoque encontrado para o produto ${produtoFatura.produto.id}.`);
+            throw new Error(
+              `Nenhum estoque encontrado para o produto ${produtoFatura.produto.id}.`,
+            );
           }
           const updatedStockData = {
             id_produto: produtoFatura.produto.id,
@@ -1274,6 +1207,7 @@ const fetchProductsAndLocations = async () => {
           };
           await updateStock(existingStock.id, updatedStockData);
         } catch (error: any) {
+          console.error(`Erro ao atualizar estoque do produto ${produtoFatura.produto.id}:`, error);
           throw new Error(`Falha ao atualizar estoque do produto ${produtoFatura.produto.id}: ${error.message || 'Tente novamente.'}`);
         }
 
@@ -1289,6 +1223,7 @@ const fetchProductsAndLocations = async () => {
           };
           await updateProduct(produto.id, updatedProduto);
         } catch (error: any) {
+          console.error(`Erro ao atualizar produto ${produto.id}:`, error);
           throw new Error(`Falha ao atualizar produto ${produto.id}: ${error.message || 'Tente novamente.'}`);
         }
       });
@@ -1504,9 +1439,11 @@ const fetchProductsAndLocations = async () => {
                 {faturaState.funcionariosCaixaId ? (
                   <>
                     Caixa Selecionado:{' '}
-                    {funcionariosCaixa.find((fc) => fc.id === faturaState.funcionariosCaixaId)?.caixas?.nomeCaixa || 'Caixa Sem Nome'}{' '}
+                    {funcionariosCaixa.find((fc) => fc.id === faturaState.funcionariosCaixaId)
+                      ?.caixas?.nomeCaixa || 'Caixa Sem Nome'}{' '}
                     -{' '}
-                    {funcionariosCaixa.find((fc) => fc.id === faturaState.funcionariosCaixaId)?.Funcionarios?.nomeFuncionario || 'Funcionário Desconhecido'}
+                    {funcionariosCaixa.find((fc) => fc.id === faturaState.funcionariosCaixaId)
+                      ?.Funcionarios?.nomeFuncionario || 'Funcionário Desconhecido'}
                   </>
                 ) : (
                   'Nenhum caixa aberto disponível. Abra um caixa primeiro.'
@@ -1523,7 +1460,7 @@ const fetchProductsAndLocations = async () => {
                 <Autocomplete
                   options={clientes}
                   getOptionLabel={(option) =>
-                    typeof option === 'string' ? option : option.numeroContribuinte ?? ''
+                    typeof option === 'string' ? option : (option.numeroContribuinte ?? '')
                   }
                   onChange={handleClientSelect}
                   value={
@@ -1600,89 +1537,68 @@ const fetchProductsAndLocations = async () => {
             <Typography variant="h6" color="text.secondary">
               Produtos
             </Typography>
-            {!dataLoaded ? (
-              <Typography variant="body2" color="text.secondary">
-                Carregando produtos...
-              </Typography>
-            ) : locations.length === 0 || !locations.some(loc => loc.tipo === tipo.Loja) ? (
-              <Typography variant="body2" color="error">
-                Nenhuma localização do tipo "Loja" encontrada.
-              </Typography>
-            ) : (
-              faturaState.produtosSelecionados.map((produto, index) => {
-                const lojaLocation = locations.find((loc) => loc.tipo === tipo.Loja);
-                return (
-                  <Grid container spacing={2} key={index} alignItems="center" sx={{ mb: 2 }}>
-                    <Grid item xs={12} sm={6} md={5}>
-                      <FormControl
-                        fullWidth
-                        variant="outlined"
-                        error={Boolean(faturaState.errors[`produto_${index}`])}
-                        sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
-                      >
-                        <InputLabel>Produto</InputLabel>
-                        <Select
-                          value={produto.id}
-                          onChange={(e) => handleProdutoChange(index, 'id', e.target.value)}
-                          disabled={loading || !lojaLocation}
-                        >
-                          <MenuItem value="">
-                            <em>Selecione um produto</em>
+            {faturaState.produtosSelecionados.map((produto, index) => (
+              <Grid container spacing={2} key={index} alignItems="center" sx={{ mb: 2 }}>
+                <Grid item xs={12} sm={6} md={5}>
+                  <FormControl
+                    fullWidth
+                    variant="outlined"
+                    error={Boolean(faturaState.errors[`produto_${index}`])}
+                    sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
+                  >
+                    <InputLabel>Produto</InputLabel>
+                    <Select
+                      value={produto.id}
+                      onChange={(e) => handleProdutoChange(index, 'id', e.target.value)}
+                    >
+                      {produtos.map((p) => {
+                        const lojaLocation = locations.find((loc) =>
+                          loc.nomeLocalizacao.toLowerCase().includes('loja'),
+                        );
+                        const produtoLocation = productLocations.find(
+                          (loc) =>
+                            loc.id_produto === p.id && loc.id_localizacao === lojaLocation?.id,
+                        );
+                        const quantidade = produtoLocation?.quantidadeProduto ?? 0;
+                        return (
+                          <MenuItem key={p.id} value={p.id}>
+                            {p.nomeProduto} - {Number(p.precoVenda).toFixed(2)}kzs (Estoque: {quantidade})
                           </MenuItem>
-                          {productsInStore.map((p) => {
-  const lojaLocations = locations.filter(loc => loc.tipo?.toString().toLowerCase() === 'loja');
-  const produtoLocations = productLocations.filter(
-    (loc) => loc.id_produto === p.id && lojaLocations.some(loja => loja.id === loc.id_localizacao)
-  );
-  const quantidade = produtoLocations.reduce((total, loc) => total + (loc.quantidadeProduto ?? 0), 0);
-
-  // Log para depuração
-  console.log(`🖥️ Exibindo produto: ${p.nomeProduto}, ID: ${p.id}, Estoque total em lojas: ${quantidade}, Localizações: ${produtoLocations.map(loc => loc.id_localizacao).join(', ')}`);
-
-  return (
-    <MenuItem key={p.id} value={p.id} disabled={quantidade === 0}>
-      {p.nomeProduto} - {Number(p.precoVenda).toFixed(2)}kzs (Estoque: {quantidade})
-    </MenuItem>
-  );
-})}
-
-                        </Select>
-                        {faturaState.errors[`produto_${index}`] && (
-                          <FormHelperText>{faturaState.errors[`produto_${index}`]}</FormHelperText>
-                        )}
-                      </FormControl>
-                    </Grid>
-                    <Grid item xs={8} sm={4} md={5}>
-                      <TextField
-                        fullWidth
-                        variant="outlined"
-                        type="number"
-                        label="Quantidade"
-                        value={produto.quantidade}
-                        onChange={(e) =>
-                          handleProdutoChange(index, 'quantidade', parseInt(e.target.value) || 1)
-                        }
-                        inputProps={{ min: 1 }}
-                        error={Boolean(faturaState.errors[`produto_${index}`])}
-                        helperText={faturaState.errors[`produto_${index}`]}
-                        sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
-                        disabled={loading || !lojaLocation}
-                      />
-                    </Grid>
-                    <Grid item xs={4} sm={2} md={2}>
-                      <IconButton
-                        color="error"
-                        onClick={() => removerProdutoInput(index)}
-                        size="small"
-                        disabled={loading}
-                      >
-                        <Delete />
-                      </IconButton>
-                    </Grid>
-                  </Grid>
-                );
-              })
-            )}
+                        );
+                      })}
+                    </Select>
+                    {faturaState.errors[`produto_${index}`] && (
+                      <FormHelperText>{faturaState.errors[`produto_${index}`]}</FormHelperText>
+                    )}
+                  </FormControl>
+                </Grid>
+                <Grid item xs={8} sm={4} md={5}>
+                  <TextField
+                    fullWidth
+                    variant="outlined"
+                    type="number"
+                    label="Quantidade"
+                    value={produto.quantidade}
+                    onChange={(e) =>
+                      handleProdutoChange(index, 'quantidade', parseInt(e.target.value) || 1)
+                    }
+                    inputProps={{ min: 1 }}
+                    error={Boolean(faturaState.errors[`produto_${index}`])}
+                    helperText={faturaState.errors[`produto_${index}`]}
+                    sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
+                  />
+                </Grid>
+                <Grid item xs={4} sm={2} md={2}>
+                  <IconButton
+                    color="error"
+                    onClick={() => removerProdutoInput(index)}
+                    size="small"
+                  >
+                    <Delete />
+                  </IconButton>
+                </Grid>
+              </Grid>
+            ))}
 
             {faturaState.errors.produtos && (
               <Typography color="error" variant="body2">
@@ -1703,7 +1619,7 @@ const fetchProductsAndLocations = async () => {
                 Adicionar Produto
               </Button>
               <Typography variant="h6" color="text.primary">
-                Total a Pagar: {calcularTotal(faturaState.produtosSelecionados, productsInStore).toFixed(2)} Kz
+                Total a Pagar: {calcularTotal(faturaState.produtosSelecionados, produtos).toFixed(2)} Kz
               </Typography>
               <Button
                 variant="contained"
@@ -1788,7 +1704,6 @@ const fetchProductsAndLocations = async () => {
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 'bold' }}>ID</TableCell>
                   <TableCell sx={{ fontWeight: 'bold' }}>Caixa</TableCell>
                   <TableCell sx={{ fontWeight: 'bold' }}>Funcionário</TableCell>
                   <TableCell sx={{ fontWeight: 'bold' }}>Estado</TableCell>
@@ -1797,34 +1712,53 @@ const fetchProductsAndLocations = async () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {funcionariosCaixa.map((item) => (
+                {(isAdmin
+                  ? funcionariosCaixa
+                  : funcionariosCaixa.filter(
+                      (item) => item.id_funcionario === loggedInFuncionarioId,
+                    )
+                ).map((item) => (
                   <TableRow key={item.id}>
-                    <TableCell>{item.id ?? 'N/A'}</TableCell>
                     <TableCell>{item.caixas?.nomeCaixa || 'N/A'}</TableCell>
                     <TableCell>{item.Funcionarios?.nomeFuncionario || 'N/A'}</TableCell>
                     <TableCell>{item.estadoCaixa ? 'Aberto' : 'Fechado'}</TableCell>
                     <TableCell>{(Number(item.quantidadaFaturada) || 0).toFixed(2)} kz</TableCell>
                     <TableCell>
-                      {item.estadoCaixa && item.id && (
-                        <Button
-                          variant="contained"
-                          color="error"
-                          onClick={() => handleFecharCaixa(item.id ?? '')}
-                          size="small"
-                          disabled={loading}
-                        >
-                          {loading ? 'Fechando...' : 'Fechar'}
-                        </Button>
-                      )}
+                      {item.estadoCaixa &&
+                        item.id &&
+                        (isAdmin || item.id_funcionario === loggedInFuncionarioId) && (
+                          <Button
+                            variant="contained"
+                            color="error"
+                            onClick={() => handleFecharCaixa(item.id ?? '')}
+                            size="small"
+                            disabled={loading}
+                          >
+                            {loading ? 'Fechando...' : 'Fechar'}
+                          </Button>
+                        )}
                     </TableCell>
                   </TableRow>
                 ))}
+                {(isAdmin
+                  ? funcionariosCaixa
+                  : funcionariosCaixa.filter(
+                      (item) => item.id_funcionario === loggedInFuncionarioId,
+                    )
+                ).length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} align="center">
+                      {isAdmin
+                        ? 'Nenhum caixa encontrado'
+                        : 'Nenhum caixa encontrado para este funcionário'}
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </TableContainer>
         </Box>
       </Modal>
-
       <Modal open={openConfirmModal} onClose={handleCloseConfirmModal}>
         <Box sx={confirmModalStyle}>
           <Typography variant="h6" gutterBottom>
@@ -1842,12 +1776,7 @@ const fetchProductsAndLocations = async () => {
             >
               Cancelar
             </Button>
-            <Button
-              variant="contained"
-              color="error"
-              onClick={excluirFatura}
-              disabled={loading}
-            >
+            <Button variant="contained" color="error" onClick={excluirFatura} disabled={loading}>
               {loading ? 'Excluindo...' : 'Excluir'}
             </Button>
           </Stack>
