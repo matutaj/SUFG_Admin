@@ -162,7 +162,6 @@ export interface Localizacao {
 }
 
 export interface ProdutoLocalizacao {
-  lote?: string;
   id?: string;
   id_produto: string;
   id_localizacao: string;
@@ -186,7 +185,7 @@ export interface Transferencia {
   id_produto: string;
   id_funcionario: string;
   id_produtoLocalizacao?: string;
-  dataTransferencia: string;
+  dataTransferencia: Date;
   quantidadeTransferida: number;
   funcionarios?: Funcionario;
   produtos?: Produto;

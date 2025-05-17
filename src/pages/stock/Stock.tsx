@@ -48,7 +48,7 @@ import {
   getAllCorridors,
   getAllLocations,
   createProductLocation,
-  getAllProductLocations, // Nova importação
+  getAllProductLocations,
 } from '../../api/methods';
 import {
   DadosEntradaEstoque,
@@ -109,7 +109,6 @@ const formatDateToDisplay = (date: string | Date): string => {
   return `${day}/${month}/${year}`;
 };
 
-// Interface para um item de produto no formulário
 interface ProductFormItem {
   id_produto: string;
   quantidadeRecebida: number;
@@ -180,7 +179,7 @@ const Stock: React.FC = () => {
   const [corridors, setCorridors] = useState<Corredor[]>([]);
   const [productsWithoutLocation, setProductsWithoutLocation] = useState<DadosEstoque[]>([]);
   const [filteredProductsWithoutLocation, setFilteredProductsWithoutLocation] = useState<DadosEstoque[]>([]);
-  const [productLocations, setProductLocations] = useState<ProdutoLocalizacao[]>([]); // Novo estado
+  const [productLocations, setProductLocations] = useState<ProdutoLocalizacao[]>([]);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -222,16 +221,23 @@ const Stock: React.FC = () => {
         getAllCorridors(),
         getAllProductLocations(),
       ]);
-  
-      // Corrigindo a lógica para produtos sem localização
+
+      console.log('Stock Data:', stockData);
+      console.log('Product Locations Data:', productLocationsData);
+
+      if (!productsData || productsData.length === 0) {
+        console.warn('Nenhum produto retornado pela API getAllProducts');
+        setFetchError('Nenhum produto encontrado. Verifique a API de produtos.');
+      }
+
       const productsWithoutLocationData = stockData.filter(stockItem => {
-        // Verifica se não existe nenhuma localização para este produto
         return !productLocationsData.some(location => 
-          location.id_produto === stockItem.id_produto && 
-          location.lote === stockItem.lote
+          location.id_produto === stockItem.id_produto
         );
       });
-  
+
+      console.log('Products Without Location:', productsWithoutLocationData);
+
       setStockEntries(stockEntriesData ?? []);
       setFilteredStockEntries(stockEntriesData ?? []);
       setCurrentStock(stockData ?? []);
@@ -792,28 +798,28 @@ const Stock: React.FC = () => {
   }, []);
 
   const handleDeleteStock = useCallback(async () => {
-  if (deleteStockId) {
-    try {
-      setLoading(true);
-      setFetchError(null);
-      await deleteStock(deleteStockId);
-      
-      // Atualiza todas as listas relevantes
-      setCurrentStock(prev => prev.filter(item => item.id !== deleteStockId));
-      setFilteredStock(prev => prev.filter(item => item.id !== deleteStockId));
-      setProductsWithoutLocation(prev => prev.filter(item => item.id !== deleteStockId));
-      setFilteredProductsWithoutLocation(prev => prev.filter(item => item.id !== deleteStockId));
-      
-      setSuccessMessage('Estoque excluído com sucesso!');
-      handleCloseConfirmDelete();
-    } catch (error) {
-      console.error('Erro ao excluir estoque:', error);
-      setFetchError('Erro ao excluir estoque.');
-    } finally {
-      setLoading(false);
+    if (deleteStockId) {
+      try {
+        setLoading(true);
+        setFetchError(null);
+        await deleteStock(deleteStockId);
+        
+        setCurrentStock(prev => prev.filter(item => item.id !== deleteStockId));
+        setFilteredStock(prev => prev.filter(item => item.id !== deleteStockId));
+        setProductsWithoutLocation(prev => prev.filter(item => item.id !== deleteStockId));
+        setFilteredProductsWithoutLocation(prev => prev.filter(item => item.id !== deleteStockId));
+        
+        setSuccessMessage('Estoque excluído com sucesso!');
+        handleCloseConfirmDelete();
+        await fetchData();
+      } catch (error) {
+        console.error('Erro ao excluir estoque:', error);
+        setFetchError('Erro ao excluir estoque.');
+      } finally {
+        setLoading(false);
+      }
     }
-  }
-}, [deleteStockId, handleCloseConfirmDelete]);
+  }, [deleteStockId, handleCloseConfirmDelete, fetchData]);
 
   const handleDeleteStockEntry = useCallback(async () => {
     if (deleteEntryId) {
@@ -913,6 +919,22 @@ const Stock: React.FC = () => {
     }));
   };
 
+  const groupProductsWithoutLocation = (stock: DadosEstoque[]) => {
+    const grouped: { [key: string]: { id_produto: string; totalQuantity: number } } = {};
+
+    stock.forEach((item) => {
+      if (!grouped[item.id_produto]) {
+        grouped[item.id_produto] = {
+          id_produto: item.id_produto,
+          totalQuantity: 0,
+        };
+      }
+      grouped[item.id_produto].totalQuantity += item.quantidadeAtual;
+    });
+
+    return Object.values(grouped);
+  };
+
   const toggleExpandProduct = (id_produto: string) => {
     setExpandedProducts((previous) => {
       const newSet = new Set(previous);
@@ -926,6 +948,10 @@ const Stock: React.FC = () => {
   };
 
   const groupedStock = useMemo(() => groupStockByProduct(filteredStock), [filteredStock]);
+  const groupedProductsWithoutLocation = useMemo(
+    () => groupProductsWithoutLocation(filteredProductsWithoutLocation),
+    [filteredProductsWithoutLocation]
+  );
   const paginatedStockEntries = filteredStockEntries.slice(
     entryPage * rowsPerPage,
     entryPage * rowsPerPage + rowsPerPage,
@@ -1876,78 +1902,61 @@ const Stock: React.FC = () => {
       </Card>
 
       <Card sx={{ maxWidth: '100%', margin: 'auto', mt: 4 }}>
-        <CardContent>
-          <Typography variant="h6" mb={2}>
-            Produtos Sem Localização ({filteredProductsWithoutLocation.length})
-          </Typography>
-          <TableContainer component={Paper}>
-            <Table aria-label="Tabela de produtos sem localização">
-              <TableHead>
-                <TableRow>
-                  <TableCell><strong>Produto</strong></TableCell>
-                  <TableCell><strong>Quantidade</strong></TableCell>
-                  <TableCell><strong>Lote</strong></TableCell>
-                  <TableCell><strong>Validade</strong></TableCell>
-                  <TableCell><strong>Ações</strong></TableCell>
+  <CardContent>
+    <Typography variant="h6" mb={2}>
+      Produtos Sem Localização ({groupedProductsWithoutLocation.length})
+    </Typography>
+    <TableContainer component={Paper}>
+      <Table aria-label="Tabela de produtos sem localização">
+        <TableHead>
+          <TableRow>
+            <TableCell><strong>Produto</strong></TableCell>
+            <TableCell><strong>Quantidade Total</strong></TableCell>
+            <TableCell><strong>Ações</strong></TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {loading ? (
+            <TableRow>
+              <TableCell colSpan={3} align="center">
+                Carregando...
+              </TableCell>
+            </TableRow>
+          ) : groupedProductsWithoutLocation.length > 0 ? (
+            groupedProductsWithoutLocation.map((group) => {
+              const product = products.find((p) => p.id === group.id_produto);
+              const stockItems = filteredStock.filter((stock) => stock.id_produto === group.id_produto);
+              return (
+                <TableRow key={group.id_produto}>
+                  <TableCell>{product?.nomeProduto || group.id_produto}</TableCell>
+                  <TableCell>{group.totalQuantity}</TableCell>
+                  <TableCell align="right">
+                    <IconButton
+                      color="secondary"
+                      onClick={() => handleOpenLocationModal(stockItems, [])}
+                      disabled={loading || group.totalQuantity === 0}
+                      aria-label={`Adicionar produto ${group.id_produto} ao armazém`}
+                    >
+                      <IconifyIcon icon="material-symbols:warehouse" />
+                    </IconButton>
+                  </TableCell>
                 </TableRow>
-              </TableHead>
-              <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={5} align="center">
-                      Carregando...
-                    </TableCell>
-                  </TableRow>
-                ) : filteredProductsWithoutLocation.length > 0 ? (
-                  filteredProductsWithoutLocation.map((stock) => {
-                    const product = products.find((p) => p.id === stock.id_produto);
-                    return (
-                      <TableRow key={stock.id}>
-                        <TableCell>{product?.nomeProduto || stock.id_produto}</TableCell>
-                        <TableCell>{stock.quantidadeAtual}</TableCell>
-                        <TableCell>{stock.lote}</TableCell>
-                        <TableCell>{formatDateToDisplay(stock.dataValidadeLote)}</TableCell>
-                        <TableCell align="right">
-                          <IconButton
-                            color="secondary"
-                            onClick={() => handleOpenLocationModal([stock], [])}
-                            disabled={loading || stock.quantidadeAtual === 0}
-                            aria-label={`Adicionar localização para o lote ${stock.id}`}
-                          >
-                            <IconifyIcon icon="material-symbols:warehouse" />
-                          </IconButton>
-                          <IconButton
-                            color="primary"
-                            onClick={() => handleEditStock(stock)}
-                            disabled={loading}
-                            aria-label={`Editar lote ${stock.id}`}
-                          >
-                            <Edit />
-                          </IconButton>
-                          <IconButton
-                            color="error"
-                            onClick={() => handleOpenConfirmDelete(stock.id!)}
-                            disabled={loading}
-                            aria-label={`Excluir lote ${stock.id}`}
-                          >
-                            <Delete />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={5} align="center">
-                      Todos os produtos estão localizados.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </CardContent>
-      </Card>
+              );
+            })
+          ) : (
+            <TableRow>
+              <TableCell colSpan={3} align="center">
+                {productsWithoutLocation.length === 0 && currentStock.length > 0
+                  ? 'Todos os produtos estão localizados.'
+                  : 'Nenhum produto sem localização encontrado. Verifique os dados do estoque.'}
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  </CardContent>
+</Card>
     </>
   );
 };

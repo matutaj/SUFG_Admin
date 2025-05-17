@@ -818,7 +818,14 @@ export const updateLocation = async (
 export const deleteLocation = async (id: string): Promise<void> => {
   try {
     await api.delete(`/localizacao/${id}`);
-  } catch (error) {
+  } catch (error: any) {
+    console.log('Erro ao excluir localização:', {
+      id,
+      status: error.response?.status,
+      data: error.response?.data,
+      details: error.response?.data?.details || error.response?.data?.message || 'Sem detalhes',
+      message: error.message,
+    });
     throw new ApiError(`Falha ao deletar localização com id ${id}`);
   }
 };
