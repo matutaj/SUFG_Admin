@@ -243,55 +243,39 @@ const validateFatura = (
     errors.funcionariosCaixaId = 'O caixa selecionado não está aberto.';
   }
 
-  if (!locations.length) {
-    errors.locations = 'Nenhuma localização encontrada.';
+  const lojaLocations = locations.filter((loc) => loc.tipo === tipo.Loja);
+
+  if (!lojaLocations.length) {
+    errors.lojaLocation = 'Nenhuma localização do tipo "Loja" encontrada.';
+    return errors;
   }
 
-  const lojaLocation = locations.filter((loc) => loc.tipo === tipo.Loja);
-  console.log("🏪 Localização 'Loja' usada na validação:", lojaLocation);
+  state.produtosSelecionados.forEach((p, index) => {
+    if (!p.id) {
+      errors[`produto_${index}`] = 'Selecione um produto';
+      return;
+    }
 
-  if (!lojaLocation) {
-    errors.lojaLocation = 'Localização "Loja" não encontrada.';
-  } else {
-    state.produtosSelecionados.forEach((p, index) => {
-      console.log(`\n🧾 [Produto ${index}] ID selecionado:`, p.id);
+    const localizacoesDoProduto = productLocations.filter(
+      (loc) =>
+        loc.id_produto === p.id && lojaLocations.some((loja) => loja.id === loc.id_localizacao),
+    );
 
-      if (!p.id) {
-        errors[`produto_${index}`] = 'Selecione um produto';
-        return;
-      }
+    if (localizacoesDoProduto.length === 0) {
+      errors[`produto_${index}`] = `Produto ${p.id} não encontrado em nenhuma loja.`;
+      return;
+    }
 
-      const localizacoesDoProduto = productLocations.filter((loc) => loc.id_produto === p.id);
-      console.log(`📍 Localizações encontradas para o produto ${p.id}:`, localizacoesDoProduto);
+    const quantidadeDisponivel = localizacoesDoProduto.reduce(
+      (total, loc) => total + (loc.quantidadeProduto ?? 0),
+      0,
+    );
 
-      const lojaLocations = locations.filter((loc) => loc.tipo === tipo.Loja);
-      console.log(
-        '🏪 IDs de lojas disponíveis:',
-        lojaLocations.map((l) => l.id),
-      );
-
-      const produtoLocations = localizacoesDoProduto.filter((loc) =>
-        lojaLocations.some((loja) => loja.id === loc.id_localizacao),
-      );
-
-      console.log(`✅ Localizações do produto ${p.id} em lojas:`, produtoLocations);
-
-      if (produtoLocations.length === 0) {
-        console.warn(`❌ Produto ${p.id} não está registrado em nenhuma loja`);
-        errors[`produto_${index}`] = `Localização do produto ${p.id} não encontrada na loja.`;
-      } else {
-        const quantidadeDisponivel = produtoLocations.reduce(
-          (total, loc) => total + (loc.quantidadeProduto ?? 0),
-          0,
-        );
-        console.log(`📦 Estoque disponível para o produto ${p.id}:`, quantidadeDisponivel);
-
-        if (p.quantidade > quantidadeDisponivel) {
-          errors[`produto_${index}`] = `Quantidade indisponível. Estoque: ${quantidadeDisponivel}`;
-        }
-      }
-    });
-  }
+    if (p.quantidade > quantidadeDisponivel) {
+      errors[`produto_${index}`] =
+        `Quantidade indisponível. Estoque total: ${quantidadeDisponivel}`;
+    }
+  });
 
   return errors;
 };
@@ -505,13 +489,10 @@ const Faturacao: React.FC = () => {
         setProdutos(productsData);
         setProductLocations(productLocationsData);
 
-        // Chamar fetchProductsAndLocations para processar productsInStore
         await fetchProductsAndLocations();
 
-        // Marcar os dados como carregados
         setDataLoaded(true);
       } catch (error: any) {
-        console.error('Erro ao carregar dados iniciais:', error);
         setAlert({
           severity: 'error',
           message: 'Erro ao carregar dados iniciais: ' + (error.message || 'Tente novamente.'),
@@ -533,70 +514,41 @@ const Faturacao: React.FC = () => {
         getAllLocations(),
       ]);
 
-      // Atualizar o estado de localizações
       setLocations(locationsData);
 
-      // Encontrar localizações do tipo "Loja"
-      const lojaLocations = locationsData.filter(
-        (loc) => loc.tipo?.toString().toLowerCase() === 'loja',
-      );
+      const lojaLocations = locationsData.filter((loc) => loc.tipo === tipo.Loja);
 
       if (!lojaLocations.length) {
-        console.error("🚫 Nenhuma localização do tipo 'Loja' encontrada.");
         setAlert({ severity: 'error', message: 'Nenhuma localização do tipo "Loja" encontrada.' });
         setProductsInStore([]);
         setProdutos(productsData);
         setProductLocations(productLocationsData);
+        setDataLoaded(true);
         return;
       }
 
-      console.log("📦 Localizações do tipo 'Loja' encontradas:", lojaLocations);
-
-      // Filtrar localizações do tipo "Loja" que têm registros em produtoLocalizacao
       const validLojaLocations = lojaLocations.filter((loja) => {
-        const hasProductLocations = productLocationsData.some(
+        return productLocationsData.some(
           (location: ProdutoLocalizacao) => location.id_localizacao === loja.id,
         );
-        console.log(
-          `🔎 Verificando loja ID: ${loja.id}, Tem registros em produtoLocalizacao: ${hasProductLocations}`,
-        );
-        return hasProductLocations;
       });
 
-      if (!validLojaLocations.length) {
-        console.error('🚫 Nenhuma loja com registros em produtoLocalizacao encontrada.');
-        setAlert({ severity: 'warning', message: 'Nenhum produto disponível nas lojas.' });
-        setProductsInStore([]);
-        setProdutos(productsData);
-        setProductLocations(productLocationsData);
-        return;
-      }
-
-      console.log('📍 Lojas válidas com registros:', validLojaLocations);
-
-      // Filtrar produtos que têm estoque em pelo menos uma loja válida
       const productsInStore = productsData.filter((product: Produto) => {
-        const productInLoja = validLojaLocations.some((loja) => {
-          const productLocation = productLocationsData.find(
+        return validLojaLocations.some((loja) => {
+          return productLocationsData.find(
             (location: ProdutoLocalizacao) =>
               location.id_produto === product.id &&
               location.id_localizacao === loja.id &&
               (location.quantidadeProduto ?? 0) > 0,
           );
-          return productLocation !== undefined;
         });
-        console.log(
-          `🔍 Produto: ${product.nomeProduto}, ID: ${product.id}, Encontrado em loja válida: ${productInLoja}`,
-        );
-        return productInLoja;
       });
 
-      console.log('🛒 Produtos na loja:', productsInStore);
       setProductsInStore(productsInStore);
       setProdutos(productsData);
       setProductLocations(productLocationsData);
+      setDataLoaded(true);
     } catch (error: any) {
-      console.error('❌ Erro em fetchProductsAndLocations:', error);
       setAlert({
         severity: 'error',
         message: 'Erro ao buscar produtos e localizações: ' + (error.message || 'Tente novamente.'),
@@ -604,6 +556,7 @@ const Faturacao: React.FC = () => {
       setProductsInStore([]);
       setProdutos([]);
       setProductLocations([]);
+      setDataLoaded(false);
     }
   };
 
@@ -745,7 +698,7 @@ const Faturacao: React.FC = () => {
 
       doc.setFontSize(12);
       doc.setTextColor(blackColor);
-      doc.setFont('helvetica', 'bold');
+      doc.setFont('helvetica sobrenome', 'bold');
       doc.text('Informação de pagamento', 10, finalY + 40);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(10);
@@ -888,15 +841,23 @@ const Faturacao: React.FC = () => {
   const handleProdutoChange = (index: number, field: string, value: string | number) => {
     dispatchFatura({ type: 'UPDATE_PRODUTO', index, field, value });
     if (field === 'id' || field === 'quantidade') {
-      const lojaLocation = locations.find((loc) => loc.tipo === tipo.Loja);
+      const lojaLocations = locations.filter((loc) => loc.tipo === tipo.Loja);
       const produtoId =
         field === 'id' ? (value as string) : faturaState.produtosSelecionados[index].id;
       const quantidade =
         field === 'quantidade' ? Number(value) : faturaState.produtosSelecionados[index].quantidade;
       const produtoLocation = productLocations.find(
-        (loc) => loc.id_produto === produtoId && loc.id_localizacao === lojaLocation?.id,
+        (loc) =>
+          loc.id_produto === produtoId &&
+          lojaLocations.some((loja) => loja.id === loc.id_localizacao),
       );
-      const quantidadeDisponivel = produtoLocation?.quantidadeProduto ?? 0;
+      const quantidadeDisponivel = productLocations
+        .filter(
+          (loc) =>
+            loc.id_produto === produtoId &&
+            lojaLocations.some((loja) => loja.id === loc.id_localizacao),
+        )
+        .reduce((total, loc) => total + (loc.quantidadeProduto ?? 0), 0);
       const newErrors = { ...faturaState.errors };
 
       if (!produtoId) {
@@ -905,7 +866,7 @@ const Faturacao: React.FC = () => {
         newErrors[`produto_${index}`] = 'Produto não encontrado na loja';
       } else if (quantidade > quantidadeDisponivel) {
         newErrors[`produto_${index}`] =
-          `Quantidade indisponível. Estoque na loja: ${quantidadeDisponivel}`;
+          `Quantidade indisponível. Estoque nas lojas: ${quantidadeDisponivel}`;
       } else {
         delete newErrors[`produto_${index}`];
       }
@@ -986,18 +947,24 @@ const Faturacao: React.FC = () => {
       return;
     }
 
-    const errors = validateFatura(
-      faturaState,
-      productsInStore,
-      funcionariosCaixa,
-      productLocations,
-      locations,
-    );
-    dispatchFatura({ type: 'SET_ERRORS', errors });
-    if (Object.keys(errors).length > 0) return;
-
     try {
       setLoading(true);
+
+      await fetchProductsAndLocations();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const errors = validateFatura(
+        faturaState,
+        productsInStore,
+        funcionariosCaixa,
+        productLocations,
+        locations,
+      );
+      dispatchFatura({ type: 'SET_ERRORS', errors });
+      if (Object.keys(errors).length > 0) {
+        return;
+      }
+
       const dataEmissao = new Date();
       const dataValidade = new Date(dataEmissao);
       dataValidade.setDate(dataEmissao.getDate() + 30);
@@ -1064,41 +1031,54 @@ const Faturacao: React.FC = () => {
         );
       }
 
-      const lojaLocation = locations.find((loc) => isStoreLocation(loc.id, locations));
-      if (!lojaLocation || !lojaLocation.id) {
-        throw new Error('Localização "Loja" não encontrada.');
+      const lojaLocations = locations.filter((loc) => loc.tipo === tipo.Loja);
+      if (!lojaLocations.length) {
+        throw new Error('Nenhuma localização do tipo "Loja" encontrada.');
       }
 
       const updates = faturaState.produtosSelecionados.map(async (produtoSelecionado) => {
-        const produtoLocation = productLocations.find(
+        const produtoLocations = productLocations.filter(
           (loc) =>
-            loc.id_produto === produtoSelecionado.id && loc.id_localizacao === lojaLocation.id,
+            loc.id_produto === produtoSelecionado.id &&
+            lojaLocations.some((loja) => loja.id === loc.id_localizacao),
         );
 
-        if (!produtoLocation || !produtoLocation.id || !produtoLocation.id_produto) {
-          throw new Error(
-            `Localização do produto ${produtoSelecionado.id} não encontrada na loja.`,
-          );
+        if (produtoLocations.length === 0) {
+          throw new Error(`Produto ${produtoSelecionado.id} não encontrado em nenhuma loja.`);
         }
 
-        const newQuantity =
-          (produtoLocation.quantidadeProduto ?? 0) - produtoSelecionado.quantidade;
-        if (newQuantity < 0) {
-          throw new Error(
-            `Quantidade insuficiente na loja para o produto ${produtoSelecionado.id}`,
-          );
+        let quantidadeRestante = produtoSelecionado.quantidade;
+
+        for (const produtoLocation of produtoLocations) {
+          if (quantidadeRestante <= 0) break;
+
+          const quantidadeAtual = produtoLocation.quantidadeProduto ?? 0;
+          const quantidadeADescontar = Math.min(quantidadeAtual, quantidadeRestante);
+
+          if (quantidadeADescontar > 0) {
+            const newQuantity = quantidadeAtual - quantidadeADescontar;
+            try {
+              const updatedLocation: ProdutoLocalizacao = {
+                ...produtoLocation,
+                quantidadeProduto: newQuantity,
+                id_produto: produtoLocation.id_produto,
+              };
+              await updateProductLocation(produtoLocation?.id!, updatedLocation);
+              setProductLocations((prev) =>
+                prev.map((loc) => (loc.id === produtoLocation.id ? updatedLocation : loc)),
+              );
+              quantidadeRestante -= quantidadeADescontar;
+            } catch (error: any) {
+              throw new Error(
+                `Falha ao atualizar localização do produto ${produtoSelecionado.id} na loja ${produtoLocation.id_localizacao}: ${error.message || 'Tente novamente.'}`,
+              );
+            }
+          }
         }
 
-        try {
-          const updatedLocation: ProdutoLocalizacao = {
-            ...produtoLocation,
-            quantidadeProduto: newQuantity,
-            id_produto: produtoLocation.id_produto,
-          };
-          await updateProductLocation(produtoLocation.id, updatedLocation);
-        } catch (error: any) {
+        if (quantidadeRestante > 0) {
           throw new Error(
-            `Falha ao atualizar localização do produto ${produtoSelecionado.id}: ${error.message || 'Tente novamente.'}`,
+            `Quantidade insuficiente para o produto ${produtoSelecionado.id} após tentar todas as lojas.`,
           );
         }
 
@@ -1113,7 +1093,13 @@ const Faturacao: React.FC = () => {
             )
           : null;
 
-        const lojaQuantity = Number(produtoLocation.quantidadeProduto) || 0;
+        const lojaQuantity = productLocations
+          .filter(
+            (loc) =>
+              loc.id_produto === produtoSelecionado.id &&
+              lojaLocations.some((loja) => loja.id === loc.id_localizacao),
+          )
+          .reduce((total, loc) => total + (loc.quantidadeProduto ?? 0), 0);
         const armazemQuantity = Number(armazemProdutoLocation?.quantidadeProduto) || 0;
         const estoqueGeral = lojaQuantity + armazemQuantity;
 
@@ -1146,6 +1132,7 @@ const Faturacao: React.FC = () => {
             quantidadePorUnidade: estoqueGeral,
           };
           await updateProduct(produto.id, updatedProduto);
+          setProdutos((prev) => prev.map((p) => (p.id === produto.id ? updatedProduto : p)));
         } catch (error: any) {
           throw new Error(
             `Falha ao atualizar produto ${produto.id}: ${error.message || 'Tente novamente.'}`,
@@ -1187,28 +1174,6 @@ const Faturacao: React.FC = () => {
       };
 
       setFaturas((prev) => [...prev, newFatura]);
-      setProdutos((prev) =>
-        prev.map((produto) => {
-          const produtoSelecionado = faturaState.produtosSelecionados.find(
-            (p) => p.id === produto.id,
-          );
-          if (produtoSelecionado && produto.id) {
-            const lojaLoc = productLocations.find(
-              (loc) => loc.id_produto === produto.id && loc.id_localizacao === lojaLocation.id,
-            );
-            const armazemLoc = productLocations.find(
-              (loc) =>
-                loc.id_produto === produto.id &&
-                loc.id_localizacao ===
-                  locations.find((l) => l.nomeLocalizacao.toLowerCase().includes('armazém'))?.id,
-            );
-            const newStock =
-              (lojaLoc?.quantidadeProduto ?? 0) + (armazemLoc?.quantidadeProduto ?? 0);
-            return { ...produto, quantidadePorUnidade: newStock };
-          }
-          return produto;
-        }),
-      );
 
       if (!clienteExistente && createdVenda.id_cliente) {
         const novoCliente: Cliente = {
@@ -1278,8 +1243,8 @@ const Faturacao: React.FC = () => {
         throw new Error('Falha ao excluir a venda: ' + (error.message || 'Tente novamente.'));
       }
 
-      const lojaLocation = locations.find((loc) => isStoreLocation(loc.id, locations));
-      if (!lojaLocation || !lojaLocation.id) {
+      const lojaLocations = locations.filter((loc) => loc.tipo === tipo.Loja);
+      if (!lojaLocations.length) {
         throw new Error('Localização "Loja" não encontrada.');
       }
 
@@ -1288,30 +1253,44 @@ const Faturacao: React.FC = () => {
           throw new Error(`Produto com ID inválido na fatura ${fatura.id}.`);
         }
 
-        const produtoLocation = productLocations.find(
+        const produtoLocations = productLocations.filter(
           (loc) =>
-            loc.id_produto === produtoFatura.produto.id && loc.id_localizacao === lojaLocation.id,
+            loc.id_produto === produtoFatura.produto.id &&
+            lojaLocations.some((loja) => loja.id === loc.id_localizacao),
         );
 
-        if (!produtoLocation || !produtoLocation.id || !produtoLocation.id_produto) {
+        if (produtoLocations.length === 0) {
           throw new Error(
             `Localização do produto ${produtoFatura.produto.id} não encontrada na loja.`,
           );
         }
 
-        const newQuantity = (produtoLocation.quantidadeProduto ?? 0) + produtoFatura.quantidade;
+        let quantidadeRestante = produtoFatura.quantidade;
 
-        try {
-          const updatedLocation: ProdutoLocalizacao = {
-            ...produtoLocation,
-            quantidadeProduto: newQuantity,
-            id_produto: produtoLocation.id_produto,
-          };
-          await updateProductLocation(produtoLocation.id, updatedLocation);
-        } catch (error: any) {
-          throw new Error(
-            `Falha ao atualizar localização do produto ${produtoFatura.produto.id}: ${error.message || 'Tente novamente.'}`,
-          );
+        for (const produtoLocation of produtoLocations) {
+          if (quantidadeRestante <= 0) break;
+
+          const quantidadeAtual = produtoLocation.quantidadeProduto ?? 0;
+          const quantidadeAAdicionar = Math.min(quantidadeRestante, quantidadeRestante);
+
+          const newQuantity = quantidadeAtual + quantidadeAAdicionar;
+
+          try {
+            const updatedLocation: ProdutoLocalizacao = {
+              ...produtoLocation,
+              quantidadeProduto: newQuantity,
+              id_produto: produtoLocation.id_produto,
+            };
+            await updateProductLocation(produtoLocation?.id!, updatedLocation);
+            setProductLocations((prev) =>
+              prev.map((loc) => (loc.id === produtoLocation.id ? updatedLocation : loc)),
+            );
+            quantidadeRestante -= quantidadeAAdicionar;
+          } catch (error: any) {
+            throw new Error(
+              `Falha ao atualizar localização do produto ${produtoFatura.produto.id}: ${error.message || 'Tente novamente.'}`,
+            );
+          }
         }
 
         const armazemLocation = locations.find((loc) =>
@@ -1325,7 +1304,13 @@ const Faturacao: React.FC = () => {
             )
           : null;
 
-        const lojaQuantity = Number(produtoLocation.quantidadeProduto) || 0;
+        const lojaQuantity = productLocations
+          .filter(
+            (loc) =>
+              loc.id_produto === produtoFatura.produto.id &&
+              lojaLocations.some((loja) => loja.id === loc.id_localizacao),
+          )
+          .reduce((total, loc) => total + (loc.quantidadeProduto ?? 0), 0);
         const armazemQuantity = Number(armazemProdutoLocation?.quantidadeProduto) || 0;
         const estoqueGeral = lojaQuantity + armazemQuantity;
 
@@ -1686,7 +1671,7 @@ const Faturacao: React.FC = () => {
               </Typography>
             ) : (
               faturaState.produtosSelecionados.map((produto, index) => {
-                const lojaLocation = locations.find((loc) => loc.tipo === tipo.Loja);
+                const lojaLocations = locations.filter((loc) => loc.tipo === tipo.Loja);
                 return (
                   <Grid container spacing={2} key={index} alignItems="center" sx={{ mb: 2 }}>
                     <Grid item xs={12} sm={6} md={5}>
@@ -1700,15 +1685,12 @@ const Faturacao: React.FC = () => {
                         <Select
                           value={produto.id}
                           onChange={(e) => handleProdutoChange(index, 'id', e.target.value)}
-                          disabled={loading || !lojaLocation}
+                          disabled={loading || !lojaLocations.length}
                         >
                           <MenuItem value="">
                             <em>Selecione um produto</em>
                           </MenuItem>
                           {productsInStore.map((p) => {
-                            const lojaLocations = locations.filter(
-                              (loc) => loc.tipo?.toString().toLowerCase() === 'loja',
-                            );
                             const produtoLocations = productLocations.filter(
                               (loc) =>
                                 loc.id_produto === p.id &&
@@ -1718,7 +1700,6 @@ const Faturacao: React.FC = () => {
                               (total, loc) => total + (loc.quantidadeProduto ?? 0),
                               0,
                             );
-
                             return (
                               <MenuItem key={p.id} value={p.id} disabled={quantidade === 0}>
                                 {p.nomeProduto} - {Number(p.precoVenda).toFixed(2)}kzs (Estoque:{' '}
@@ -1746,7 +1727,7 @@ const Faturacao: React.FC = () => {
                         error={Boolean(faturaState.errors[`produto_${index}`])}
                         helperText={faturaState.errors[`produto_${index}`]}
                         sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
-                        disabled={loading || !lojaLocation}
+                        disabled={loading || !lojaLocations.length}
                       />
                     </Grid>
                     <Grid item xs={4} sm={2} md={2}>
