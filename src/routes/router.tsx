@@ -159,7 +159,7 @@ export const routes = [
               },
               {
                 path: paths.faturacao,
-                element: <Faturacao subItems={undefined} open={true} />,
+                element: <Faturacao />,
               },
             ],
           },
