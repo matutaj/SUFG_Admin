@@ -49,7 +49,6 @@ import {
   FuncionarioCaixa,
 } from '../../types/models';
 
-// Changed from 10 to 5 items per page
 const ITEMS_PER_PAGE = 5;
 
 interface ProdutoLocalizacaoDisplay {
@@ -65,7 +64,6 @@ interface EntradaEstoqueDisplay {
   nomeProduto: string;
   quantidadeRecebida: number;
   dataEntrada: string;
-  nomeFuncionario: string;
   lote: string;
 }
 
@@ -84,6 +82,7 @@ type PeriodoFaturamento = 'dia' | 'mes' | 'ano';
 
 const DashboardPage = () => {
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dashboardData, setDashboardData] = useState<{
     vendas: Venda[];
@@ -100,16 +99,13 @@ const DashboardPage = () => {
   const [endDate, setEndDate] = useState<string>('');
   const [periodoFaturamento, setPeriodoFaturamento] = useState<PeriodoFaturamento>('dia');
   const [faturamentoPorPeriodo, setFaturamentoPorPeriodo] = useState<FaturamentoPorPeriodo[]>([]);
-  const [selectedMonth, setSelectedMonth] = useState<string>(
-    new Date().toISOString().slice(0, 7), // Default to current YYYY-MM
-  );
+  const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7));
 
   const fetchDashboardData = async () => {
     try {
-      setLoading(true);
+      setIsRefreshing(true);
       setError(null);
 
-      // Fetch data in parallel
       const [
         vendas,
         produtosLocalizacoes,
@@ -128,7 +124,7 @@ const DashboardPage = () => {
         getAllEmployeeCashRegisters().catch(() => []),
       ]);
 
-      // Create lookup maps
+
       const produtoMap = new Map(produtos.map((p: Produto) => [p.id, p.nomeProduto]));
       const localizacaoMap = new Map(
         localizacoes.map((l: Localizacao) => [l.id, l.nomeLocalizacao]),
@@ -140,7 +136,6 @@ const DashboardPage = () => {
         ]),
       );
 
-      // Map produtosLocalizacoes
       const produtosLocalizacoesMapped: ProdutoLocalizacaoDisplay[] = produtosLocalizacoes.map(
         (loc: ProdutoLocalizacao) => ({
           id: loc.id,
@@ -151,7 +146,6 @@ const DashboardPage = () => {
         }),
       );
 
-      // Map entradasEstoque
       const entradasEstoqueMapped: EntradaEstoqueDisplay[] = entradasEstoque.map(
         (entrada: DadosEntradaEstoque) => {
           const dataEntrada =
@@ -163,13 +157,11 @@ const DashboardPage = () => {
             nomeProduto: produtoMap.get(entrada.id_produto) || 'Desconhecido',
             quantidadeRecebida: entrada.quantidadeRecebida,
             dataEntrada: dataEntrada.toLocaleDateString('pt-AO'),
-            nomeFuncionario: entrada.funcionarioNome || 'Desconhecido',
             lote: entrada.lote,
           };
         },
       );
 
-      // Calculate faturamento por caixa
       const faturamentoMap = new Map<string, { nomeCaixa: string; quantidadeFaturada: number }>();
       vendas.forEach((venda: Venda) => {
         if (venda.id_funcionarioCaixa) {
@@ -190,9 +182,9 @@ const DashboardPage = () => {
         }),
       );
 
-      // Count pending tasks
       const tarefasPendentes = atividades.filter(
-        (atividade: AtividadeDoDia) => atividade.status === 'Pendente',
+        (atividade: AtividadeDoDia) =>
+          atividade.status.toLowerCase() === 'pendente' 
       ).length;
 
       setDashboardData({
@@ -203,24 +195,18 @@ const DashboardPage = () => {
         tarefasPendentes,
       });
 
-      // Processar faturamento por período
       processarFaturamentoPorPeriodo(vendas, periodoFaturamento, selectedMonth);
     } catch (err) {
       console.error('Erro ao carregar dashboard:', err);
       setError('Erro ao carregar dados do dashboard.');
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
   useEffect(() => {
-    fetchDashboardData();
-
-    // Set up interval to refresh data every 60 seconds
-    const intervalId = setInterval(fetchDashboardData, 60000);
-
-    // Cleanup interval on component unmount
-    return () => clearInterval(intervalId);
+    fetchDashboardData(); // Carregar dados apenas uma vez na inicialização
   }, []);
 
   useEffect(() => {
@@ -239,71 +225,61 @@ const DashboardPage = () => {
     const nomesDiasSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
     if (periodo === 'dia') {
-      // Current week (Monday to Sunday)
+      // Criar um mapa com todos os dias da semana atual
+      const hoje = new Date();
       const startOfWeek = new Date(hoje);
-      startOfWeek.setDate(hoje.getDate() - hoje.getDay() + (hoje.getDay() === 0 ? -6 : 1)); // Start on Monday
-      const endOfWeek = new Date(startOfWeek);
-      endOfWeek.setDate(startOfWeek.getDate() + 6); // End on Sunday
+      startOfWeek.setDate(hoje.getDate() - hoje.getDay()); // Domingo da semana atual
+      startOfWeek.setHours(0, 0, 0, 0);
 
-      // Initialize days of the week
-      for (let i = 0; i < 7; i++) {
-        const currentDay = new Date(startOfWeek);
-        currentDay.setDate(startOfWeek.getDate() + i);
-        const diaSemana = currentDay.getDay();
-        faturamentoMap.set(nomesDiasSemana[diaSemana], 0);
-      }
+      // Inicializar o mapa com todos os dias da semana
+      const diasSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+      diasSemana.forEach((dia) => faturamentoMap.set(dia, 0));
 
-      // Aggregate sales for the current week
+      // Processar todas as vendas, não apenas as da semana atual
       vendas.forEach((venda) => {
         if (!venda.dataEmissao) return;
-        const dataVenda = new Date(venda.dataEmissao);
-        if (dataVenda >= startOfWeek && dataVenda <= endOfWeek) {
+
+        const dataVenda = venda.dataEmissao.includes('/')
+          ? new Date(venda.dataEmissao.split('/').reverse().join('-'))
+          : new Date(venda.dataEmissao);
+
+        // Verificar se é da semana atual
+        if (dataVenda >= startOfWeek && dataVenda <= hoje) {
           const diaSemana = dataVenda.getDay();
-          const chavePeriodo = nomesDiasSemana[diaSemana];
+          const chavePeriodo = diasSemana[diaSemana];
           const valorAtual = faturamentoMap.get(chavePeriodo) || 0;
           faturamentoMap.set(chavePeriodo, valorAtual + Number(venda.valorTotal || 0));
         }
       });
     } else if (periodo === 'mes') {
-      // Weeks of the selected month
       const [year, month] = selectedMonth.split('-').map(Number);
       const primeiroDiaMes = new Date(year, month - 1, 1);
       const ultimoDiaMes = new Date(year, month, 0);
 
-      // Initialize weeks
-      const weeks: string[] = [];
-      let currentDate = new Date(primeiroDiaMes);
-      let weekNumber = 1;
+      // Calcular número de semanas no mês
+      const semanasNoMes = Math.ceil((ultimoDiaMes.getDate() + primeiroDiaMes.getDay()) / 7);
 
-      while (currentDate <= ultimoDiaMes) {
-        weeks.push(`Semana ${weekNumber}`);
-        faturamentoMap.set(`Semana ${weekNumber}`, 0);
-        weekNumber++;
-        currentDate.setDate(currentDate.getDate() + 7);
+      // Inicializar todas as semanas
+      for (let i = 1; i <= semanasNoMes; i++) {
+        faturamentoMap.set(`Semana ${i}`, 0);
       }
 
-      // Aggregate sales by week
       vendas.forEach((venda) => {
         if (!venda.dataEmissao) return;
-        const dataVenda = new Date(venda.dataEmissao);
-        if (
-          dataVenda.getFullYear() === year &&
-          dataVenda.getMonth() === month - 1 &&
-          dataVenda >= primeiroDiaMes &&
-          dataVenda <= ultimoDiaMes
-        ) {
-          const daysSinceMonthStart =
-            (dataVenda.getTime() - primeiroDiaMes.getTime()) / (1000 * 60 * 60 * 24);
-          const weekIndex = Math.floor(daysSinceMonthStart / 7) + 1;
-          const chavePeriodo = `Semana ${weekIndex}`;
-          if (faturamentoMap.has(chavePeriodo)) {
-            const valorAtual = faturamentoMap.get(chavePeriodo) || 0;
-            faturamentoMap.set(chavePeriodo, valorAtual + Number(venda.valorTotal || 0));
-          }
+
+        const dataVenda = venda.dataEmissao.includes('/')
+          ? new Date(venda.dataEmissao.split('/').reverse().join('-'))
+          : new Date(venda.dataEmissao);
+
+        if (dataVenda.getMonth() === month - 1 && dataVenda.getFullYear() === year) {
+          const diaMes = dataVenda.getDate();
+          const semana = Math.ceil((diaMes + primeiroDiaMes.getDay()) / 7);
+          const chavePeriodo = `Semana ${semana}`;
+          const valorAtual = faturamentoMap.get(chavePeriodo) || 0;
+          faturamentoMap.set(chavePeriodo, valorAtual + Number(venda.valorTotal || 0));
         }
       });
     } else if (periodo === 'ano') {
-      // Meses do ano
       const meses = [
         'Janeiro',
         'Fevereiro',
@@ -318,16 +294,20 @@ const DashboardPage = () => {
         'Novembro',
         'Dezembro',
       ];
+
       meses.forEach((mes) => faturamentoMap.set(mes, 0));
 
       vendas.forEach((venda) => {
         if (!venda.dataEmissao) return;
-        const dataVenda = new Date(venda.dataEmissao);
-        const chavePeriodo = dataVenda.toLocaleDateString('pt-AO', { month: 'long' });
-        if (faturamentoMap.has(chavePeriodo)) {
-          const valorAtual = faturamentoMap.get(chavePeriodo) || 0;
-          faturamentoMap.set(chavePeriodo, valorAtual + Number(venda.valorTotal || 0));
-        }
+
+        const dataVenda = venda.dataEmissao.includes('/')
+          ? new Date(venda.dataEmissao.split('/').reverse().join('-'))
+          : new Date(venda.dataEmissao);
+
+        const mesIndex = dataVenda.getMonth();
+        const chavePeriodo = meses[mesIndex];
+        const valorAtual = faturamentoMap.get(chavePeriodo) || 0;
+        faturamentoMap.set(chavePeriodo, valorAtual + Number(venda.valorTotal || 0));
       });
     }
 
@@ -338,7 +318,8 @@ const DashboardPage = () => {
       }))
       .sort((a, b) => {
         if (periodo === 'dia') {
-          return nomesDiasSemana.indexOf(a.periodo) - nomesDiasSemana.indexOf(b.periodo);
+          const diasSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+          return diasSemana.indexOf(a.periodo) - diasSemana.indexOf(b.periodo);
         } else if (periodo === 'mes') {
           return parseInt(a.periodo.split(' ')[1]) - parseInt(b.periodo.split(' ')[1]);
         } else {
@@ -422,17 +403,17 @@ const DashboardPage = () => {
     );
   }
 
-  // Filter sales for the last 30 days
   const dateRangeEnd = new Date();
   const dateRangeStart = new Date(dateRangeEnd);
   dateRangeStart.setDate(dateRangeEnd.getDate() - 30);
 
   const vendasLast30Days = dashboardData.vendas.filter((venda) => {
-    const vendaDate = new Date(venda.dataEmissao);
+    const vendaDate = venda.dataEmissao.includes('/')
+      ? new Date(venda.dataEmissao.split('/').reverse().join('-'))
+      : new Date(venda.dataEmissao);
     return vendaDate >= dateRangeStart && vendaDate <= dateRangeEnd;
   });
 
-  // Calculate metrics for summary cards
   const totalFaturado = vendasLast30Days.reduce(
     (sum, venda) => sum + Number(venda.valorTotal || 0),
     0,
@@ -448,26 +429,23 @@ const DashboardPage = () => {
     (loc) => loc.quantidadeProduto <= loc.quantidadeMinimaProduto,
   ).length;
 
-  // Filter products based on search term
   const filteredProdutos = dashboardData.produtosLocalizacoes.filter(
     (loc) =>
       loc.nomeProduto.toLowerCase().includes(searchTermProdutos.toLowerCase()) ||
       loc.nomeLocalizacao.toLowerCase().includes(searchTermProdutos.toLowerCase()),
   );
 
-  // Filter entradas based on search term and date range
   const filteredEntradas = dashboardData.entradasEstoque.filter((entrada) => {
-    const matchesSearch =
-      entrada.nomeProduto.toLowerCase().includes(searchTermEntradas.toLowerCase()) ||
-      entrada.nomeFuncionario.toLowerCase().includes(searchTermEntradas.toLowerCase());
-    const entradaDate = new Date(entrada.dataEntrada.split('/').reverse().join('-')); // Assume DD/MM/YYYY
+    const matchesSearch = entrada.nomeProduto
+      .toLowerCase()
+      .includes(searchTermEntradas.toLowerCase());
+    const entradaDate = new Date(entrada.dataEntrada.split('/').reverse().join('-'));
     const start = startDate ? new Date(startDate) : null;
     const end = endDate ? new Date(endDate) : null;
     const matchesDate = (!start || entradaDate >= start) && (!end || entradaDate <= end);
     return matchesSearch && matchesDate;
   });
 
-  // Pagination logic
   const totalPagesProdutos = Math.ceil(filteredProdutos.length / ITEMS_PER_PAGE);
   const paginatedProdutos = filteredProdutos.slice(
     (pageProdutos - 1) * ITEMS_PER_PAGE,
@@ -486,7 +464,6 @@ const DashboardPage = () => {
         Visão Geral do Sistema
       </Typography>
 
-      {/* Summary Cards */}
       <Grid container spacing={4} sx={{ mb: 4 }}>
         {[
           {
@@ -545,7 +522,6 @@ const DashboardPage = () => {
         ))}
       </Grid>
 
-      {/* Faturamento por Período */}
       <Card sx={{ mb: 4, boxShadow: 3, borderRadius: 2 }}>
         <CardContent sx={{ p: 3 }}>
           <Box
@@ -589,34 +565,48 @@ const DashboardPage = () => {
                   Semanas do Mês
                 </ToggleButton>
                 <ToggleButton value="ano" aria-label="Ano">
-                  Mês do Ano
+                  Meses do Ano
                 </ToggleButton>
               </ToggleButtonGroup>
             </Box>
           </Box>
-          <Paper sx={{ p: 3, borderRadius: 2, bgcolor: '#fff' }}>
+          <Paper sx={{ p: 3, borderRadius: 2, bgcolor: '#fff', position: 'relative' }}>
+            {isRefreshing && (
+              <CircularProgress size={24} sx={{ position: 'absolute', top: 10, right: 10 }} />
+            )}
             {faturamentoPorPeriodo.length > 0 ? (
-              <ResponsiveContainer width="100%" height={350}>
-                <BarChart data={faturamentoPorPeriodo}>
+              <ResponsiveContainer width="100%" height={400}>
+                <BarChart
+                  data={faturamentoPorPeriodo}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+                >
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="periodo" tick={{ fontSize: 14, fill: '#555' }} />
+                  <XAxis
+                    dataKey="periodo"
+                    tick={{ fontSize: 12 }}
+                    interval={0}
+                    angle={-45}
+                    textAnchor="end"
+                    height={70}
+                  />
                   <YAxis
-                    tick={{ fontSize: 14, fill: '#555' }}
+                    tick={{ fontSize: 12 }}
                     label={{
                       value: 'Valor (AOA)',
                       angle: -90,
                       position: 'insideLeft',
+                      style: { fontSize: 14 },
                     }}
                   />
                   <Tooltip
                     formatter={(value) => formatCurrency(Number(value))}
                     labelFormatter={(label) => `Período: ${label}`}
                   />
-                  <Legend wrapperStyle={{ fontSize: 14, paddingTop: 10 }} />
+                  <Legend />
                   <Bar
                     dataKey="quantidadeFaturada"
-                    fill="#8884d8"
                     name="Valor Faturado"
+                    fill="#8884d8"
                     radius={[4, 4, 0, 0]}
                   />
                 </BarChart>
@@ -630,7 +620,6 @@ const DashboardPage = () => {
         </CardContent>
       </Card>
 
-      {/* Produtos por Localização */}
       <Card sx={{ mb: 4, boxShadow: 3, borderRadius: 2 }}>
         <CardContent sx={{ p: 3 }}>
           <Box
@@ -747,7 +736,6 @@ const DashboardPage = () => {
         </CardContent>
       </Card>
 
-      {/* Entradas de Estoque */}
       <Card sx={{ boxShadow: 3, borderRadius: 2 }}>
         <CardContent sx={{ p: 3 }}>
           <Box
