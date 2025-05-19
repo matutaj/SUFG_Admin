@@ -124,7 +124,6 @@ const DashboardPage = () => {
         getAllEmployeeCashRegisters().catch(() => []),
       ]);
 
-
       const produtoMap = new Map(produtos.map((p: Produto) => [p.id, p.nomeProduto]));
       const localizacaoMap = new Map(
         localizacoes.map((l: Localizacao) => [l.id, l.nomeLocalizacao]),
@@ -183,8 +182,7 @@ const DashboardPage = () => {
       );
 
       const tarefasPendentes = atividades.filter(
-        (atividade: AtividadeDoDia) =>
-          atividade.status.toLowerCase() === 'pendente' 
+        (atividade: AtividadeDoDia) => atividade.status.toLowerCase() === 'pendente',
       ).length;
 
       setDashboardData({
@@ -206,7 +204,7 @@ const DashboardPage = () => {
   };
 
   useEffect(() => {
-    fetchDashboardData(); // Carregar dados apenas uma vez na inicialização
+    fetchDashboardData();
   }, []);
 
   useEffect(() => {

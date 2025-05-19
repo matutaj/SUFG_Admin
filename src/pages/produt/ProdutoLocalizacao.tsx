@@ -31,6 +31,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import IconifyIcon from 'components/base/IconifyIcon';
 import Edit from 'components/icons/factor/Edit';
 import Delete from 'components/icons/factor/Delete';
+import { useNotifications } from 'NotificationContext';
 import {
   Produto,
   ProdutoLocalizacao,
@@ -122,7 +123,7 @@ const confirmModalStyle = {
 
 const transferModalStyle = {
   ...modalStyle,
-  width: { xs: '90%', sm: '80%', md: 900 }
+  width: { xs: '90%', sm: '80%', md: 900 },
 };
 
 const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
@@ -170,7 +171,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const [errors, setErrors] = useState<Errors>({
     transferItems: [],
-    destinationForm: {}
+    destinationForm: {},
   });
   const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState<{
@@ -178,11 +179,14 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     message: string;
   } | null>(null);
   const [isTransferSuccessful, setIsTransferSuccessful] = useState(false);
-
-  const isStoreLocation = useCallback((locationId: string) => {
-    const location = locations.find((loc) => loc.id === locationId);
-    return location?.tipo === 'Loja';
-  }, [locations]);
+  const { addNotification } = useNotifications();
+  const isStoreLocation = useCallback(
+    (locationId: string) => {
+      const location = locations.find((loc) => loc.id === locationId);
+      return location?.tipo === 'Loja';
+    },
+    [locations],
+  );
 
   const loadUserData = useCallback(() => {
     try {
@@ -193,6 +197,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       if (!id) throw new Error('ID não encontrado');
       return id;
     } catch (error: any) {
+      console.error('Erro em loadUserData:', error);
       setAlert({ severity: 'error', message: error.message });
       navigate('/login');
       return '';
@@ -204,13 +209,27 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       setLoading(true);
       setAlert(null);
 
+      const timeoutPromise = (promise: Promise<any>, time: number) =>
+        Promise.race([
+          promise,
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Tempo limite excedido')), time),
+          ),
+        ]);
+
       const results = await Promise.allSettled([
-        getAllProducts(),
-        getAllLocations(),
-        getAllSections(),
-        getAllShelves(),
-        getAllCorridors(),
-        getAllProductLocations(),
+        timeoutPromise(getAllProducts(), 10000),
+        timeoutPromise(getAllLocations(), 10000),
+        timeoutPromise(getAllSections(), 10000),
+        timeoutPromise(getAllShelves(), 10000),
+        timeoutPromise(getAllCorridors(), 10000),
+        timeoutPromise(
+          getAllProductLocations(page + 1, rowsPerPage, {
+            locationId: selectedLocationType,
+            searchQuery,
+          }),
+          10000,
+        ),
       ]);
 
       const [
@@ -222,40 +241,52 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         productLocationsResult,
       ] = results;
 
-      setProducts(productsResult.status === 'fulfilled' ? productsResult.value ?? [] : []);
-      setLocations(locationsResult.status === 'fulfilled' ? locationsResult.value ?? [] : []);
-      setSections(sectionsResult.status === 'fulfilled' ? sectionsResult.value ?? [] : []);
-      setShelves(shelvesResult.status === 'fulfilled' ? shelvesResult.value ?? [] : []);
-      setCorridors(corridorsResult.status === 'fulfilled' ? corridorsResult.value ?? [] : []);
+      setProducts(productsResult.status === 'fulfilled' ? (productsResult.value ?? []) : []);
+      setLocations(locationsResult.status === 'fulfilled' ? (locationsResult.value ?? []) : []);
+      setSections(sectionsResult.status === 'fulfilled' ? (sectionsResult.value ?? []) : []);
+      setShelves(shelvesResult.status === 'fulfilled' ? (shelvesResult.value ?? []) : []);
+      setCorridors(corridorsResult.status === 'fulfilled' ? (corridorsResult.value ?? []) : []);
       setProductLocations(
-        productLocationsResult.status === 'fulfilled' && Array.isArray(productLocationsResult.value) 
-          ? productLocationsResult.value 
-          : []
+        productLocationsResult.status === 'fulfilled' && Array.isArray(productLocationsResult.value)
+          ? productLocationsResult.value
+          : [],
       );
 
       if (results.some((result) => result.status === 'rejected')) {
-        setAlert({ severity: 'warning', message: 'Alguns dados não carregados' });
+        console.error(
+          'Erros nas chamadas:',
+          results.filter((r) => r.status === 'rejected'),
+        );
+        setAlert({ severity: 'warning', message: 'Alguns dados não foram carregados' });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao carregar dados:', error);
-      setAlert({ severity: 'error', message: 'Erro ao carregar dados' });
+      setAlert({ severity: 'error', message: error.message || 'Erro ao carregar dados' });
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, rowsPerPage, selectedLocationType, searchQuery]);
 
   useEffect(() => {
     const initialize = async () => {
-      setIsLoading(true);
-      const id = loadUserData();
-      if (id) {
+      try {
+        setIsLoading(true);
+        const id = loadUserData();
+        if (!id) {
+          navigate('/login');
+          return;
+        }
         setLoggedInFuncionarioId(id);
         await fetchData();
+      } catch (error) {
+        console.error('Erro no initialize:', error);
+        setAlert({ severity: 'error', message: 'Erro ao inicializar a página' });
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
     initialize();
-  }, [fetchData, loadUserData]);
+  }, [fetchData, loadUserData, navigate]);
 
   const updateStockData = useCallback(async () => {
     if (!idProdutoLocalizacao) {
@@ -269,22 +300,28 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     try {
       const stock = await getStockByProduct(idProdutoLocalizacao);
       if (!stock) throw new Error('Estoque não encontrado');
-      
+
       const totalStock = Number(stock.quantidadeAtual) || 0;
       setStockQuantity(totalStock);
 
       const storeQty = productLocations
-        .filter((loc) => loc.id_produto === idProdutoLocalizacao && isStoreLocation(loc.id_localizacao))
+        .filter(
+          (loc) => loc.id_produto === idProdutoLocalizacao && isStoreLocation(loc.id_localizacao),
+        )
         .reduce((sum, loc) => sum + (loc.quantidadeProduto ?? 0), 0);
-      
+
       const warehouseQty = productLocations
-        .filter((loc) => loc.id_produto === idProdutoLocalizacao && !isStoreLocation(loc.id_localizacao))
+        .filter(
+          (loc) => loc.id_produto === idProdutoLocalizacao && !isStoreLocation(loc.id_localizacao),
+        )
         .reduce((sum, loc) => sum + (loc.quantidadeProduto ?? 0), 0);
 
       setStoreQuantity(storeQty);
       setWarehouseQuantity(warehouseQty);
 
-      const currentLocation = editLocationId ? productLocations.find((loc) => loc.id === editLocationId) : null;
+      const currentLocation = editLocationId
+        ? productLocations.find((loc) => loc.id === editLocationId)
+        : null;
       const currentLocationQty = currentLocation ? (currentLocation.quantidadeProduto ?? 0) : 0;
       setRemainingQuantity(totalStock - (storeQty + warehouseQty - currentLocationQty));
     } catch (error: any) {
@@ -325,9 +362,9 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       return;
     }
     setTransferItems([{ id_produto: '', id_localizacao_origem: '', quantidadeTransferida: 0 }]);
-    setErrors({ 
-      transferItems: [{ id_produto: '', id_localizacao_origem: '', quantidadeTransferida: '' }], 
-      destinationForm: {} 
+    setErrors({
+      transferItems: [{ id_produto: '', id_localizacao_origem: '', quantidadeTransferida: '' }],
+      destinationForm: {},
     });
     setOpenTransferModal(true);
   }, [loggedInFuncionarioId, navigate]);
@@ -377,42 +414,45 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     setOpenDestinationModal(true);
   }, []);
 
-  const handleCloseDestinationModal = useCallback(async (isCancel = true) => {
-    try {
-      setLoading(true);
-      setAlert(null);
+  const handleCloseDestinationModal = useCallback(
+    async (isCancel = true) => {
+      try {
+        setLoading(true);
+        setAlert(null);
 
-      if (isCancel && !isTransferSuccessful) {
-        for (const original of originalLocations) {
-          if (original.id) {
-            await updateProductLocation(original.id, original);
+        if (isCancel && !isTransferSuccessful) {
+          for (const original of originalLocations) {
+            if (original.id) {
+              await updateProductLocation(original.id, original);
+            }
           }
+          setAlert({ severity: 'info', message: 'Transferência cancelada' });
         }
-        setAlert({ severity: 'info', message: 'Transferência cancelada' });
+      } catch (error: any) {
+        console.error('Erro ao reverter:', error);
+        setAlert({ severity: 'error', message: 'Erro ao reverter' });
+      } finally {
+        setOpenDestinationModal(false);
+        setDestinationLocations([]);
+        setOriginalLocations([]);
+        setCurrentDestinationIndex(0);
+        setDestinationForm({
+          id_produto: '',
+          id_localizacao: '',
+          id_seccao: '',
+          id_prateleira: '',
+          id_corredor: '',
+          quantidadeProduto: 0,
+        });
+        setErrors({ transferItems: [], destinationForm: {} });
+        setIsTransferSuccessful(false);
+        await fetchData();
+        await updateStockData();
+        setLoading(false);
       }
-    } catch (error: any) {
-      console.error('Erro ao reverter:', error);
-      setAlert({ severity: 'error', message: 'Erro ao reverter' });
-    } finally {
-      setOpenDestinationModal(false);
-      setDestinationLocations([]);
-      setOriginalLocations([]);
-      setCurrentDestinationIndex(0);
-      setDestinationForm({
-        id_produto: '',
-        id_localizacao: '',
-        id_seccao: '',
-        id_prateleira: '',
-        id_corredor: '',
-        quantidadeProduto: 0,
-      });
-      setErrors({ transferItems: [], destinationForm: {} });
-      setIsTransferSuccessful(false);
-      await fetchData();
-      await updateStockData();
-      setLoading(false);
-    }
-  }, [originalLocations, fetchData, updateStockData, isTransferSuccessful]);
+    },
+    [originalLocations, fetchData, updateStockData, isTransferSuccessful],
+  );
 
   const handleChangePage = useCallback((_event: unknown, newPage: number) => {
     setPage(newPage);
@@ -464,9 +504,14 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     return grouped;
   }, [filteredProductLocations]);
 
-  const uniqueLocationIds = useMemo(() => Object.keys(groupedProductLocations).sort(), [groupedProductLocations]);
-  const paginatedLocationIds = useMemo(() => uniqueLocationIds.slice(page * rowsPerPage, (page + 1) * rowsPerPage), 
-    [uniqueLocationIds, page, rowsPerPage]);
+  const uniqueLocationIds = useMemo(
+    () => Object.keys(groupedProductLocations).sort(),
+    [groupedProductLocations],
+  );
+  const paginatedLocationIds = useMemo(
+    () => uniqueLocationIds.slice(page * rowsPerPage, (page + 1) * rowsPerPage),
+    [uniqueLocationIds, page, rowsPerPage],
+  );
 
   const locationsWithProduct = useMemo(() => {
     const locationIds = new Set(productLocations.map((loc) => loc.id_localizacao));
@@ -474,24 +519,32 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   }, [locations, productLocations]);
 
   const addTransferItem = useCallback(() => {
-    setTransferItems((prev) => [...prev, { id_produto: '', id_localizacao_origem: '', quantidadeTransferida: 0 }]);
-    setErrors((prev) => ({ 
-      ...prev, 
-      transferItems: [...prev.transferItems, { id_produto: '', id_localizacao_origem: '', quantidadeTransferida: '' }] 
+    setTransferItems((prev) => [
+      ...prev,
+      { id_produto: '', id_localizacao_origem: '', quantidadeTransferida: 0 },
+    ]);
+    setErrors((prev) => ({
+      ...prev,
+      transferItems: [
+        ...prev.transferItems,
+        { id_produto: '', id_localizacao_origem: '', quantidadeTransferida: '' },
+      ],
     }));
   }, []);
 
   const removeTransferItem = useCallback((index: number) => {
     setTransferItems((prev) => prev.filter((_, i) => i !== index));
-    setErrors((prev) => ({ 
-      ...prev, 
-      transferItems: prev.transferItems.filter((_, i) => i !== index) 
+    setErrors((prev) => ({
+      ...prev,
+      transferItems: prev.transferItems.filter((_, i) => i !== index),
     }));
   }, []);
 
   const handleTransferItemChange = useCallback(
     (index: number, field: keyof TransferFormItem, value: string | number) => {
-      setTransferItems((prev) => prev.map((item, i) => i === index ? { ...item, [field]: value } : item));
+      setTransferItems((prev) =>
+        prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)),
+      );
       setErrors((prev) => {
         const newErrors = [...prev.transferItems];
         newErrors[index] = { ...newErrors[index], [field]: '' };
@@ -504,9 +557,9 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const handleDestinationFormChange = useCallback(
     (field: keyof DestinationLocation, value: string) => {
       setDestinationForm((prev) => ({ ...prev, [field]: value }));
-      setErrors((prev) => ({ 
-        ...prev, 
-        destinationForm: { ...prev.destinationForm, [field]: '' } 
+      setErrors((prev) => ({
+        ...prev,
+        destinationForm: { ...prev.destinationForm, [field]: '' },
       }));
     },
     [],
@@ -531,13 +584,15 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       }
 
       const fromLocation = productLocations.find(
-        (loc) => loc.id_produto === item.id_produto && loc.id_localizacao === item.id_localizacao_origem,
+        (loc) =>
+          loc.id_produto === item.id_produto && loc.id_localizacao === item.id_localizacao_origem,
       );
       if (!fromLocation) {
         newErrors[index].id_localizacao_origem = 'Origem não encontrada';
         isValid = false;
       } else if (item.quantidadeTransferida > (fromLocation.quantidadeProduto ?? 0)) {
-        newErrors[index].quantidadeTransferida = `Excede disponível (${fromLocation.quantidadeProduto ?? 0})`;
+        newErrors[index].quantidadeTransferida =
+          `Excede disponível (${fromLocation.quantidadeProduto ?? 0})`;
         isValid = false;
       }
     });
@@ -557,7 +612,8 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     if (
       destinationForm.id_localizacao &&
       transferItems[currentDestinationIndex] &&
-      destinationForm.id_localizacao === transferItems[currentDestinationIndex].id_localizacao_origem
+      destinationForm.id_localizacao ===
+        transferItems[currentDestinationIndex].id_localizacao_origem
     ) {
       newErrors.id_localizacao = 'Destino igual à origem';
     }
@@ -600,7 +656,8 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     if (!idCorredor) newErrors.idCorredor = 'Corredor obrigatório';
     if (quantidadeProduto <= 0) newErrors.quantidadeProduto = 'Quantidade inválida';
     if (quantidadeMinimaProduto < 0) newErrors.quantidadeMinimaProduto = 'Mínimo inválido';
-    if (quantidadeProduto < quantidadeMinimaProduto) newErrors.quantidadeProduto = `Abaixo do mínimo (${quantidadeMinimaProduto})`;
+    if (quantidadeProduto < quantidadeMinimaProduto)
+      newErrors.quantidadeProduto = `Abaixo do mínimo (${quantidadeMinimaProduto})`;
 
     let totalStock = 0;
     try {
@@ -613,7 +670,9 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
     if (totalStock > 0) {
       const currentTotal = getTotalStockInLocations(idProdutoLocalizacao, editLocationId);
-      const currentLocation = editLocationId ? productLocations.find((loc) => loc.id === editLocationId) : null;
+      const currentLocation = editLocationId
+        ? productLocations.find((loc) => loc.id === editLocationId)
+        : null;
       const currentLocationQty = currentLocation ? (currentLocation.quantidadeProduto ?? 0) : 0;
       const newTotal = currentTotal - currentLocationQty + quantidadeProduto;
       if (newTotal > totalStock) newErrors.quantidadeProduto = `Excede estoque (${totalStock})`;
@@ -683,7 +742,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       setAlert(null);
       const location = productLocations.find((loc) => loc.id === locationToDelete);
       if (!location) throw new Error('Localização não encontrada');
-      
+
       await deleteProductLocation(locationToDelete);
       await fetchData();
       await updateStockData();
@@ -707,9 +766,11 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       // Salvar os estados originais para possível rollback
       const originals = transferItems.map((item) => {
         const loc = productLocations.find(
-          (loc) => loc.id_produto === item.id_produto && loc.id_localizacao === item.id_localizacao_origem
+          (loc) =>
+            loc.id_produto === item.id_produto && loc.id_localizacao === item.id_localizacao_origem,
         );
-        if (!loc) throw new Error(`Localização de origem não encontrada para o produto ${item.id_produto}`);
+        if (!loc)
+          throw new Error(`Localização de origem não encontrada para o produto ${item.id_produto}`);
         return { ...loc };
       });
       setOriginalLocations(originals);
@@ -718,14 +779,15 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       const updatedProductLocations = [...productLocations];
       for (const item of transferItems) {
         const fromLocationIndex = updatedProductLocations.findIndex(
-          (loc) => loc.id_produto === item.id_produto && loc.id_localizacao === item.id_localizacao_origem
+          (loc) =>
+            loc.id_produto === item.id_produto && loc.id_localizacao === item.id_localizacao_origem,
         );
         if (fromLocationIndex === -1) throw new Error(`Origem inválida para ${item.id_produto}`);
-        
+
         const fromLocation = updatedProductLocations[fromLocationIndex];
         const newQuantity = (fromLocation.quantidadeProduto ?? 0) - item.quantidadeTransferida;
         if (newQuantity < 0) throw new Error(`Quantidade insuficiente para ${item.id_produto}`);
-        
+
         const updatedFromLocation = { ...fromLocation, quantidadeProduto: newQuantity };
         await updateProductLocation(fromLocation.id!, updatedFromLocation);
         updatedProductLocations[fromLocationIndex] = updatedFromLocation;
@@ -738,7 +800,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     } catch (error: any) {
       console.error('Erro na transferência:', error);
       setAlert({ severity: 'error', message: error.message || 'Erro na transferência' });
-      
+
       // Reverter as alterações em caso de erro
       for (const original of originalLocations) {
         if (original.id) await updateProductLocation(original.id, original);
@@ -775,10 +837,9 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         throw new Error('Item inválido');
       }
 
-      // Verificar se há estoque suficiente
       const stock = await getStockByProduct(destinationForm.id_produto);
       if (!stock) throw new Error('Estoque não encontrado');
-      
+
       const totalStock = Number(stock.quantidadeAtual) || 0;
       const currentTotal = productLocations
         .filter((loc) => loc.id_produto === destinationForm.id_produto)
@@ -788,29 +849,26 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         throw new Error(`Excede disponível (${totalStock - currentTotal})`);
       }
 
-      // Verificar se já existe uma localização para este produto no destino
-      const existingDestination = productLocations.find(
-        (loc) => loc.id_produto === destinationForm.id_produto &&
-          loc.id_localizacao === destinationForm.id_localizacao &&
-          loc.id_seccao === destinationForm.id_seccao &&
-          loc.id_prateleira === destinationForm.id_prateleira &&
-          loc.id_corredor === destinationForm.id_corredor
-      );
-
       let updatedProductLocations = [...productLocations];
       let destinationLocation: ProdutoLocalizacao;
 
+      const existingDestination = productLocations.find(
+        (loc) =>
+          loc.id_produto === destinationForm.id_produto &&
+          loc.id_localizacao === destinationForm.id_localizacao &&
+          loc.id_seccao === destinationForm.id_seccao &&
+          loc.id_prateleira === destinationForm.id_prateleira &&
+          loc.id_corredor === destinationForm.id_corredor,
+      );
+
       if (existingDestination) {
-        // Atualizar a localização existente
-        const newQuantity = (existingDestination.quantidadeProduto ?? 0) + destinationForm.quantidadeProduto;
+        const newQuantity =
+          (existingDestination.quantidadeProduto ?? 0) + destinationForm.quantidadeProduto;
         destinationLocation = { ...existingDestination, quantidadeProduto: newQuantity };
         await updateProductLocation(existingDestination.id!, destinationLocation);
-        
-        // Atualizar a lista local
         const index = updatedProductLocations.findIndex((loc) => loc.id === existingDestination.id);
         updatedProductLocations[index] = destinationLocation;
       } else {
-        // Criar uma nova localização
         const newLocation: ProdutoLocalizacao = {
           id_produto: destinationForm.id_produto,
           id_localizacao: destinationForm.id_localizacao,
@@ -824,7 +882,6 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         updatedProductLocations.push(destinationLocation);
       }
 
-      // Registrar a transferência
       const transferData = {
         id_funcionario: loggedInFuncionarioId,
         id_produto: destinationForm.id_produto,
@@ -840,7 +897,6 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       await createTransfer(transferData);
       setProductLocations(updatedProductLocations);
 
-      // Avançar para o próximo item ou concluir
       if (currentDestinationIndex < destinationLocations.length - 1) {
         const nextIndex = currentDestinationIndex + 1;
         setCurrentDestinationIndex(nextIndex);
@@ -858,22 +914,20 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         setOriginalLocations([]);
         setTransferItems([]);
         setIsTransferSuccessful(true);
-        await fetchData();
+        await fetchData(); // Recarrega os dados
         await updateStockData();
         handleCloseDestinationModal(false);
       }
     } catch (error: any) {
       console.error('Erro ao salvar:', error);
       setAlert({ severity: 'error', message: error.message || 'Erro ao salvar' });
-      
-      // Reverter as alterações em caso de erro
       for (const original of originalLocations) {
         if (original.id) await updateProductLocation(original.id, original);
       }
       setOriginalLocations([]);
       setTransferItems([]);
       setProductLocations([...productLocations]);
-      await fetchData();
+      await fetchData(); // Recarrega os dados mesmo em caso de erro
       handleCloseDestinationModal(true);
     } finally {
       setLoading(false);
@@ -901,26 +955,37 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       )}
 
       {isLoading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <Box
+          sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}
+        >
           <CircularProgress />
         </Box>
       ) : (
         <>
           <Paper sx={{ p: 2, width: '100%' }}>
             <Collapse in={open}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+                sx={{ mb: 2 }}
+              >
                 <Typography variant="h5">Localizações de Produtos</Typography>
                 <Stack direction="row" spacing={2}>
                   <Select
                     value={selectedLocationType}
-                    onChange={(e: SelectChangeEvent<string>) => setSelectedLocationType(e.target.value)}
+                    onChange={(e: SelectChangeEvent<string>) =>
+                      setSelectedLocationType(e.target.value)
+                    }
                     displayEmpty
                     sx={{ minWidth: 200 }}
                     disabled={loading}
                   >
                     <MenuItem value="">Todas as Localizações</MenuItem>
                     {locations.map((loc) => (
-                      <MenuItem key={loc.id} value={loc.id}>{loc.nomeLocalizacao}</MenuItem>
+                      <MenuItem key={loc.id} value={loc.id}>
+                        {loc.nomeLocalizacao}
+                      </MenuItem>
                     ))}
                   </Select>
                   <TextField
@@ -947,7 +1012,9 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
           <Modal open={openConfirmModal} onClose={handleCloseConfirmModal}>
             <Box sx={confirmModalStyle}>
-              <Typography variant="h6" gutterBottom>Confirmar Exclusão</Typography>
+              <Typography variant="h6" gutterBottom>
+                Confirmar Exclusão
+              </Typography>
               <Typography variant="body1" mb={3}>
                 Tem certeza que deseja excluir esta localização?
               </Typography>
@@ -957,10 +1024,20 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 </Box>
               )}
               <Stack direction="row" spacing={2} justifyContent="flex-end">
-                <Button variant="outlined" color="secondary" onClick={handleCloseConfirmModal} disabled={loading}>
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  onClick={handleCloseConfirmModal}
+                  disabled={loading}
+                >
                   Cancelar
                 </Button>
-                <Button variant="contained" color="error" onClick={handleDeleteLocation} disabled={loading}>
+                <Button
+                  variant="contained"
+                  color="error"
+                  onClick={handleDeleteLocation}
+                  disabled={loading}
+                >
                   {loading ? 'Excluindo...' : 'Excluir'}
                 </Button>
               </Stack>
@@ -969,9 +1046,19 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
           <Modal open={openTransferModal} onClose={handleCloseTransferModal}>
             <Box sx={transferModalStyle}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+                sx={{ mb: 2 }}
+              >
                 <Typography variant="h5">Transferir Produtos</Typography>
-                <Button variant="outlined" color="error" onClick={handleCloseTransferModal} disabled={loading}>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  onClick={handleCloseTransferModal}
+                  disabled={loading}
+                >
                   Fechar
                 </Button>
               </Stack>
@@ -983,20 +1070,46 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               <Grid container spacing={2}>
                 {transferItems.map((item, index) => {
                   const availableProducts = productLocations
-                    .filter((loc) => loc.id_localizacao === item.id_localizacao_origem && (loc.quantidadeProduto ?? 0) > 0)
+                    .filter(
+                      (loc) =>
+                        loc.id_localizacao === item.id_localizacao_origem &&
+                        (loc.quantidadeProduto ?? 0) > 0,
+                    )
                     .map((loc) => loc.id_produto)
                     .filter((value, idx, self) => self.indexOf(value) === idx)
                     .map((id_produto) => products.find((p) => p.id === id_produto)!)
                     .filter((p) => p);
-                  const stockAvailable = productLocations.find(
-                    (loc) => loc.id_produto === item.id_produto && loc.id_localizacao === item.id_localizacao_origem,
-                  )?.quantidadeProduto ?? 0;
+                  const stockAvailable =
+                    productLocations.find(
+                      (loc) =>
+                        loc.id_produto === item.id_produto &&
+                        loc.id_localizacao === item.id_localizacao_origem,
+                    )?.quantidadeProduto ?? 0;
                   return (
-                    <Box key={index} sx={{ mb: 2, p: 2, border: 1, borderRadius: 1, borderColor: 'grey.300', width: '100%' }}>
-                      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                    <Box
+                      key={index}
+                      sx={{
+                        mb: 2,
+                        p: 2,
+                        border: 1,
+                        borderRadius: 1,
+                        borderColor: 'grey.300',
+                        width: '100%',
+                      }}
+                    >
+                      <Stack
+                        direction="row"
+                        justifyContent="space-between"
+                        alignItems="center"
+                        sx={{ mb: 2 }}
+                      >
                         <Typography variant="subtitle1">Transferência {index + 1}</Typography>
                         {transferItems.length > 1 && (
-                          <IconButton color="error" onClick={() => removeTransferItem(index)} disabled={loading}>
+                          <IconButton
+                            color="error"
+                            onClick={() => removeTransferItem(index)}
+                            disabled={loading}
+                          >
                             <Delete />
                           </IconButton>
                         )}
@@ -1006,7 +1119,11 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                           <Select
                             value={item.id_localizacao_origem}
                             onChange={(e: SelectChangeEvent<string>) => {
-                              handleTransferItemChange(index, 'id_localizacao_origem', e.target.value);
+                              handleTransferItemChange(
+                                index,
+                                'id_localizacao_origem',
+                                e.target.value,
+                              );
                               handleTransferItemChange(index, 'id_produto', '');
                             }}
                             displayEmpty
@@ -1014,13 +1131,19 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                             error={!!errors.transferItems[index]?.id_localizacao_origem}
                             disabled={loading}
                           >
-                            <MenuItem value="" disabled>Selecione a Origem</MenuItem>
+                            <MenuItem value="" disabled>
+                              Selecione a Origem
+                            </MenuItem>
                             {locationsWithProduct.map((loc) => (
-                              <MenuItem key={loc.id} value={loc.id}>{loc.nomeLocalizacao}</MenuItem>
+                              <MenuItem key={loc.id} value={loc.id}>
+                                {loc.nomeLocalizacao}
+                              </MenuItem>
                             ))}
                           </Select>
                           {errors.transferItems[index]?.id_localizacao_origem && (
-                            <FormHelperText error>{errors.transferItems[index].id_localizacao_origem}</FormHelperText>
+                            <FormHelperText error>
+                              {errors.transferItems[index].id_localizacao_origem}
+                            </FormHelperText>
                           )}
                         </Grid>
                         <Grid item xs={12} sm={6}>
@@ -1032,18 +1155,33 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                             displayEmpty
                             fullWidth
                             error={!!errors.transferItems[index]?.id_produto}
-                            disabled={loading || !item.id_localizacao_origem || availableProducts.length === 0}
+                            disabled={
+                              loading ||
+                              !item.id_localizacao_origem ||
+                              availableProducts.length === 0
+                            }
                           >
-                            <MenuItem value="" disabled>Selecione um Produto</MenuItem>
+                            <MenuItem value="" disabled>
+                              Selecione um Produto
+                            </MenuItem>
                             {availableProducts.map((prod) => {
-                              const stock = productLocations.find(
-                                (pl) => pl.id_produto === prod.id && pl.id_localizacao === item.id_localizacao_origem,
-                              )?.quantidadeProduto ?? 0;
-                              return <MenuItem key={prod.id} value={prod.id}>{prod.nomeProduto} (Estoque: {stock})</MenuItem>;
+                              const stock =
+                                productLocations.find(
+                                  (pl) =>
+                                    pl.id_produto === prod.id &&
+                                    pl.id_localizacao === item.id_localizacao_origem,
+                                )?.quantidadeProduto ?? 0;
+                              return (
+                                <MenuItem key={prod.id} value={prod.id}>
+                                  {prod.nomeProduto} (Estoque: {stock})
+                                </MenuItem>
+                              );
                             })}
                           </Select>
                           {errors.transferItems[index]?.id_produto && (
-                            <FormHelperText error>{errors.transferItems[index].id_produto}</FormHelperText>
+                            <FormHelperText error>
+                              {errors.transferItems[index].id_produto}
+                            </FormHelperText>
                           )}
                         </Grid>
                         <Grid item xs={12}>
@@ -1061,7 +1199,8 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                             }}
                             error={!!errors.transferItems[index]?.quantidadeTransferida}
                             helperText={
-                              errors.transferItems[index]?.quantidadeTransferida || `Disponível: ${stockAvailable}`
+                              errors.transferItems[index]?.quantidadeTransferida ||
+                              `Disponível: ${stockAvailable}`
                             }
                             disabled={loading || !item.id_produto}
                             fullWidth
@@ -1112,11 +1251,21 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
           <Modal open={openDestinationModal} onClose={() => handleCloseDestinationModal(true)}>
             <Box sx={modalStyle}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+                sx={{ mb: 2 }}
+              >
                 <Typography variant="h5">
                   Destino ({currentDestinationIndex + 1} de {destinationLocations.length})
                 </Typography>
-                <Button variant="outlined" color="error" onClick={() => handleCloseDestinationModal(true)} disabled={loading}>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  onClick={() => handleCloseDestinationModal(true)}
+                  disabled={loading}
+                >
                   Fechar
                 </Button>
               </Stack>
@@ -1126,7 +1275,8 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 </Box>
               )}
               <Typography variant="subtitle1" sx={{ mb: 2 }}>
-                Produto: {products.find((p) => p.id === destinationForm.id_produto)?.nomeProduto || 'N/A'}
+                Produto:{' '}
+                {products.find((p) => p.id === destinationForm.id_produto)?.nomeProduto || 'N/A'}
               </Typography>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
@@ -1140,9 +1290,13 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                     error={!!errors.destinationForm.id_localizacao}
                     disabled={loading}
                   >
-                    <MenuItem value="" disabled>Selecione o Destino</MenuItem>
+                    <MenuItem value="" disabled>
+                      Selecione o Destino
+                    </MenuItem>
                     {locations.map((loc) => (
-                      <MenuItem key={loc.id} value={loc.id}>{loc.nomeLocalizacao}</MenuItem>
+                      <MenuItem key={loc.id} value={loc.id}>
+                        {loc.nomeLocalizacao}
+                      </MenuItem>
                     ))}
                   </Select>
                   {errors.destinationForm.id_localizacao && (
@@ -1160,9 +1314,13 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                     error={!!errors.destinationForm.id_seccao}
                     disabled={loading}
                   >
-                    <MenuItem value="" disabled>Selecione uma Seção</MenuItem>
+                    <MenuItem value="" disabled>
+                      Selecione uma Seção
+                    </MenuItem>
                     {sections.map((sec) => (
-                      <MenuItem key={sec.id} value={sec.id}>{sec.nomeSeccao}</MenuItem>
+                      <MenuItem key={sec.id} value={sec.id}>
+                        {sec.nomeSeccao}
+                      </MenuItem>
                     ))}
                   </Select>
                   {errors.destinationForm.id_seccao && (
@@ -1180,9 +1338,13 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                     error={!!errors.destinationForm.id_prateleira}
                     disabled={loading}
                   >
-                    <MenuItem value="" disabled>Selecione uma Prateleira</MenuItem>
+                    <MenuItem value="" disabled>
+                      Selecione uma Prateleira
+                    </MenuItem>
                     {shelves.map((shelf) => (
-                      <MenuItem key={shelf.id} value={shelf.id}>{shelf.nomePrateleira}</MenuItem>
+                      <MenuItem key={shelf.id} value={shelf.id}>
+                        {shelf.nomePrateleira}
+                      </MenuItem>
                     ))}
                   </Select>
                   {errors.destinationForm.id_prateleira && (
@@ -1200,9 +1362,13 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                     error={!!errors.destinationForm.id_corredor}
                     disabled={loading}
                   >
-                    <MenuItem value="" disabled>Selecione um Corredor</MenuItem>
+                    <MenuItem value="" disabled>
+                      Selecione um Corredor
+                    </MenuItem>
                     {corridors.map((corr) => (
-                      <MenuItem key={corr.id} value={corr.id}>{corr.nomeCorredor}</MenuItem>
+                      <MenuItem key={corr.id} value={corr.id}>
+                        {corr.nomeCorredor}
+                      </MenuItem>
                     ))}
                   </Select>
                   {errors.destinationForm.id_corredor && (
@@ -1226,7 +1392,11 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                     disabled={loading}
                     fullWidth
                   >
-                    {loading ? 'Salvando...' : currentDestinationIndex < destinationLocations.length - 1 ? 'Próximo' : 'Concluir'}
+                    {loading
+                      ? 'Salvando...'
+                      : currentDestinationIndex < destinationLocations.length - 1
+                        ? 'Próximo'
+                        : 'Concluir'}
                   </Button>
                 </Grid>
               </Grid>
@@ -1235,27 +1405,38 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
           <Card sx={{ maxWidth: '100%', margin: 'auto', mt: 4 }}>
             <CardContent>
-              <Typography variant="h6" mb={2}>Localizações dos Produtos</Typography>
+              <Typography variant="h6" mb={2}>
+                Localizações dos Produtos
+              </Typography>
               <TableContainer component={Paper}>
                 <Table>
                   <TableHead>
                     <TableRow>
-                      <TableCell><strong>Localização</strong></TableCell>
-                      <TableCell><strong>Total de Produtos</strong></TableCell>
-                      <TableCell align="right"><strong>Ações</strong></TableCell>
+                      <TableCell>
+                        <strong>Localização</strong>
+                      </TableCell>
+                      <TableCell>
+                        <strong>Total de Produtos</strong>
+                      </TableCell>
+                      <TableCell align="right">
+                        <strong>Ações</strong>
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {loading ? (
                       <TableRow>
-                        <TableCell colSpan={3} align="center"><CircularProgress size={24} /></TableCell>
+                        <TableCell colSpan={3} align="center">
+                          <CircularProgress size={24} />
+                        </TableCell>
                       </TableRow>
                     ) : paginatedLocationIds.length > 0 ? (
                       paginatedLocationIds.map((locationId) => {
                         const location = locations.find((l) => l.id === locationId);
                         const productsForLocation = groupedProductLocations[locationId] || [];
                         const totalQuantity = productsForLocation.reduce(
-                          (sum, loc) => sum + (loc.quantidadeProduto ?? 0), 0
+                          (sum, loc) => sum + (loc.quantidadeProduto ?? 0),
+                          0,
                         );
                         const isExpanded = expandedLocations.has(locationId);
 
@@ -1264,7 +1445,13 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                             <TableRow>
                               <TableCell>
                                 <IconButton onClick={() => toggleExpandLocation(locationId)}>
-                                  <IconifyIcon icon={isExpanded ? 'heroicons-solid:chevron-down' : 'heroicons-solid:chevron-right'} />
+                                  <IconifyIcon
+                                    icon={
+                                      isExpanded
+                                        ? 'heroicons-solid:chevron-down'
+                                        : 'heroicons-solid:chevron-right'
+                                    }
+                                  />
                                 </IconButton>
                                 {location?.nomeLocalizacao ?? 'N/A'}
                               </TableCell>
@@ -1278,38 +1465,74 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                                     <Table size="small">
                                       <TableHead>
                                         <TableRow>
-                                          <TableCell><strong>Produto</strong></TableCell>
-                                          <TableCell><strong>Seção</strong></TableCell>
-                                          <TableCell><strong>Prateleira</strong></TableCell>
-                                          <TableCell><strong>Corredor</strong></TableCell>
-                                          <TableCell><strong>Quantidade</strong></TableCell>
-                                          <TableCell><strong>Limite Mínimo</strong></TableCell>
-                                          <TableCell align="right"><strong>Ações</strong></TableCell>
+                                          <TableCell>
+                                            <strong>Produto</strong>
+                                          </TableCell>
+                                          <TableCell>
+                                            <strong>Seção</strong>
+                                          </TableCell>
+                                          <TableCell>
+                                            <strong>Prateleira</strong>
+                                          </TableCell>
+                                          <TableCell>
+                                            <strong>Corredor</strong>
+                                          </TableCell>
+                                          <TableCell>
+                                            <strong>Quantidade</strong>
+                                          </TableCell>
+                                          <TableCell>
+                                            <strong>Limite Mínimo</strong>
+                                          </TableCell>
+                                          <TableCell align="right">
+                                            <strong>Ações</strong>
+                                          </TableCell>
                                         </TableRow>
                                       </TableHead>
                                       <TableBody>
                                         {productsForLocation.map((loc) => {
                                           if (!loc.id) return null;
-                                          const product = products.find((p) => p.id === loc.id_produto);
-                                          const isBelowLimit = (loc.quantidadeProduto ?? 0) <= (loc.quantidadeMinimaProduto ?? 0);
+                                          const product = products.find(
+                                            (p) => p.id === loc.id_produto,
+                                          );
+                                          const isBelowLimit =
+                                            (loc.quantidadeProduto ?? 0) <=
+                                            (loc.quantidadeMinimaProduto ?? 0);
                                           return (
-                                            <TableRow key={loc.id} sx={{ bgcolor: isBelowLimit ? '#ffebee' : 'inherit' }}>
-                                              <TableCell sx={{ color: isBelowLimit ? 'red' : 'inherit' }}>
+                                            <TableRow
+                                              key={loc.id}
+                                              sx={{ bgcolor: isBelowLimit ? '#ffebee' : 'inherit' }}
+                                            >
+                                              <TableCell
+                                                sx={{ color: isBelowLimit ? 'red' : 'inherit' }}
+                                              >
                                                 {product?.nomeProduto ?? 'N/A'}
                                               </TableCell>
-                                              <TableCell sx={{ color: isBelowLimit ? 'red' : 'inherit' }}>
-                                                {sections.find((s) => s.id === loc.id_seccao)?.nomeSeccao ?? 'N/A'}
+                                              <TableCell
+                                                sx={{ color: isBelowLimit ? 'red' : 'inherit' }}
+                                              >
+                                                {sections.find((s) => s.id === loc.id_seccao)
+                                                  ?.nomeSeccao ?? 'N/A'}
                                               </TableCell>
-                                              <TableCell sx={{ color: isBelowLimit ? 'red' : 'inherit' }}>
-                                                {shelves.find((s) => s.id === loc.id_prateleira)?.nomePrateleira ?? 'N/A'}
+                                              <TableCell
+                                                sx={{ color: isBelowLimit ? 'red' : 'inherit' }}
+                                              >
+                                                {shelves.find((s) => s.id === loc.id_prateleira)
+                                                  ?.nomePrateleira ?? 'N/A'}
                                               </TableCell>
-                                              <TableCell sx={{ color: isBelowLimit ? 'red' : 'inherit' }}>
-                                                {corridors.find((c) => c.id === loc.id_corredor)?.nomeCorredor ?? 'N/A'}
+                                              <TableCell
+                                                sx={{ color: isBelowLimit ? 'red' : 'inherit' }}
+                                              >
+                                                {corridors.find((c) => c.id === loc.id_corredor)
+                                                  ?.nomeCorredor ?? 'N/A'}
                                               </TableCell>
-                                              <TableCell sx={{ color: isBelowLimit ? 'red' : 'inherit' }}>
+                                              <TableCell
+                                                sx={{ color: isBelowLimit ? 'red' : 'inherit' }}
+                                              >
                                                 {loc.quantidadeProduto ?? 0}
                                               </TableCell>
-                                              <TableCell sx={{ color: isBelowLimit ? 'red' : 'inherit' }}>
+                                              <TableCell
+                                                sx={{ color: isBelowLimit ? 'red' : 'inherit' }}
+                                              >
                                                 {loc.quantidadeMinimaProduto ?? 0}
                                               </TableCell>
                                               <TableCell align="right">
@@ -1342,7 +1565,9 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                       })
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={3} align="center">Nenhuma localização cadastrada</TableCell>
+                        <TableCell colSpan={3} align="center">
+                          Nenhuma localização cadastrada
+                        </TableCell>
                       </TableRow>
                     )}
                   </TableBody>
