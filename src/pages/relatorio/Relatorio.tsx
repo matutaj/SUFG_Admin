@@ -33,7 +33,6 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 
-// Mapeamento dos tipos de relatório para endpoints
 const reportTypeToEndpoint: { [key: string]: string } = {
   AtividadesCaixa: 'atividades-caixas',
   AtividadesDoDia: 'atividades-do-dia',
