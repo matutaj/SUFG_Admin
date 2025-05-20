@@ -33,12 +33,12 @@ import {
   deleteProduct,
   getAllProductCategories,
 } from '../../api/methods';
+import { getUserData, hasPermission } from '../../api/authUtils';
 
 interface CollapsedItemProps {
   open: boolean;
 }
 
-// Definir opções predefinidas para Unidade de Medida e Unidade de Conteúdo
 const unidadeMedidaOptions = [
   { value: 'L', label: 'Litros (L)' },
   { value: 'mL', label: 'Mililitros (mL)' },
@@ -106,6 +106,11 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const [searchTerm, setSearchTerm] = React.useState('');
   const [products, setProducts] = React.useState<Produto[]>([]);
   const [categories, setCategories] = React.useState<CategoriaProduto[]>([]);
+  const [userId, setUserId] = React.useState<string | null>(null);
+  const [canCreate, setCanCreate] = React.useState(false);
+  const [canUpdate, setCanUpdate] = React.useState(false);
+  const [canDelete, setCanDelete] = React.useState(false);
+  const [canRead, setCanRead] = React.useState(false);
   const [errors, setErrors] = React.useState<{
     nomeProduto?: string;
     referenciaProduto?: string;
@@ -122,12 +127,32 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const [page, setPage] = React.useState(0);
   const [rowsPerPage, setRowsPerPage] = React.useState(5);
 
-  // Função de logging condicional
+  // Função de logging para depuração
   const log = (message: string, ...args: any[]) => {
     if (process.env.NODE_ENV !== 'production') {
       console.log(message, ...args);
     }
   };
+
+  // Carregar dados do usuário e permissões
+  React.useEffect(() => {
+    const loadUserData = () => {
+      const userData = getUserData();
+      log('Dados do usuário:', userData);
+      if (userData && userData.id) {
+        setUserId(userData.id);
+        setCanRead(hasPermission('listar_produto')); // Updated permission
+        setCanCreate(hasPermission('criar_produto')); // Updated permission
+        setCanUpdate(hasPermission('atualizar_produto')); // Updated permission
+        setCanDelete(hasPermission('eliminar_produto')); // Updated permission
+        log('Permissões:', { canRead, canCreate, canUpdate, canDelete });
+      } else {
+        setAlert({ severity: 'error', message: 'Usuário não autenticado!' });
+        log('Nenhum usuário autenticado encontrado');
+      }
+    };
+    loadUserData();
+  }, []);
 
   const handleOpenProduct = () => {
     setOpenProductModal(true);
@@ -156,12 +181,19 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   };
 
   const fetchProducts = async () => {
+    if (!canRead) {
+      setAlert({ severity: 'error', message: 'Você não tem permissão para visualizar produtos!' });
+      log('Permissão de leitura negada');
+      return;
+    }
     try {
       setLoading(true);
       const productsData = await getAllProducts();
-      setProducts(productsData);
-    } catch (error) {
-      setAlert({ severity: 'error', message: 'Erro ao carregar produtos!' });
+      log('Produtos carregados:', productsData);
+      setProducts(productsData || []);
+    } catch (error: any) {
+      setAlert({ severity: 'error', message: error.message || 'Erro ao carregar produtos!' });
+      log('Erro ao carregar produtos:', error);
     } finally {
       setLoading(false);
     }
@@ -170,18 +202,34 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const fetchCategories = async () => {
     try {
       const data = await getAllProductCategories();
-      setCategories(data);
-    } catch (error) {
-      log('Error fetching categories:', error);
+      log('Categorias carregadas:', data);
+      setCategories(data || []);
+    } catch (error: any) {
+      setAlert({ severity: 'error', message: error.message || 'Erro ao carregar categorias!' });
+      log('Erro ao carregar categorias:', error);
     }
   };
 
   React.useEffect(() => {
-    fetchProducts();
-    fetchCategories();
-  }, []);
+    log('canRead changed:', canRead);
+    if (canRead) {
+      fetchProducts();
+      fetchCategories();
+    }
+  }, [canRead]);
 
   const handleAddProduct = async () => {
+    if (editProductRef && !canUpdate) {
+      setAlert({ severity: 'error', message: 'Você não tem permissão para atualizar produtos!' });
+      log('Permissão de atualização negada');
+      return;
+    }
+    if (!editProductRef && !canCreate) {
+      setAlert({ severity: 'error', message: 'Você não tem permissão para criar produtos!' });
+      log('Permissão de criação negada');
+      return;
+    }
+
     const newErrors: {
       nomeProduto?: string;
       referenciaProduto?: string;
@@ -191,7 +239,6 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       unidadeConteudo?: string;
     } = {};
 
-    // Validações
     if (!nomeProduto.trim()) newErrors.nomeProduto = 'O nome do produto é obrigatório.';
     if (!referenciaProduto.trim()) newErrors.referenciaProduto = 'A referência é obrigatória.';
     if (!idCategoriaProduto) newErrors.idCategoriaProduto = 'A categoria é obrigatória.';
@@ -199,7 +246,6 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     if (!unidadeMedida) newErrors.unidadeMedida = 'A unidade de medida é obrigatória.';
     if (!unidadeConteudo) newErrors.unidadeConteudo = 'O conteúdo é obrigatório.';
 
-    // Verificar duplicidade de nome
     const existingProduct = products.find(
       (p) =>
         p.nomeProduto.toLowerCase() === nomeProduto.trim().toLowerCase() &&
@@ -209,7 +255,6 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       newErrors.nomeProduto = 'Já existe um produto com este nome.';
     }
 
-    // Verificar duplicidade de referência
     const existingReference = products.find(
       (p) =>
         p.referenciaProduto.toLowerCase() === referenciaProduto.trim().toLowerCase() &&
@@ -221,6 +266,7 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
+      log('Erros de validação:', newErrors);
       return;
     }
 
@@ -241,10 +287,12 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         const updatedProduct = await updateProduct(editProductRef, productData);
         setProducts(products.map((p) => (p.id === updatedProduct.id ? updatedProduct : p)));
         setAlert({ severity: 'success', message: 'Produto atualizado com sucesso!' });
+        log('Produto atualizado:', updatedProduct);
       } else {
         const newProduct = await createProduct(productData);
         setProducts([...products, newProduct]);
         setAlert({ severity: 'success', message: 'Produto cadastrado com sucesso!' });
+        log('Produto criado:', newProduct);
       }
 
       handleCloseProduct();
@@ -253,12 +301,18 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       const errorMessage = error.message || 'Erro ao salvar produto!';
       setErrors({ nomeProduto: errorMessage });
       setAlert({ severity: 'error', message: errorMessage });
+      log('Erro ao salvar produto:', error);
     } finally {
       setLoading(false);
     }
   };
 
   const handleEditProduct = (ref: string) => {
+    if (!canUpdate) {
+      setAlert({ severity: 'error', message: 'Você não tem permissão para editar produtos!' });
+      log('Permissão de edição negada');
+      return;
+    }
     const productToEdit = products.find((p) => p.id === ref);
     if (productToEdit) {
       setNomeProduto(productToEdit.nomeProduto);
@@ -268,23 +322,32 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       setUnidadeMedida(productToEdit.unidadeMedida);
       setUnidadeConteudo(productToEdit.unidadeConteudo);
       setEditProductRef(ref);
+      log('Editando produto:', productToEdit);
       handleOpenProduct();
     }
   };
 
   const handleDeleteProduct = async () => {
+    if (!canDelete) {
+      setAlert({ severity: 'error', message: 'Você não tem permissão para excluir produtos!' });
+      log('Permissão de exclusão negada');
+      handleCloseConfirmModal();
+      return;
+    }
     if (productToDelete) {
       try {
         setLoading(true);
         await deleteProduct(productToDelete);
         setProducts(products.filter((p) => p.id !== productToDelete));
         setAlert({ severity: 'success', message: 'Produto excluído com sucesso!' });
+        log('Produto excluído:', productToDelete);
         const totalPages = Math.ceil(filteredProducts.length / rowsPerPage);
         if (page >= totalPages && page > 0) {
           setPage(page - 1);
         }
-      } catch (error) {
-        setAlert({ severity: 'error', message: 'Erro ao excluir produto!' });
+      } catch (error: any) {
+        setAlert({ severity: 'error', message: error.message || 'Erro ao excluir produto!' });
+        log('Erro ao excluir produto:', error);
       } finally {
         setLoading(false);
         handleCloseConfirmModal();
@@ -313,13 +376,11 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     page * rowsPerPage + rowsPerPage,
   );
 
-  // Função para obter o rótulo da Unidade de Medida
   const getUnidadeMedidaLabel = (value: string) => {
     const option = unidadeMedidaOptions.find((opt) => opt.value === value);
     return option ? option.label : 'N/A';
   };
 
-  // Função para obter o rótulo da Unidade de Conteúdo
   const getUnidadeConteudoLabel = (value: string) => {
     const option = unidadeConteudoOptions.find((opt) => opt.value === value);
     return option ? option.label : 'N/A';
@@ -345,13 +406,15 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 setPage(0);
               }}
               sx={{ minWidth: 400 }}
+              disabled={!canRead}
             />
             <Button
               variant="contained"
               color="secondary"
               onClick={handleOpenProduct}
-              disabled={loading}
+              disabled={loading || !canCreate}
               startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
+              title={!canCreate ? 'Você não tem permissão para criar produtos' : ''}
             >
               Novo Produto
             </Button>
@@ -372,7 +435,7 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 onChange={(e) => setNomeProduto(e.target.value)}
                 error={Boolean(errors.nomeProduto)}
                 helperText={errors.nomeProduto}
-                disabled={loading}
+                disabled={loading || (editProductRef ? !canUpdate : !canCreate)}
                 fullWidth
               />
             </Grid>
@@ -383,7 +446,7 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 onChange={(e) => setReferenciaProduto(e.target.value)}
                 error={Boolean(errors.referenciaProduto)}
                 helperText={errors.referenciaProduto}
-                disabled={loading}
+                disabled={loading || (editProductRef ? !canUpdate : !canCreate)}
                 fullWidth
               />
             </Grid>
@@ -395,7 +458,7 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 onChange={(e) => setIdCategoriaProduto(e.target.value)}
                 error={Boolean(errors.idCategoriaProduto)}
                 helperText={errors.idCategoriaProduto}
-                disabled={loading}
+                disabled={loading || (editProductRef ? !canUpdate : !canCreate)}
                 fullWidth
               >
                 <MenuItem value="" disabled>
@@ -416,7 +479,7 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 onChange={(e) => setPrecoVenda(Number(e.target.value) || 0)}
                 error={Boolean(errors.precoVenda)}
                 helperText={errors.precoVenda}
-                disabled={loading}
+                disabled={loading || (editProductRef ? !canUpdate : !canCreate)}
                 fullWidth
               />
             </Grid>
@@ -428,7 +491,7 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 onChange={(e) => setUnidadeMedida(e.target.value)}
                 error={Boolean(errors.unidadeMedida)}
                 helperText={errors.unidadeMedida}
-                disabled={loading}
+                disabled={loading || (editProductRef ? !canUpdate : !canCreate)}
                 fullWidth
               >
                 <MenuItem value="" disabled>
@@ -449,7 +512,7 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 onChange={(e) => setUnidadeConteudo(e.target.value)}
                 error={Boolean(errors.unidadeConteudo)}
                 helperText={errors.unidadeConteudo}
-                disabled={loading}
+                disabled={loading || (editProductRef ? !canUpdate : !canCreate)}
                 fullWidth
               >
                 <MenuItem value="" disabled>
@@ -467,9 +530,18 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 variant="contained"
                 color="secondary"
                 onClick={handleAddProduct}
-                disabled={loading}
+                disabled={loading || (editProductRef ? !canUpdate : !canCreate)}
                 fullWidth
                 sx={{ mt: 2 }}
+                title={
+                  editProductRef
+                    ? !canUpdate
+                      ? 'Você não tem permissão para atualizar produtos'
+                      : ''
+                    : !canCreate
+                      ? 'Você não tem permissão para criar produtos'
+                      : ''
+                }
               >
                 {loading ? 'Salvando...' : editProductRef ? 'Atualizar' : 'Cadastrar'}
               </Button>
@@ -501,7 +573,8 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               variant="contained"
               color="error"
               onClick={handleDeleteProduct}
-              disabled={loading}
+              disabled={loading || !canDelete}
+              title={!canDelete ? 'Você não tem permissão para excluir produtos' : ''}
             >
               {loading ? 'Excluindo...' : 'Excluir'}
             </Button>
@@ -564,16 +637,18 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                         <IconButton
                           color="primary"
                           onClick={() => handleEditProduct(product.id!)}
-                          disabled={loading}
+                          disabled={loading || !canUpdate}
                           aria-label="Editar produto"
+                          title={!canUpdate ? 'Você não tem permissão para editar produtos' : ''}
                         >
                           <Edit />
                         </IconButton>
                         <IconButton
                           color="error"
                           onClick={() => handleOpenConfirmModal(product.id!)}
-                          disabled={loading}
+                          disabled={loading || !canDelete}
                           aria-label="Excluir produto"
+                          title={!canDelete ? 'Você não tem permissão para excluir produtos' : ''}
                         >
                           <Delete />
                         </IconButton>
@@ -602,6 +677,7 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             labelDisplayedRows={({ from, to, count }) =>
               `${from}–${to} de ${count !== -1 ? count : `mais de ${to}`}`
             }
+            disabled={!canRead}
           />
         </CardContent>
       </Card>
