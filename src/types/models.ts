@@ -373,8 +373,8 @@ export interface Tarefa {
 }
 
 export interface AtividadeDoDia {
-  tarefa: any;
-  funcionarios: any;
+  tarefa?: any;
+  funcionarios?: any;
   id?: string;
   id_funcionario: string;
   id_tarefa: string;
