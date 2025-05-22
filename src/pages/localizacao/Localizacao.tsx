@@ -72,6 +72,13 @@ const confirmModalStyle = {
   borderRadius: 1,
 };
 
+interface Permissions {
+  canRead: boolean;
+  canCreate: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+}
+
 const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const navigate = useNavigate();
   const [openWarehouseModal, setOpenWarehouseModal] = useState(false);
@@ -95,94 +102,52 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     message: string;
   } | null>(null);
   const [page, setPage] = useState(0);
-  const rowsPerPage = 6;
-
-  // Permission states
-  const [canRead, setCanRead] = useState(false);
-  const [canCreate, setCanCreate] = useState(false);
-  const [canUpdate, setCanUpdate] = useState(false);
-  const [canDelete, setCanDelete] = useState(false);
+  const [rowsPerPage, setRowsPerPage] = useState(6);
+  const [permissions, setPermissions] = useState<Permissions>({
+    canRead: false,
+    canCreate: false,
+    canUpdate: false,
+    canDelete: false,
+  });
 
   // Logging function for debugging
   const log = (message: string, ...args: any[]) => {
     if (process.env.NODE_ENV !== 'production') {
-      console.log(message, ...args);
+      console.log(`[WarehouseComponent] ${message}`, ...args);
     }
   };
 
-  const handleOpen = useCallback(() => {
-    if (!canCreate && !editWarehouseId) {
-      setAlert({
-        severity: 'error',
-        message: 'Você não tem permissão para criar localizações!',
-      });
-      log('Permissão de criação negada');
-      return;
-    }
-    if (!canUpdate && editWarehouseId) {
-      setAlert({
-        severity: 'error',
-        message: 'Você não tem permissão para atualizar localizações!',
-      });
-      log('Permissão de atualização negada');
-      return;
-    }
-    setOpenWarehouseModal(true);
-  }, [canCreate, canUpdate, editWarehouseId]);
-
-  const handleClose = useCallback(() => {
-    setOpenWarehouseModal(false);
-    setEditWarehouseId(null);
-    setNomeLocalizacao('');
-    setDescricao('');
-    setTipoSelecionado(null);
-    setErrors({});
-  }, []);
-
-  const handleOpenConfirmDelete = useCallback(
-    (id: string) => {
-      if (!canDelete) {
-        setAlert({
-          severity: 'error',
-          message: 'Você não tem permissão para excluir localizações!',
-        });
-        log('Permissão de exclusão negada');
-        return;
+  // Carregar dados do usuário e permissões
+  useEffect(() => {
+    const loadUserDataAndPermissions = async () => {
+      try {
+        const userData = await getUserData();
+        log('Dados do usuário:', userData);
+        if (userData && userData.id) {
+          const [canRead, canCreate, canUpdate, canDelete] = await Promise.all([
+            hasPermission('listar_localizacao'),
+            hasPermission('criar_localizacao'),
+            hasPermission('atualizar_localizacao'),
+            hasPermission('eliminar_localizacao'),
+          ]);
+          setPermissions({ canRead, canCreate, canUpdate, canDelete });
+          log('Permissões carregadas:', { canRead, canCreate, canUpdate, canDelete });
+        } else {
+          setAlert({ severity: 'error', message: 'Usuário não autenticado!' });
+          log('Nenhum usuário autenticado encontrado');
+          navigate('/login');
+        }
+      } catch (error: any) {
+        setAlert({ severity: 'error', message: 'Erro ao carregar dados do usuário!' });
+        log('Erro ao carregar dados do usuário:', error);
+        navigate('/login');
       }
-      setDeleteWarehouseId(id);
-      setOpenConfirmDelete(true);
-    },
-    [canDelete],
-  );
-
-  const handleCloseConfirmDelete = useCallback(() => {
-    setOpenConfirmDelete(false);
-    setDeleteWarehouseId(null);
-  }, []);
-
-  const loadUserData = useCallback(() => {
-    try {
-      const userData = getUserData();
-      log('Dados do usuário:', userData);
-      if (!userData || !userData.id) {
-        throw new Error('Usuário não autenticado');
-      }
-      setCanRead(hasPermission('listar_localizacao'));
-      setCanCreate(hasPermission('criar_localizacao'));
-      setCanUpdate(hasPermission('atualizar_localizacao'));
-      setCanDelete(hasPermission('eliminar_localizacao'));
-      log('Permissões:', { canRead, canCreate, canUpdate, canDelete });
-      return userData.id;
-    } catch (error: any) {
-      console.error('Erro em loadUserData:', error);
-      setAlert({ severity: 'error', message: error.message });
-      navigate('/login');
-      return '';
-    }
+    };
+    loadUserDataAndPermissions();
   }, [navigate]);
 
   const fetchLocalizacoes = useCallback(async () => {
-    if (!canRead) {
+    if (!permissions.canRead) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para visualizar localizações!',
@@ -200,11 +165,14 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
           ),
         ]);
       const data = await timeoutPromise(getAllLocations(), 10000);
+      if (!Array.isArray(data)) {
+        throw new Error('A resposta de getAllLocations não é um array');
+      }
       setLocalizacoes(data ?? []);
       setLocalizacoesFiltradas(data ?? []);
+      setPage(0);
       log('Localizações carregadas:', data);
     } catch (error: any) {
-      console.error('Erro ao buscar localizações:', error);
       let errorMessage = 'Erro ao carregar localizações';
       if (error.response) {
         if (error.response.status === 403) {
@@ -216,27 +184,67 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         errorMessage = 'A requisição demorou muito para responder';
       }
       setAlert({ severity: 'error', message: errorMessage });
+      log('Erro ao buscar localizações:', error);
     } finally {
       setLoading(false);
     }
-  }, [canRead]);
+  }, [permissions.canRead]);
 
   useEffect(() => {
-    const initialize = async () => {
-      try {
-        const id = loadUserData();
-        if (!id) {
-          navigate('/login');
-          return;
-        }
-        await fetchLocalizacoes();
-      } catch (error) {
-        console.error('Erro no initialize:', error);
-        setAlert({ severity: 'error', message: 'Erro ao inicializar a página' });
+    if (permissions.canRead) {
+      fetchLocalizacoes();
+    }
+  }, [fetchLocalizacoes, permissions.canRead]);
+
+  const handleOpen = useCallback(() => {
+    if (!permissions.canCreate && !editWarehouseId) {
+      setAlert({
+        severity: 'error',
+        message: 'Você não tem permissão para criar localizações!',
+      });
+      log('Permissão de criação negada');
+      return;
+    }
+    if (!permissions.canUpdate && editWarehouseId) {
+      setAlert({
+        severity: 'error',
+        message: 'Você não tem permissão para atualizar localizações!',
+      });
+      log('Permissão de atualização negada');
+      return;
+    }
+    setOpenWarehouseModal(true);
+  }, [permissions.canCreate, permissions.canUpdate, editWarehouseId]);
+
+  const handleClose = useCallback(() => {
+    setOpenWarehouseModal(false);
+    setEditWarehouseId(null);
+    setNomeLocalizacao('');
+    setDescricao('');
+    setTipoSelecionado(null);
+    setErrors({});
+  }, []);
+
+  const handleOpenConfirmDelete = useCallback(
+    (id: string) => {
+      if (!permissions.canDelete) {
+        setAlert({
+          severity: 'error',
+          message: 'Você não tem permissão para excluir localizações!',
+        });
+        log('Permissão de exclusão negada');
+        return;
       }
-    };
-    initialize();
-  }, [fetchLocalizacoes, loadUserData, navigate]);
+      setDeleteWarehouseId(id);
+      setOpenConfirmDelete(true);
+    },
+    [permissions.canDelete],
+  );
+
+  const handleCloseConfirmDelete = useCallback(() => {
+    setOpenConfirmDelete(false);
+    setDeleteWarehouseId(null);
+  }, []);
 
   const getTipoLabel = useCallback((tipoValue: tipo | null | undefined): string => {
     switch (tipoValue) {
@@ -250,7 +258,7 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   }, []);
 
   const handleAddLocation = useCallback(async () => {
-    if (!canCreate && !editWarehouseId) {
+    if (!permissions.canCreate && !editWarehouseId) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para criar localizações!',
@@ -258,7 +266,7 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       log('Permissão de criação negada');
       return;
     }
-    if (!canUpdate && editWarehouseId) {
+    if (!permissions.canUpdate && editWarehouseId) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para atualizar localizações!',
@@ -286,7 +294,13 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       };
 
       if (editWarehouseId) {
-        await updateLocation(editWarehouseId, locationData);
+        const updatedLocation = await updateLocation(editWarehouseId, locationData);
+        setLocalizacoes((prev) =>
+          prev.map((loc) => (loc.id === editWarehouseId ? updatedLocation : loc)),
+        );
+        setLocalizacoesFiltradas((prev) =>
+          prev.map((loc) => (loc.id === editWarehouseId ? updatedLocation : loc)),
+        );
         setAlert({ severity: 'success', message: 'Localização atualizada com sucesso!' });
         log('Localização atualizada:', { id: editWarehouseId, ...locationData });
       } else {
@@ -296,9 +310,9 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         setAlert({ severity: 'success', message: 'Localização cadastrada com sucesso!' });
         log('Localização criada:', newLocation);
       }
+      setPage(0);
       handleClose();
     } catch (error: any) {
-      console.error('Erro ao salvar localização:', error);
       let errorMessage = 'Erro ao salvar localização';
       if (error.response) {
         if (error.response.status === 409) {
@@ -310,12 +324,14 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         }
       }
       setAlert({ severity: 'error', message: errorMessage });
+      setErrors({ nomeLocalizacao: 'Erro ao salvar. Tente novamente.' });
+      log('Erro ao salvar localização:', error);
     } finally {
       setLoading(false);
     }
   }, [
-    canCreate,
-    canUpdate,
+    permissions.canCreate,
+    permissions.canUpdate,
     editWarehouseId,
     nomeLocalizacao,
     descricao,
@@ -325,7 +341,7 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const handleEdit = useCallback(
     (id: string) => {
-      if (!canUpdate) {
+      if (!permissions.canUpdate) {
         setAlert({
           severity: 'error',
           message: 'Você não tem permissão para atualizar localizações!',
@@ -345,11 +361,11 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         setAlert({ severity: 'error', message: 'Localização não encontrada para edição' });
       }
     },
-    [canUpdate, localizacoes, handleOpen],
+    [permissions.canUpdate, localizacoes, handleOpen],
   );
 
   const handleDelete = useCallback(async () => {
-    if (!canDelete) {
+    if (!permissions.canDelete) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para excluir localizações!',
@@ -365,23 +381,21 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     try {
       setLoading(true);
       setAlert(null);
-
-      // Cache the location for rollback
       const locationToDelete = localizacoes.find((loc) => loc.id === deleteWarehouseId);
       if (!locationToDelete) {
         throw new Error('Localização não encontrada');
       }
-
-      // Optimistic update
       setLocalizacoes((prev) => prev.filter((loc) => loc.id !== deleteWarehouseId));
       setLocalizacoesFiltradas((prev) => prev.filter((loc) => loc.id !== deleteWarehouseId));
-
       await deleteLocation(deleteWarehouseId);
       setAlert({ severity: 'success', message: 'Localização excluída com sucesso!' });
       log('Localização excluída:', deleteWarehouseId);
+      const totalPages = Math.ceil((localizacoes.length - 1) / rowsPerPage);
+      if (page >= totalPages && page > 0) {
+        setPage(page - 1);
+      }
       handleCloseConfirmDelete();
     } catch (error: any) {
-      console.error('Erro ao excluir localização:', error);
       let errorMessage = 'Erro ao excluir localização';
       if (error.response) {
         if (error.response.status === 404) {
@@ -396,8 +410,6 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
           errorMessage = 'Erro interno no servidor';
         }
       }
-
-      // Rollback optimistic update
       if (locationToDelete) {
         setLocalizacoes((prev) =>
           [...prev, locationToDelete].sort((a, b) =>
@@ -410,14 +422,21 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
           ),
         );
       }
-
       setAlert({ severity: 'error', message: errorMessage });
+      log('Erro ao excluir localização:', error);
     } finally {
       setLoading(false);
     }
-  }, [canDelete, deleteWarehouseId, localizacoes, handleCloseConfirmDelete]);
+  }, [
+    permissions.canDelete,
+    deleteWarehouseId,
+    localizacoes,
+    page,
+    rowsPerPage,
+    handleCloseConfirmDelete,
+  ]);
 
-  const handleSearch = useMemo(() => {
+  const handleSearch = useCallback(() => {
     const query = searchQuery.toLowerCase().trim();
     if (!query) {
       setLocalizacoesFiltradas(localizacoes);
@@ -434,8 +453,8 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   }, [searchQuery, localizacoes, getTipoLabel]);
 
   useEffect(() => {
-    handleSearch;
-  }, [searchQuery, localizacoes]);
+    handleSearch();
+  }, [handleSearch]);
 
   useEffect(() => {
     if (alert) {
@@ -444,12 +463,15 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     }
   }, [alert]);
 
-  const handleChangePage = useCallback(
-    (_event: React.MouseEvent<HTMLButtonElement> | null, newPage: number) => {
-      setPage(newPage);
-    },
-    [],
-  );
+  const handleChangePage = useCallback((event: unknown, newPage: number) => {
+    setPage(newPage);
+  }, []);
+
+  const handleChangeRowsPerPage = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const newRowsPerPage = parseInt(event.target.value, 10);
+    setRowsPerPage(newRowsPerPage);
+    setPage(0);
+  }, []);
 
   const paginatedLocations = useMemo(
     () => localizacoesFiltradas.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
@@ -476,16 +498,20 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 label="Pesquisar Localização"
                 variant="outlined"
                 size="small"
-                disabled={loading || !canRead}
-                title={!canRead ? 'Você não tem permissão para visualizar localizações' : ''}
+                disabled={loading || !permissions.canRead}
+                title={
+                  !permissions.canRead ? 'Você não tem permissão para visualizar localizações' : ''
+                }
               />
               <Button
                 variant="contained"
                 color="secondary"
                 onClick={handleOpen}
-                disabled={loading || !canCreate}
+                disabled={loading || !permissions.canCreate}
                 startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
-                title={!canCreate ? 'Você não tem permissão para criar localizações' : ''}
+                title={
+                  !permissions.canCreate ? 'Você não tem permissão para criar localizações' : ''
+                }
               >
                 Localização
               </Button>
@@ -507,10 +533,21 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               onChange={(e) => setNomeLocalizacao(e.target.value)}
               error={Boolean(errors.nomeLocalizacao)}
               helperText={errors.nomeLocalizacao}
-              disabled={loading}
+              disabled={
+                loading || (editWarehouseId ? !permissions.canUpdate : !permissions.canCreate)
+              }
               variant="filled"
               fullWidth
               required
+              title={
+                editWarehouseId
+                  ? !permissions.canUpdate
+                    ? 'Você não tem permissão para atualizar localizações'
+                    : ''
+                  : !permissions.canCreate
+                    ? 'Você não tem permissão para criar localizações'
+                    : ''
+              }
             />
             <TextField
               id="descricao"
@@ -519,19 +556,46 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               onChange={(e) => setDescricao(e.target.value)}
               error={Boolean(errors.descricao)}
               helperText={errors.descricao}
-              disabled={loading}
+              disabled={
+                loading || (editWarehouseId ? !permissions.canUpdate : !permissions.canCreate)
+              }
               variant="filled"
               fullWidth
               required
+              title={
+                editWarehouseId
+                  ? !permissions.canUpdate
+                    ? 'Você não tem permissão para atualizar localizações'
+                    : ''
+                  : !permissions.canCreate
+                    ? 'Você não tem permissão para criar localizações'
+                    : ''
+              }
             />
-            <FormControl variant="filled" fullWidth error={Boolean(errors.tipo)} required>
+            <FormControl
+              variant="filled"
+              fullWidth
+              error={Boolean(errors.tipo)}
+              required
+              disabled={
+                loading || (editWarehouseId ? !permissions.canUpdate : !permissions.canCreate)
+              }
+            >
               <InputLabel id="tipo-label">Tipo de Localização</InputLabel>
               <Select
                 labelId="tipo-label"
                 id="tipo"
                 value={tipoSelecionado || ''}
                 onChange={(e) => setTipoSelecionado(e.target.value as tipo)}
-                disabled={loading}
+                title={
+                  editWarehouseId
+                    ? !permissions.canUpdate
+                      ? 'Você não tem permissão para atualizar localizações'
+                      : ''
+                    : !permissions.canCreate
+                      ? 'Você não tem permissão para criar localizações'
+                      : ''
+                }
               >
                 <MenuItem value="" disabled>
                   Selecione o tipo
@@ -546,14 +610,16 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               color="secondary"
               onClick={handleAddLocation}
               disabled={
-                loading || (!canCreate && !editWarehouseId) || (!canUpdate && editWarehouseId)
+                loading || (editWarehouseId ? !permissions.canUpdate : !permissions.canCreate)
               }
               fullWidth
               title={
-                !canCreate && !editWarehouseId
-                  ? 'Você não tem permissão para criar localizações'
-                  : !canUpdate && editWarehouseId
+                editWarehouseId
+                  ? !permissions.canUpdate
                     ? 'Você não tem permissão para atualizar localizações'
+                    : ''
+                  : !permissions.canCreate
+                    ? 'Você não tem permissão para criar localizações'
                     : ''
               }
             >
@@ -609,9 +675,11 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                         <IconButton
                           color="primary"
                           onClick={() => handleEdit(location.id!)}
-                          disabled={loading || !canUpdate}
+                          disabled={loading || !permissions.canUpdate}
                           title={
-                            !canUpdate ? 'Você não tem permissão para atualizar localizações' : ''
+                            !permissions.canUpdate
+                              ? 'Você não tem permissão para atualizar localizações'
+                              : ''
                           }
                         >
                           <Edit />
@@ -619,9 +687,11 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                         <IconButton
                           color="error"
                           onClick={() => handleOpenConfirmDelete(location.id!)}
-                          disabled={loading || !canDelete}
+                          disabled={loading || !permissions.canDelete}
                           title={
-                            !canDelete ? 'Você não tem permissão para excluir localizações' : ''
+                            !permissions.canDelete
+                              ? 'Você não tem permissão para excluir localizações'
+                              : ''
                           }
                         >
                           <Delete />
@@ -640,15 +710,18 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             </Table>
           </TableContainer>
           <TablePagination
-            rowsPerPageOptions={[rowsPerPage]}
+            rowsPerPageOptions={[6, 12, 24]}
             component="div"
             count={localizacoesFiltradas.length}
             rowsPerPage={rowsPerPage}
             page={page}
             onPageChange={handleChangePage}
-            labelRowsPerPage="Itens por página"
-            labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
-            disabled={loading || !canRead}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+            labelRowsPerPage="Itens por página:"
+            labelDisplayedRows={({ from, to, count }) =>
+              `${from}–${to} de ${count !== -1 ? count : `mais de ${to}`}`
+            }
+            disabled={loading || !permissions.canRead}
           />
         </CardContent>
       </Card>
@@ -664,7 +737,9 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             Confirmar Exclusão
           </Typography>
           <Typography id="confirm-delete-modal-description" sx={{ mb: 3 }}>
-            Tem certeza que deseja excluir esta localização?
+            Tem certeza que deseja excluir a localização "
+            {localizacoes.find((loc) => loc.id === deleteWarehouseId)?.nomeLocalizacao}"? Esta ação
+            não pode ser desfeita.
           </Typography>
           {loading && (
             <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
@@ -684,8 +759,10 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               variant="contained"
               color="error"
               onClick={handleDelete}
-              disabled={loading || !canDelete}
-              title={!canDelete ? 'Você não tem permissão para excluir localizações' : ''}
+              disabled={loading || !permissions.canDelete}
+              title={
+                !permissions.canDelete ? 'Você não tem permissão para excluir localizações' : ''
+              }
             >
               {loading ? 'Excluindo...' : 'Excluir'}
             </Button>

@@ -68,6 +68,13 @@ const confirmModalStyle = {
   borderRadius: 1,
 };
 
+interface Permissions {
+  canRead: boolean;
+  canCreate: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+}
+
 const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
   const navigate = useNavigate();
   const [openModal, setOpenModal] = useState(false);
@@ -91,12 +98,12 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
   const [loadingFetch, setLoadingFetch] = useState(false);
   const [loadingSave, setLoadingSave] = useState(false);
   const [loadingDelete, setLoadingDelete] = useState(false);
-
-  // Permission states
-  const [canRead, setCanRead] = useState(false);
-  const [canCreate, setCanCreate] = useState(false);
-  const [canUpdate, setCanUpdate] = useState(false);
-  const [canDelete, setCanDelete] = useState(false);
+  const [permissions, setPermissions] = useState<Permissions>({
+    canRead: false,
+    canCreate: false,
+    canUpdate: false,
+    canDelete: false,
+  });
 
   // Logging function for debugging
   const log = (message: string, ...args: any[]) => {
@@ -105,29 +112,37 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
     }
   };
 
-  const loadUserData = useCallback(() => {
-    try {
-      const userData = getUserData();
-      log('Dados do usuário:', userData);
-      if (!userData || !userData.id) {
-        throw new Error('Usuário não autenticado');
+  // Carregar dados do usuário e permissões
+  useEffect(() => {
+    const loadUserDataAndPermissions = async () => {
+      try {
+        const userData = await getUserData();
+        log('Dados do usuário:', userData);
+        if (userData && userData.id) {
+          const [canRead, canCreate, canUpdate, canDelete] = await Promise.all([
+            hasPermission('listar_fornecedor'),
+            hasPermission('criar_fornecedor'),
+            hasPermission('atualizar_fornecedor'),
+            hasPermission('eliminar_fornecedor'),
+          ]);
+          setPermissions({ canRead, canCreate, canUpdate, canDelete });
+          log('Permissões carregadas:', { canRead, canCreate, canUpdate, canDelete });
+        } else {
+          setAlert({ severity: 'error', message: 'Usuário não autenticado!' });
+          log('Nenhum usuário autenticado encontrado');
+          navigate('/login');
+        }
+      } catch (error: any) {
+        setAlert({ severity: 'error', message: 'Erro ao carregar dados do usuário!' });
+        log('Erro ao carregar dados do usuário:', error);
+        navigate('/login');
       }
-      setCanRead(hasPermission('listar_fornecedor'));
-      setCanCreate(hasPermission('criar_fornecedor'));
-      setCanUpdate(hasPermission('atualizar_fornecedor'));
-      setCanDelete(hasPermission('eliminar_fornecedor'));
-      log('Permissões:', { canRead, canCreate, canUpdate, canDelete });
-      return userData.id;
-    } catch (error: any) {
-      console.error('Erro em loadUserData:', error);
-      setAlert({ severity: 'error', message: error.message });
-      navigate('/login');
-      return '';
-    }
+    };
+    loadUserDataAndPermissions();
   }, [navigate]);
 
   const fetchFornecedores = useCallback(async () => {
-    if (!canRead) {
+    if (!permissions.canRead) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para visualizar fornecedores!',
@@ -151,7 +166,6 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
       setFornecedores(data ?? []);
       log('Fornecedores carregados:', data);
     } catch (error: any) {
-      console.error('Erro ao buscar fornecedores:', error);
       let errorMessage = 'Erro ao carregar fornecedores';
       if (error.response) {
         if (error.response.status === 403) {
@@ -163,30 +177,20 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
         errorMessage = 'A requisição demorou muito para responder';
       }
       setAlert({ severity: 'error', message: errorMessage });
+      log('Erro ao buscar fornecedores:', error);
     } finally {
       setLoadingFetch(false);
     }
-  }, [canRead]);
+  }, [permissions.canRead]);
 
   useEffect(() => {
-    const initialize = async () => {
-      try {
-        const id = loadUserData();
-        if (!id) {
-          navigate('/login');
-          return;
-        }
-        await fetchFornecedores();
-      } catch (error) {
-        console.error('Erro no initialize:', error);
-        setAlert({ severity: 'error', message: 'Erro ao inicializar a página' });
-      }
-    };
-    initialize();
-  }, [fetchFornecedores, loadUserData, navigate]);
+    if (permissions.canRead) {
+      fetchFornecedores();
+    }
+  }, [fetchFornecedores, permissions.canRead]);
 
   const handleOpen = useCallback(() => {
-    if (!canCreate && !isEditing) {
+    if (!permissions.canCreate && !isEditing) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para criar fornecedores!',
@@ -194,7 +198,7 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
       log('Permissão de criação negada');
       return;
     }
-    if (!canUpdate && isEditing) {
+    if (!permissions.canUpdate && isEditing) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para atualizar fornecedores!',
@@ -213,7 +217,7 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
     });
     setErrors({});
     setOpenModal(true);
-  }, [canCreate, canUpdate, isEditing]);
+  }, [permissions.canCreate, permissions.canUpdate, isEditing]);
 
   const handleClose = useCallback(() => {
     setOpenModal(false);
@@ -231,7 +235,7 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const handleOpenConfirmDelete = useCallback(
     (id: string) => {
-      if (!canDelete) {
+      if (!permissions.canDelete) {
         setAlert({
           severity: 'error',
           message: 'Você não tem permissão para excluir fornecedores!',
@@ -242,7 +246,7 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
       setDeleteFornecedorId(id);
       setOpenConfirmDelete(true);
     },
-    [canDelete],
+    [permissions.canDelete],
   );
 
   const handleCloseConfirmDelete = useCallback(() => {
@@ -274,7 +278,7 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const onSubmit = useCallback(async () => {
     if (!validateForm()) return;
-    if (!canCreate && !isEditing) {
+    if (!permissions.canCreate && !isEditing) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para criar fornecedores!',
@@ -282,7 +286,7 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
       log('Permissão de criação negada');
       return;
     }
-    if (!canUpdate && isEditing) {
+    if (!permissions.canUpdate && isEditing) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para atualizar fornecedores!',
@@ -315,7 +319,6 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
       }
       handleClose();
     } catch (error: any) {
-      console.error('Erro ao salvar fornecedor:', error);
       let errorMessage = 'Erro ao salvar fornecedor';
       if (error.response) {
         if (error.response.status === 409) {
@@ -328,13 +331,14 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
       }
       setAlert({ severity: 'error', message: errorMessage });
       setErrors({ nomeFornecedor: 'Erro ao salvar. Tente novamente.' });
+      log('Erro ao salvar fornecedor:', error);
     } finally {
       setLoadingSave(false);
     }
-  }, [canCreate, canUpdate, isEditing, editId, form, handleClose]);
+  }, [permissions.canCreate, permissions.canUpdate, isEditing, editId, form, handleClose]);
 
   const handleDelete = useCallback(async () => {
-    if (!canDelete) {
+    if (!permissions.canDelete) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para excluir fornecedores!',
@@ -359,7 +363,6 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
       log('Fornecedor excluído:', deleteFornecedorId);
       handleCloseConfirmDelete();
     } catch (error: any) {
-      console.error('Erro ao excluir fornecedor:', error);
       let errorMessage = 'Erro ao excluir fornecedor';
       if (error.response) {
         if (error.response.status === 404) {
@@ -382,14 +385,15 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
         );
       }
       setAlert({ severity: 'error', message: errorMessage });
+      log('Erro ao excluir fornecedor:', error);
     } finally {
       setLoadingDelete(false);
     }
-  }, [canDelete, deleteFornecedorId, fornecedores, handleCloseConfirmDelete]);
+  }, [permissions.canDelete, deleteFornecedorId, fornecedores, handleCloseConfirmDelete]);
 
   const handleEdit = useCallback(
     (fornecedor: Fornecedor) => {
-      if (!canUpdate) {
+      if (!permissions.canUpdate) {
         setAlert({
           severity: 'error',
           message: 'Você não tem permissão para atualizar fornecedores!',
@@ -414,7 +418,7 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
       setOpenModal(true);
       log('Editando fornecedor:', fornecedor);
     },
-    [canUpdate],
+    [permissions.canUpdate],
   );
 
   useEffect(() => {
@@ -445,8 +449,8 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
               color="secondary"
               onClick={handleOpen}
               startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
-              disabled={loadingFetch || loadingSave || !canCreate}
-              title={!canCreate ? 'Você não tem permissão para criar fornecedores' : ''}
+              disabled={loadingFetch || loadingSave || !permissions.canCreate}
+              title={!permissions.canCreate ? 'Você não tem permissão para criar fornecedores' : ''}
             >
               <Typography variant="body2">Adicionar</Typography>
             </Button>
@@ -479,7 +483,18 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
                 fullWidth
                 value={form.nif || ''}
                 onChange={handleChange}
-                disabled={loadingSave}
+                disabled={
+                  loadingSave || (isEditing ? !permissions.canUpdate : !permissions.canCreate)
+                }
+                title={
+                  isEditing
+                    ? !permissions.canUpdate
+                      ? 'Você não tem permissão para atualizar fornecedores'
+                      : ''
+                    : !permissions.canCreate
+                      ? 'Você não tem permissão para criar fornecedores'
+                      : ''
+                }
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -492,8 +507,19 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
                 onChange={handleChange}
                 error={!!errors.nomeFornecedor}
                 helperText={errors.nomeFornecedor}
-                disabled={loadingSave}
+                disabled={
+                  loadingSave || (isEditing ? !permissions.canUpdate : !permissions.canCreate)
+                }
                 required
+                title={
+                  isEditing
+                    ? !permissions.canUpdate
+                      ? 'Você não tem permissão para atualizar fornecedores'
+                      : ''
+                    : !permissions.canCreate
+                      ? 'Você não tem permissão para criar fornecedores'
+                      : ''
+                }
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -507,8 +533,19 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
                 onChange={handleChange}
                 error={!!errors.telefoneFornecedor}
                 helperText={errors.telefoneFornecedor}
-                disabled={loadingSave}
+                disabled={
+                  loadingSave || (isEditing ? !permissions.canUpdate : !permissions.canCreate)
+                }
                 required
+                title={
+                  isEditing
+                    ? !permissions.canUpdate
+                      ? 'Você não tem permissão para atualizar fornecedores'
+                      : ''
+                    : !permissions.canCreate
+                      ? 'Você não tem permissão para criar fornecedores'
+                      : ''
+                }
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -519,7 +556,18 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
                 fullWidth
                 value={form.emailFornecedor || ''}
                 onChange={handleChange}
-                disabled={loadingSave}
+                disabled={
+                  loadingSave || (isEditing ? !permissions.canUpdate : !permissions.canCreate)
+                }
+                title={
+                  isEditing
+                    ? !permissions.canUpdate
+                      ? 'Você não tem permissão para atualizar fornecedores'
+                      : ''
+                    : !permissions.canCreate
+                      ? 'Você não tem permissão para criar fornecedores'
+                      : ''
+                }
               />
             </Grid>
             <Grid item xs={12}>
@@ -530,7 +578,18 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
                 fullWidth
                 value={form.moradaFornecedor || ''}
                 onChange={handleChange}
-                disabled={loadingSave}
+                disabled={
+                  loadingSave || (isEditing ? !permissions.canUpdate : !permissions.canCreate)
+                }
+                title={
+                  isEditing
+                    ? !permissions.canUpdate
+                      ? 'Você não tem permissão para atualizar fornecedores'
+                      : ''
+                    : !permissions.canCreate
+                      ? 'Você não tem permissão para criar fornecedores'
+                      : ''
+                }
               />
             </Grid>
             <Grid item xs={12}>
@@ -539,12 +598,16 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
                 color="secondary"
                 sx={{ height: 40, width: '100%' }}
                 onClick={onSubmit}
-                disabled={loadingSave || (!canCreate && !isEditing) || (!canUpdate && isEditing)}
+                disabled={
+                  loadingSave || (isEditing ? !permissions.canUpdate : !permissions.canCreate)
+                }
                 title={
-                  !canCreate && !isEditing
-                    ? 'Você não tem permissão para criar fornecedores'
-                    : !canUpdate && isEditing
+                  isEditing
+                    ? !permissions.canUpdate
                       ? 'Você não tem permissão para atualizar fornecedores'
+                      : ''
+                    : !permissions.canCreate
+                      ? 'Você não tem permissão para criar fornecedores'
                       : ''
                 }
               >
@@ -589,9 +652,11 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
                         <IconButton
                           color="primary"
                           onClick={() => handleEdit(item)}
-                          disabled={loadingFetch || loadingDelete || !canUpdate}
+                          disabled={loadingFetch || loadingDelete || !permissions.canUpdate}
                           title={
-                            !canUpdate ? 'Você não tem permissão para atualizar fornecedores' : ''
+                            !permissions.canUpdate
+                              ? 'Você não tem permissão para atualizar fornecedores'
+                              : ''
                           }
                         >
                           <Edit />
@@ -599,9 +664,11 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
                         <IconButton
                           color="error"
                           onClick={() => handleOpenConfirmDelete(item.id!)}
-                          disabled={loadingFetch || loadingDelete || !canDelete}
+                          disabled={loadingFetch || loadingDelete || !permissions.canDelete}
                           title={
-                            !canDelete ? 'Você não tem permissão para excluir fornecedores' : ''
+                            !permissions.canDelete
+                              ? 'Você não tem permissão para excluir fornecedores'
+                              : ''
                           }
                         >
                           <Delete />
@@ -633,7 +700,9 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
             Confirmar Exclusão
           </Typography>
           <Typography id="confirm-delete-modal-description" sx={{ mb: 3 }}>
-            Tem certeza que deseja excluir este fornecedor?
+            Tem certeza que deseja excluir o fornecedor "
+            {fornecedores.find((f) => f.id === deleteFornecedorId)?.nomeFornecedor}"? Esta ação não
+            pode ser desfeita.
           </Typography>
           {loadingDelete && (
             <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
@@ -653,8 +722,10 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
               variant="contained"
               color="error"
               onClick={handleDelete}
-              disabled={loadingDelete || !canDelete}
-              title={!canDelete ? 'Você não tem permissão para excluir fornecedores' : ''}
+              disabled={loadingDelete || !permissions.canDelete}
+              title={
+                !permissions.canDelete ? 'Você não tem permissão para excluir fornecedores' : ''
+              }
             >
               {loadingDelete ? 'Excluindo...' : 'Excluir'}
             </Button>
