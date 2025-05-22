@@ -1,80 +1,57 @@
-import { FuncaoPermissao } from 'types/models';
-import { getAllFunctionPermissions } from './methods';
-
 interface UserData {
+  id: string;
   nome: string;
   email: string;
   telefone?: string;
   numeroBI?: string;
-  roles: string[];
+  role?: string;
   permissoes: string[];
 }
 
-const permissionCache: Record<string, string[]> = {};
+export const getUserData = (): UserData | null => {
+  const token = localStorage.getItem('token');
+  const user = localStorage.getItem('user');
+  if (!token || !user) {
+    console.error('Token ou dados do usuário não encontrados no localStorage');
+    return null;
+  }
 
-const fetchPermissionsForRole = async (role: string): Promise<string[]> => {
   try {
-    // Verificar cache primeiro
-    if (permissionCache[role]) {
-      return permissionCache[role];
-    }
+    const payloadBase64 = token.split('.')[1];
+    const decodedPayload = JSON.parse(atob(payloadBase64));
+    const parsedUser = JSON.parse(user);
 
-    // Buscar permissões da API
-    const functionPermissions = await getAllFunctionPermissions();
-
-    // Filtrar permissões para a função específica
-    const permissions = functionPermissions
-      .filter((fp: FuncaoPermissao) => fp.funcoes?.nome === role || fp.id_funcao === role)
-      .map((fp: FuncaoPermissao) => fp.permissoes?.nome || fp.id_permissao);
-
-    // Armazenar no cache
-    permissionCache[role] = permissions;
-
-    return permissions;
+    return {
+      id: decodedPayload.userId || decodedPayload.sub || '',
+      nome: parsedUser.nome || decodedPayload.nome || '',
+      email: parsedUser.email || decodedPayload.email || '',
+      telefone: parsedUser.telefone || decodedPayload.telefone || '',
+      numeroBI: parsedUser.numeroBI || decodedPayload.numeroBI || '',
+      role: parsedUser.role || decodedPayload.role || undefined,
+      permissoes: parsedUser.permissoes || [],
+    };
   } catch (error) {
-    console.error(`Erro ao buscar permissões para a função ${role}:`, error);
-    return [];
+    console.error('Erro ao processar dados do usuário:', error);
+    return null;
   }
 };
 
-export const getUserData = async (): Promise<UserData | null> => {
-  const user = localStorage.getItem('user');
-  if (!user) return null;
-
-  const parsedUser = JSON.parse(user);
-
-  // Determinar a função (role ou roles)
-  const roles = parsedUser.role ? [parsedUser.role] : parsedUser.roles || [];
-
-  // Buscar permissões para a primeira (e única) função
-  const permissoes = roles.length > 0 ? await fetchPermissionsForRole(roles[0]) : [];
-
-  return {
-    nome: parsedUser.nome || '',
-    email: parsedUser.email || '',
-    telefone: parsedUser.telefone || '',
-    numeroBI: parsedUser.numeroBI || '',
-    roles,
-    permissoes,
-  };
+export const hasPermission = (requiredPermission: string): boolean => {
+  const user = getUserData();
+  return user?.permissoes.includes(requiredPermission) || false;
 };
 
-export const hasPermission = async (requiredPermission: string): Promise<boolean> => {
-  const user = await getUserData();
-  return user?.permissoes.includes(requiredPermission) ?? false;
+export const hasAnyPermission = (requiredPermissions: string[]): boolean => {
+  const user = getUserData();
+  return user?.permissoes.some((permissao) => requiredPermissions.includes(permissao)) || false;
 };
 
-export const hasAnyPermission = async (requiredPermissions: string[]): Promise<boolean> => {
-  const user = await getUserData();
-  return user?.permissoes.some((permissao) => requiredPermissions.includes(permissao)) ?? false;
+export const hasRole = (requiredRole: string): boolean => {
+  const user = getUserData();
+  return user?.role === requiredRole || false;
 };
 
-export const hasRole = async (requiredRole: string): Promise<boolean> => {
-  const user = await getUserData();
-  return user?.roles.includes(requiredRole) ?? false;
-};
-
-export const hasAnyRole = async (requiredRoles: string[]): Promise<boolean> => {
-  const user = await getUserData();
-  return user?.roles.some((role) => requiredRoles.includes(role)) ?? false;
+export const hasAnyRole = (requiredRoles: string[]): boolean => {
+  const user = getUserData();
+  return user?.role ? requiredRoles.includes(user.role) : false;
 };

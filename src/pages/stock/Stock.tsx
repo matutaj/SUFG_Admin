@@ -1,4 +1,3 @@
-
 import {
   Paper,
   Button,
@@ -148,13 +147,15 @@ const Stock: React.FC = () => {
     id_fornecedor: '',
     id_funcionario: '',
     dataEntrada: new Date(),
-    products: [{
-      id_produto: '',
-      quantidadeRecebida: 0,
-      custoUnitario: 0,
-      lote: '',
-      dataValidadeLote: new Date(),
-    }],
+    products: [
+      {
+        id_produto: '',
+        quantidadeRecebida: 0,
+        custoUnitario: 0,
+        lote: '',
+        dataValidadeLote: new Date(),
+      },
+    ],
   });
   const [stockForm, setStockForm] = useState<Partial<DadosEstoque>>({
     id_produto: '',
@@ -184,7 +185,9 @@ const Stock: React.FC = () => {
   const [shelves, setShelves] = useState<Prateleira[]>([]);
   const [corridors, setCorridors] = useState<Corredor[]>([]);
   const [productsWithoutLocation, setProductsWithoutLocation] = useState<DadosEstoque[]>([]);
-  const [filteredProductsWithoutLocation, setFilteredProductsWithoutLocation] = useState<DadosEstoque[]>([]);
+  const [filteredProductsWithoutLocation, setFilteredProductsWithoutLocation] = useState<
+    DadosEstoque[]
+  >([]);
   const [productLocations, setProductLocations] = useState<ProdutoLocalizacao[]>([]);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -258,9 +261,9 @@ const Stock: React.FC = () => {
         setFetchError('Nenhum produto encontrado. Verifique a API de produtos.');
       }
 
-      const productsWithoutLocationData = stockData.filter(stockItem => {
-        return !productLocationsData.some(location => 
-          location.id_produto === stockItem.id_produto
+      const productsWithoutLocationData = stockData.filter((stockItem) => {
+        return !productLocationsData.some(
+          (location) => location.id_produto === stockItem.id_produto,
         );
       });
 
@@ -322,13 +325,15 @@ const Stock: React.FC = () => {
         id_fornecedor: '',
         id_funcionario: userId,
         dataEntrada: new Date(),
-        products: [{
-          id_produto: '',
-          quantidadeRecebida: 0,
-          custoUnitario: 0,
-          lote: '',
-          dataValidadeLote: new Date(),
-        }],
+        products: [
+          {
+            id_produto: '',
+            quantidadeRecebida: 0,
+            custoUnitario: 0,
+            lote: '',
+            dataValidadeLote: new Date(),
+          },
+        ],
       });
       setErrors({});
       setOpenModal(true);
@@ -434,26 +439,29 @@ const Stock: React.FC = () => {
     setDeleteEntryId(null);
   }, []);
 
-  const handleTextFieldChange = useCallback((e: React.ChangeEvent<HTMLInputElement>, index: number) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({
-      ...prev,
-      products: prev.products.map((item, i) =>
-        i === index
-          ? {
-              ...item,
-              [name]:
-                name === 'custoUnitario' || name === 'quantidadeRecebida'
-                  ? Number(value) || 0
-                  : name === 'dataValidadeLote'
-                  ? new Date(value)
-                  : value,
-            }
-          : item,
-      ),
-    }));
-    setErrors((prev) => ({ ...prev, [`${name}_${index}`]: '' }));
-  }, []);
+  const handleTextFieldChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
+      const { name, value } = e.target;
+      setForm((prev) => ({
+        ...prev,
+        products: prev.products.map((item, i) =>
+          i === index
+            ? {
+                ...item,
+                [name]:
+                  name === 'custoUnitario' || name === 'quantidadeRecebida'
+                    ? Number(value) || 0
+                    : name === 'dataValidadeLote'
+                      ? new Date(value)
+                      : value,
+              }
+            : item,
+        ),
+      }));
+      setErrors((prev) => ({ ...prev, [`${name}_${index}`]: '' }));
+    },
+    [],
+  );
 
   const handleGlobalTextFieldChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -472,8 +480,8 @@ const Stock: React.FC = () => {
         name === 'quantidadeAtual'
           ? Number(value) || 0
           : name === 'dataValidadeLote'
-          ? new Date(value)
-          : value,
+            ? new Date(value)
+            : value,
     }));
     setErrors((prev) => ({ ...prev, [name]: '' }));
   }, []);
@@ -495,9 +503,7 @@ const Stock: React.FC = () => {
     if (index !== undefined) {
       setForm((prev) => ({
         ...prev,
-        products: prev.products.map((item, i) =>
-          i === index ? { ...item, [name]: value } : item,
-        ),
+        products: prev.products.map((item, i) => (i === index ? { ...item, [name]: value } : item)),
       }));
       setErrors((prev) => ({ ...prev, [`${name}_${index}`]: '' }));
     } else {
@@ -567,13 +573,10 @@ const Stock: React.FC = () => {
         newErrors[`quantidadeRecebida_${index}`] = 'Quantidade deve ser maior que 0';
       if (product.custoUnitario <= 0)
         newErrors[`custoUnitario_${index}`] = 'Custo unitário deve ser maior que 0';
-      if (!product.lote || !product.lote.trim())
-        newErrors[`lote_${index}`] = 'Lote é obrigatório';
+      if (!product.lote || !product.lote.trim()) newErrors[`lote_${index}`] = 'Lote é obrigatório';
       if (!product.dataValidadeLote || isNaN(new Date(product.dataValidadeLote).getTime()))
         newErrors[`dataValidadeLote_${index}`] = 'Data de validade é inválida';
-      else if (
-        new Date(product.dataValidadeLote) <= new Date(new Date().setHours(0, 0, 0, 0))
-      )
+      else if (new Date(product.dataValidadeLote) <= new Date(new Date().setHours(0, 0, 0, 0)))
         newErrors[`dataValidadeLote_${index}`] = 'Data de validade deve ser futura';
     });
 
@@ -601,7 +604,10 @@ const Stock: React.FC = () => {
     if (!locationForm.id_localizacao) newErrors.id_localizacao = 'Localização é obrigatória';
     if (locationForm.quantidadeProduto === undefined || locationForm.quantidadeProduto <= 0)
       newErrors.quantidadeProduto = 'Quantidade deve ser maior que 0';
-    if (lastEntries.length > 0 && locationForm.quantidadeProduto! > lastEntries[locationIndex].quantidadeRecebida) {
+    if (
+      lastEntries.length > 0 &&
+      locationForm.quantidadeProduto! > lastEntries[locationIndex].quantidadeRecebida
+    ) {
       newErrors.quantidadeProduto = `Quantidade não pode exceder a entrada (${lastEntries[locationIndex].quantidadeRecebida})`;
     } else if (selectedStock && locationForm.quantidadeProduto! > selectedStock.quantidadeAtual) {
       newErrors.quantidadeProduto = `Quantidade não pode exceder o estoque atual (${selectedStock.quantidadeAtual})`;
@@ -798,7 +804,14 @@ const Stock: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [locationForm, validateLocationForm, handleCloseLocationModal, lastEntries, locationIndex, fetchData]);
+  }, [
+    locationForm,
+    validateLocationForm,
+    handleCloseLocationModal,
+    lastEntries,
+    locationIndex,
+    fetchData,
+  ]);
 
   const handleEditStock = useCallback((stock: DadosEstoque) => {
     setEditStockId(stock.id!);
@@ -872,12 +885,14 @@ const Stock: React.FC = () => {
         setLoading(true);
         setFetchError(null);
         await deleteStock(deleteStockId);
-        
-        setCurrentStock(prev => prev.filter(item => item.id !== deleteStockId));
-        setFilteredStock(prev => prev.filter(item => item.id !== deleteStockId));
-        setProductsWithoutLocation(prev => prev.filter(item => item.id !== deleteStockId));
-        setFilteredProductsWithoutLocation(prev => prev.filter(item => item.id !== deleteStockId));
-        
+
+        setCurrentStock((prev) => prev.filter((item) => item.id !== deleteStockId));
+        setFilteredStock((prev) => prev.filter((item) => item.id !== deleteStockId));
+        setProductsWithoutLocation((prev) => prev.filter((item) => item.id !== deleteStockId));
+        setFilteredProductsWithoutLocation((prev) =>
+          prev.filter((item) => item.id !== deleteStockId),
+        );
+
         setSuccessMessage('Estoque excluído com sucesso!');
         handleCloseConfirmDelete();
         await fetchData();
@@ -981,8 +996,7 @@ const Stock: React.FC = () => {
     return Object.entries(grouped).map(([id_produto, lots]) => ({
       id_produto,
       lots: lots.sort(
-        (a, b) =>
-          new Date(b.dataValidadeLote).getTime() - new Date(a.dataValidadeLote).getTime(),
+        (a, b) => new Date(b.dataValidadeLote).getTime() - new Date(a.dataValidadeLote).getTime(),
       ),
       totalQuantity: lots.reduce((sum, lot) => sum + lot.quantidadeAtual, 0),
     }));
@@ -1019,7 +1033,7 @@ const Stock: React.FC = () => {
   const groupedStock = useMemo(() => groupStockByProduct(filteredStock), [filteredStock]);
   const groupedProductsWithoutLocation = useMemo(
     () => groupProductsWithoutLocation(filteredProductsWithoutLocation),
-    [filteredProductsWithoutLocation]
+    [filteredProductsWithoutLocation],
   );
   const paginatedStockEntries = filteredStockEntries.slice(
     entryPage * rowsPerPage,
@@ -1111,7 +1125,11 @@ const Stock: React.FC = () => {
               </FormControl>
             </Grid>
             <Grid item xs={12} sm={6}>
-              <FormControl fullWidth error={!!errors.id_funcionario} disabled={loading || !isEditing}>
+              <FormControl
+                fullWidth
+                error={!!errors.id_funcionario}
+                disabled={loading || !isEditing}
+              >
                 <InputLabel>Funcionário</InputLabel>
                 <Select
                   name="id_funcionario"
@@ -1164,8 +1182,16 @@ const Stock: React.FC = () => {
                 Produtos
               </Typography>
               {form.products.map((product, index) => (
-                <Box key={index} sx={{ mb: 2, p: 2, border: 1, borderRadius: 1, borderColor: 'grey.300' }}>
-                  <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                <Box
+                  key={index}
+                  sx={{ mb: 2, p: 2, border: 1, borderRadius: 1, borderColor: 'grey.300' }}
+                >
+                  <Stack
+                    direction="row"
+                    justifyContent="space-between"
+                    alignItems="center"
+                    sx={{ mb: 2 }}
+                  >
                     <Typography variant="subtitle1">Produto {index + 1}</Typography>
                     {form.products.length > 1 && (
                       <IconButton
@@ -1180,7 +1206,11 @@ const Stock: React.FC = () => {
                   </Stack>
                   <Grid container spacing={2}>
                     <Grid item xs={12} sm={6}>
-                      <FormControl fullWidth error={!!errors[`id_produto_${index}`]} disabled={loading}>
+                      <FormControl
+                        fullWidth
+                        error={!!errors[`id_produto_${index}`]}
+                        disabled={loading}
+                      >
                         <InputLabel>Produto</InputLabel>
                         <Select
                           name="id_produto"
@@ -1209,7 +1239,9 @@ const Stock: React.FC = () => {
                         type="number"
                         fullWidth
                         value={product.quantidadeRecebida}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleTextFieldChange(e, index)}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          handleTextFieldChange(e, index)
+                        }
                         error={!!errors[`quantidadeRecebida_${index}`]}
                         helperText={errors[`quantidadeRecebida_${index}`]}
                         disabled={loading}
@@ -1224,7 +1256,9 @@ const Stock: React.FC = () => {
                         type="number"
                         fullWidth
                         value={product.custoUnitario}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleTextFieldChange(e, index)}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          handleTextFieldChange(e, index)
+                        }
                         error={!!errors[`custoUnitario_${index}`]}
                         helperText={errors[`custoUnitario_${index}`]}
                         disabled={loading}
@@ -1238,7 +1272,9 @@ const Stock: React.FC = () => {
                         label="Lote"
                         fullWidth
                         value={product.lote || ''}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleTextFieldChange(e, index)}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          handleTextFieldChange(e, index)
+                        }
                         error={!!errors[`lote_${index}`]}
                         helperText={errors[`lote_${index}`]}
                         disabled={loading}
@@ -1252,7 +1288,9 @@ const Stock: React.FC = () => {
                         type="date"
                         fullWidth
                         value={formatDateToInput(product.dataValidadeLote)}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleTextFieldChange(e, index)}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          handleTextFieldChange(e, index)
+                        }
                         InputLabelProps={{ shrink: true }}
                         error={!!errors[`dataValidadeLote_${index}`]}
                         helperText={errors[`dataValidadeLote_${index}`]}
@@ -1281,7 +1319,9 @@ const Stock: React.FC = () => {
                 fullWidth
                 onClick={onSubmit}
                 disabled={loading}
-                aria-label={isEditing ? 'Salvar entrada de estoque' : 'Cadastrar entrada de estoque'}
+                aria-label={
+                  isEditing ? 'Salvar entrada de estoque' : 'Cadastrar entrada de estoque'
+                }
               >
                 {loading ? 'Salvando...' : isEditing ? 'Salvar' : 'Cadastrar'}
               </Button>
@@ -1371,7 +1411,7 @@ const Stock: React.FC = () => {
                 label="Validade do Lote"
                 type="date"
                 fullWidth
-                value={(stockForm.dataValidadeLote)}
+                value={stockForm.dataValidadeLote}
                 onChange={handleStockTextFieldChange}
                 InputLabelProps={{ shrink: true }}
                 error={!!errors.dataValidadeLote}
@@ -1402,12 +1442,7 @@ const Stock: React.FC = () => {
         aria-labelledby="modal-adicionar-armazem"
       >
         <Box sx={modalStyle}>
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="center"
-            sx={{ mb: 2 }}
-          >
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
             <Typography id="modal-adicionar-armazem" variant="h5">
               Adicionar Produto ao Armazém ({locationIndex + 1} de {lastEntries.length})
             </Typography>
@@ -1422,7 +1457,9 @@ const Stock: React.FC = () => {
             </Button>
           </Stack>
           <Typography variant="subtitle1" sx={{ mb: 2 }}>
-            Produto: {products.find((p) => p.id === locationForm.id_produto)?.nomeProduto || locationForm.id_produto}
+            Produto:{' '}
+            {products.find((p) => p.id === locationForm.id_produto)?.nomeProduto ||
+              locationForm.id_produto}
           </Typography>
           <Grid container spacing={2}>
             <Grid item xs={12} sm={6}>
@@ -1464,7 +1501,9 @@ const Stock: React.FC = () => {
                     </MenuItem>
                   ))}
                 </Select>
-                {errors.id_localizacao && <FormHelperText error>{errors.id_localizacao}</FormHelperText>}
+                {errors.id_localizacao && (
+                  <FormHelperText error>{errors.id_localizacao}</FormHelperText>
+                )}
               </FormControl>
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -1506,7 +1545,9 @@ const Stock: React.FC = () => {
                     </MenuItem>
                   ))}
                 </Select>
-                {errors.id_prateleira && <FormHelperText error>{errors.id_prateleira}</FormHelperText>}
+                {errors.id_prateleira && (
+                  <FormHelperText error>{errors.id_prateleira}</FormHelperText>
+                )}
               </FormControl>
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -1544,13 +1585,16 @@ const Stock: React.FC = () => {
                   (lastEntries.length > 0
                     ? `Máximo: ${lastEntries[locationIndex].quantidadeRecebida} unidades (entrada)`
                     : selectedStock
-                    ? `Máximo: ${selectedStock.quantidadeAtual} unidades disponíveis`
-                    : '')
+                      ? `Máximo: ${selectedStock.quantidadeAtual} unidades disponíveis`
+                      : '')
                 }
                 disabled={loading}
                 inputProps={{
                   min: 1,
-                  max: lastEntries.length > 0 ? lastEntries[locationIndex].quantidadeRecebida : selectedStock?.quantidadeAtual,
+                  max:
+                    lastEntries.length > 0
+                      ? lastEntries[locationIndex].quantidadeRecebida
+                      : selectedStock?.quantidadeAtual,
                 }}
                 aria-label="Quantidade do produto no armazém"
               />
@@ -1580,7 +1624,11 @@ const Stock: React.FC = () => {
                   disabled={loading}
                   aria-label="Adicionar produto ao armazém"
                 >
-                  {loading ? 'Salvando...' : locationIndex < lastEntries.length - 1 ? 'Próximo' : 'Concluir'}
+                  {loading
+                    ? 'Salvando...'
+                    : locationIndex < lastEntries.length - 1
+                      ? 'Próximo'
+                      : 'Concluir'}
                 </Button>
               </Stack>
             </Grid>
@@ -1640,7 +1688,8 @@ const Stock: React.FC = () => {
             Confirmar Exclusão
           </Typography>
           <Typography id="confirm-delete-entry-modal-description" sx={{ mb: 3 }}>
-            Tem certeza que deseja excluir esta entrada de estoque? Isso pode afetar o estoque atual.
+            Tem certeza que deseja excluir esta entrada de estoque? Isso pode afetar o estoque
+            atual.
           </Typography>
           <Stack direction="row" spacing={2} justifyContent="flex-end">
             <Button
@@ -1747,7 +1796,9 @@ const Stock: React.FC = () => {
               color="primary"
               onClick={toggleStockEntries}
               disabled={loading}
-              aria-label={showStockEntries ? 'Ocultar entradas de estoque' : 'Ver entradas de estoque'}
+              aria-label={
+                showStockEntries ? 'Ocultar entradas de estoque' : 'Ver entradas de estoque'
+              }
             >
               {showStockEntries ? 'Ocultar Entradas' : 'Ver Entradas'}
             </Button>
@@ -1842,10 +1893,18 @@ const Stock: React.FC = () => {
             <Table aria-label="Tabela de estoque atual">
               <TableHead>
                 <TableRow>
-                  <TableCell><strong>Produto</strong></TableCell>
-                  <TableCell><strong>Quantidade Total</strong></TableCell>
-                  <TableCell><strong>Lotes</strong></TableCell>
-                  <TableCell><strong>Ações</strong></TableCell>
+                  <TableCell>
+                    <strong>Produto</strong>
+                  </TableCell>
+                  <TableCell>
+                    <strong>Quantidade Total</strong>
+                  </TableCell>
+                  <TableCell>
+                    <strong>Lotes</strong>
+                  </TableCell>
+                  <TableCell>
+                    <strong>Ações</strong>
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1888,10 +1947,18 @@ const Stock: React.FC = () => {
                                 <Table size="small" aria-label="Sub-tabela de lotes">
                                   <TableHead>
                                     <TableRow>
-                                      <TableCell><strong>Lote</strong></TableCell>
-                                      <TableCell><strong>Quantidade</strong></TableCell>
-                                      <TableCell><strong>Validade</strong></TableCell>
-                                      <TableCell><strong>Ações</strong></TableCell>
+                                      <TableCell>
+                                        <strong>Lote</strong>
+                                      </TableCell>
+                                      <TableCell>
+                                        <strong>Quantidade</strong>
+                                      </TableCell>
+                                      <TableCell>
+                                        <strong>Validade</strong>
+                                      </TableCell>
+                                      <TableCell>
+                                        <strong>Ações</strong>
+                                      </TableCell>
                                     </TableRow>
                                   </TableHead>
                                   <TableBody>
@@ -1899,7 +1966,9 @@ const Stock: React.FC = () => {
                                       <TableRow key={lot.id}>
                                         <TableCell>{lot.lote}</TableCell>
                                         <TableCell>{lot.quantidadeAtual}</TableCell>
-                                        <TableCell>{formatDateToDisplay(lot.dataValidadeLote)}</TableCell>
+                                        <TableCell>
+                                          {formatDateToDisplay(lot.dataValidadeLote)}
+                                        </TableCell>
                                         <TableCell align="right">
                                           <IconButton
                                             color="primary"
@@ -1962,61 +2031,69 @@ const Stock: React.FC = () => {
       </Card>
 
       <Card sx={{ maxWidth: '100%', margin: 'auto', mt: 4 }}>
-  <CardContent>
-    <Typography variant="h6" mb={2}>
-      Produtos Sem Localização ({groupedProductsWithoutLocation.length})
-    </Typography>
-    <TableContainer component={Paper}>
-      <Table aria-label="Tabela de produtos sem localização">
-        <TableHead>
-          <TableRow>
-            <TableCell><strong>Produto</strong></TableCell>
-            <TableCell><strong>Quantidade Total</strong></TableCell>
-            <TableCell><strong>Ações</strong></TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {loading ? (
-            <TableRow>
-              <TableCell colSpan={3} align="center">
-                Carregando...
-              </TableCell>
-            </TableRow>
-          ) : groupedProductsWithoutLocation.length > 0 ? (
-            groupedProductsWithoutLocation.map((group) => {
-              const product = products.find((p) => p.id === group.id_produto);
-              const stockItems = filteredStock.filter((stock) => stock.id_produto === group.id_produto);
-              return (
-                <TableRow key={group.id_produto}>
-                  <TableCell>{product?.nomeProduto || group.id_produto}</TableCell>
-                  <TableCell>{group.totalQuantity}</TableCell>
-                  <TableCell align="right">
-                    <IconButton
-                      color="secondary"
-                      onClick={() => handleOpenLocationModal(stockItems, [])}
-                      disabled={loading || group.totalQuantity === 0}
-                      aria-label={`Adicionar produto ${group.id_produto} ao armazém`}
-                    >
-                      <IconifyIcon icon="material-symbols:warehouse" />
-                    </IconButton>
+        <CardContent>
+          <Typography variant="h6" mb={2}>
+            Produtos Sem Localização ({groupedProductsWithoutLocation.length})
+          </Typography>
+          <TableContainer component={Paper}>
+            <Table aria-label="Tabela de produtos sem localização">
+              <TableHead>
+                <TableRow>
+                  <TableCell>
+                    <strong>Produto</strong>
+                  </TableCell>
+                  <TableCell>
+                    <strong>Quantidade Total</strong>
+                  </TableCell>
+                  <TableCell>
+                    <strong>Ações</strong>
                   </TableCell>
                 </TableRow>
-              );
-            })
-          ) : (
-            <TableRow>
-              <TableCell colSpan={3} align="center">
-                {productsWithoutLocation.length === 0 && currentStock.length > 0
-                  ? 'Todos os produtos estão localizados.'
-                  : 'Nenhum produto sem localização encontrado. Verifique os dados do estoque.'}
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </TableContainer>
-  </CardContent>
-</Card>
+              </TableHead>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={3} align="center">
+                      Carregando...
+                    </TableCell>
+                  </TableRow>
+                ) : groupedProductsWithoutLocation.length > 0 ? (
+                  groupedProductsWithoutLocation.map((group) => {
+                    const product = products.find((p) => p.id === group.id_produto);
+                    const stockItems = filteredStock.filter(
+                      (stock) => stock.id_produto === group.id_produto,
+                    );
+                    return (
+                      <TableRow key={group.id_produto}>
+                        <TableCell>{product?.nomeProduto || group.id_produto}</TableCell>
+                        <TableCell>{group.totalQuantity}</TableCell>
+                        <TableCell align="right">
+                          <IconButton
+                            color="secondary"
+                            onClick={() => handleOpenLocationModal(stockItems, [])}
+                            disabled={loading || group.totalQuantity === 0}
+                            aria-label={`Adicionar produto ${group.id_produto} ao armazém`}
+                          >
+                            <IconifyIcon icon="material-symbols:warehouse" />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={3} align="center">
+                      {productsWithoutLocation.length === 0 && currentStock.length > 0
+                        ? 'Todos os produtos estão localizados.'
+                        : 'Nenhum produto sem localização encontrado. Verifique os dados do estoque.'}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
     </>
   );
 };

@@ -24,13 +24,16 @@ import {
   InputLabel,
   FormHelperText,
   Chip,
+  CircularProgress,
 } from '@mui/material';
-import React from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import IconifyIcon from 'components/base/IconifyIcon';
 import Edit from 'components/icons/factor/Edit';
 import Delete from 'components/icons/factor/Delete';
 import { Localizacao, tipo } from '../../types/models';
 import { getAllLocations, createLocation, deleteLocation, updateLocation } from '../../api/methods';
+import { getUserData, hasPermission } from '../../api/authUtils';
+import { useNavigate } from 'react-router-dom';
 
 interface CollapsedItemProps {
   open: boolean;
@@ -54,6 +57,7 @@ const modalStyle = {
   backgroundColor: '#f9f9f9',
   p: 4,
   overflowY: 'auto' as const,
+  borderRadius: 1,
 };
 
 const confirmModalStyle = {
@@ -69,74 +73,199 @@ const confirmModalStyle = {
 };
 
 const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
-  const [openWarehouseModal, setOpenWarehouseModal] = React.useState(false);
-  const [openConfirmDelete, setOpenConfirmDelete] = React.useState(false);
-  const [deleteWarehouseId, setDeleteWarehouseId] = React.useState<string | null>(null);
-  const [editWarehouseId, setEditWarehouseId] = React.useState<string | null>(null);
-  const [nomeLocalizacao, setNomeLocalizacao] = React.useState('');
-  const [descricao, setDescricao] = React.useState<string>('');
-  const [tipoSelecionado, setTipoSelecionado] = React.useState<tipo | null>(null);
-  const [localizacoes, setLocalizacoes] = React.useState<Localizacao[]>([]);
-  const [localizacoesFiltradas, setLocalizacoesFiltradas] = React.useState<Localizacao[]>([]);
-  const [searchQuery, setSearchQuery] = React.useState('');
-  const [errors, setErrors] = React.useState<{ nomeLocalizacao?: string; descricao?: string; tipo?: string }>({});
-  const [loading, setLoading] = React.useState(false);
-  const [alert, setAlert] = React.useState<{
+  const navigate = useNavigate();
+  const [openWarehouseModal, setOpenWarehouseModal] = useState(false);
+  const [openConfirmDelete, setOpenConfirmDelete] = useState(false);
+  const [deleteWarehouseId, setDeleteWarehouseId] = useState<string | null>(null);
+  const [editWarehouseId, setEditWarehouseId] = useState<string | null>(null);
+  const [nomeLocalizacao, setNomeLocalizacao] = useState('');
+  const [descricao, setDescricao] = useState('');
+  const [tipoSelecionado, setTipoSelecionado] = useState<tipo | null>(null);
+  const [localizacoes, setLocalizacoes] = useState<Localizacao[]>([]);
+  const [localizacoesFiltradas, setLocalizacoesFiltradas] = useState<Localizacao[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [errors, setErrors] = useState<{
+    nomeLocalizacao?: string;
+    descricao?: string;
+    tipo?: string;
+  }>({});
+  const [loading, setLoading] = useState(false);
+  const [alert, setAlert] = useState<{
     severity: 'success' | 'error' | 'info' | 'warning';
     message: string;
   } | null>(null);
-  const [page, setPage] = React.useState(0);
+  const [page, setPage] = useState(0);
   const rowsPerPage = 6;
 
-  const handleOpen = () => setOpenWarehouseModal(true);
-  const handleClose = () => {
+  // Permission states
+  const [canRead, setCanRead] = useState(false);
+  const [canCreate, setCanCreate] = useState(false);
+  const [canUpdate, setCanUpdate] = useState(false);
+  const [canDelete, setCanDelete] = useState(false);
+
+  // Logging function for debugging
+  const log = (message: string, ...args: any[]) => {
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(message, ...args);
+    }
+  };
+
+  const handleOpen = useCallback(() => {
+    if (!canCreate && !editWarehouseId) {
+      setAlert({
+        severity: 'error',
+        message: 'Você não tem permissão para criar localizações!',
+      });
+      log('Permissão de criação negada');
+      return;
+    }
+    if (!canUpdate && editWarehouseId) {
+      setAlert({
+        severity: 'error',
+        message: 'Você não tem permissão para atualizar localizações!',
+      });
+      log('Permissão de atualização negada');
+      return;
+    }
+    setOpenWarehouseModal(true);
+  }, [canCreate, canUpdate, editWarehouseId]);
+
+  const handleClose = useCallback(() => {
     setOpenWarehouseModal(false);
     setEditWarehouseId(null);
     setNomeLocalizacao('');
     setDescricao('');
     setTipoSelecionado(null);
     setErrors({});
-  };
+  }, []);
 
-  const handleOpenConfirmDelete = (id: string) => {
-    setDeleteWarehouseId(id);
-    setOpenConfirmDelete(true);
-  };
+  const handleOpenConfirmDelete = useCallback(
+    (id: string) => {
+      if (!canDelete) {
+        setAlert({
+          severity: 'error',
+          message: 'Você não tem permissão para excluir localizações!',
+        });
+        log('Permissão de exclusão negada');
+        return;
+      }
+      setDeleteWarehouseId(id);
+      setOpenConfirmDelete(true);
+    },
+    [canDelete],
+  );
 
-  const handleCloseConfirmDelete = () => {
+  const handleCloseConfirmDelete = useCallback(() => {
     setOpenConfirmDelete(false);
     setDeleteWarehouseId(null);
-  };
+  }, []);
 
-  const fetchLocalizacoes = async () => {
+  const loadUserData = useCallback(() => {
+    try {
+      const userData = getUserData();
+      log('Dados do usuário:', userData);
+      if (!userData || !userData.id) {
+        throw new Error('Usuário não autenticado');
+      }
+      setCanRead(hasPermission('listar_localizacao'));
+      setCanCreate(hasPermission('criar_localizacao'));
+      setCanUpdate(hasPermission('atualizar_localizacao'));
+      setCanDelete(hasPermission('eliminar_localizacao'));
+      log('Permissões:', { canRead, canCreate, canUpdate, canDelete });
+      return userData.id;
+    } catch (error: any) {
+      console.error('Erro em loadUserData:', error);
+      setAlert({ severity: 'error', message: error.message });
+      navigate('/login');
+      return '';
+    }
+  }, [navigate]);
+
+  const fetchLocalizacoes = useCallback(async () => {
+    if (!canRead) {
+      setAlert({
+        severity: 'error',
+        message: 'Você não tem permissão para visualizar localizações!',
+      });
+      log('Permissão de leitura negada');
+      return;
+    }
     try {
       setLoading(true);
-      const data = await getAllLocations();
-      setLocalizacoes(data);
-      setLocalizacoesFiltradas(data);
+      const timeoutPromise = (promise: Promise<any>, time: number) =>
+        Promise.race([
+          promise,
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Tempo limite excedido')), time),
+          ),
+        ]);
+      const data = await timeoutPromise(getAllLocations(), 10000);
+      setLocalizacoes(data ?? []);
+      setLocalizacoesFiltradas(data ?? []);
+      log('Localizações carregadas:', data);
     } catch (error: any) {
       console.error('Erro ao buscar localizações:', error);
-      const errorMessage = error.message || 'Erro ao carregar localizações';
+      let errorMessage = 'Erro ao carregar localizações';
+      if (error.response) {
+        if (error.response.status === 403) {
+          errorMessage = 'Permissão negada para listar localizações';
+        } else if (error.response.status === 500) {
+          errorMessage = 'Erro interno no servidor';
+        }
+      } else if (error.message === 'Tempo limite excedido') {
+        errorMessage = 'A requisição demorou muito para responder';
+      }
       setAlert({ severity: 'error', message: errorMessage });
-      setTimeout(() => setAlert(null), 5000);
     } finally {
       setLoading(false);
     }
-  };
+  }, [canRead]);
 
-  React.useEffect(() => {
-    fetchLocalizacoes();
+  useEffect(() => {
+    const initialize = async () => {
+      try {
+        const id = loadUserData();
+        if (!id) {
+          navigate('/login');
+          return;
+        }
+        await fetchLocalizacoes();
+      } catch (error) {
+        console.error('Erro no initialize:', error);
+        setAlert({ severity: 'error', message: 'Erro ao inicializar a página' });
+      }
+    };
+    initialize();
+  }, [fetchLocalizacoes, loadUserData, navigate]);
+
+  const getTipoLabel = useCallback((tipoValue: tipo | null | undefined): string => {
+    switch (tipoValue) {
+      case tipo.Armazem:
+        return 'Armazém';
+      case tipo.Loja:
+        return 'Loja';
+      default:
+        return 'Sem tipo';
+    }
   }, []);
 
-  const getTipoLabel = (tipoValue: tipo | null | undefined): string => {
-    switch (tipoValue) {
-      case tipo.Armazem: return 'Armazém';
-      case tipo.Loja: return 'Loja';
-      default: return 'Sem tipo';
+  const handleAddLocation = useCallback(async () => {
+    if (!canCreate && !editWarehouseId) {
+      setAlert({
+        severity: 'error',
+        message: 'Você não tem permissão para criar localizações!',
+      });
+      log('Permissão de criação negada');
+      return;
     }
-  };
-
-  const handleAddLocation = async () => {
+    if (!canUpdate && editWarehouseId) {
+      setAlert({
+        severity: 'error',
+        message: 'Você não tem permissão para atualizar localizações!',
+      });
+      log('Permissão de atualização negada');
+      return;
+    }
     const newErrors: { nomeLocalizacao?: string; descricao?: string; tipo?: string } = {};
     if (!nomeLocalizacao.trim()) newErrors.nomeLocalizacao = 'O nome da localização é obrigatório.';
     if (!descricao.trim()) newErrors.descricao = 'A descrição é obrigatória.';
@@ -149,126 +278,188 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
     try {
       setLoading(true);
-      const locationData = { 
-        nomeLocalizacao: nomeLocalizacao.trim(), 
-        descricao: descricao.trim(), 
-        tipo: tipoSelecionado as tipo 
+      setAlert(null);
+      const locationData: Localizacao = {
+        nomeLocalizacao: nomeLocalizacao.trim(),
+        descricao: descricao.trim(),
+        tipo: tipoSelecionado as tipo,
       };
 
       if (editWarehouseId) {
         await updateLocation(editWarehouseId, locationData);
         setAlert({ severity: 'success', message: 'Localização atualizada com sucesso!' });
+        log('Localização atualizada:', { id: editWarehouseId, ...locationData });
       } else {
-        await createLocation(locationData);
+        const newLocation = await createLocation(locationData);
+        setLocalizacoes((prev) => [...prev, newLocation]);
+        setLocalizacoesFiltradas((prev) => [...prev, newLocation]);
         setAlert({ severity: 'success', message: 'Localização cadastrada com sucesso!' });
+        log('Localização criada:', newLocation);
       }
-      
-      await fetchLocalizacoes();
       handleClose();
     } catch (error: any) {
       console.error('Erro ao salvar localização:', error);
-      const errorMessage = error.message || 'Erro ao salvar localização';
+      let errorMessage = 'Erro ao salvar localização';
+      if (error.response) {
+        if (error.response.status === 409) {
+          errorMessage = 'Já existe uma localização com esse nome';
+        } else if (error.response.status === 403) {
+          errorMessage = `Permissão negada para ${editWarehouseId ? 'atualizar' : 'criar'} localizações`;
+        } else if (error.response.status === 400) {
+          errorMessage = error.response.data?.message || 'Dados inválidos';
+        }
+      }
       setAlert({ severity: 'error', message: errorMessage });
-      setTimeout(() => setAlert(null), 5000);
     } finally {
       setLoading(false);
     }
-  };
+  }, [
+    canCreate,
+    canUpdate,
+    editWarehouseId,
+    nomeLocalizacao,
+    descricao,
+    tipoSelecionado,
+    handleClose,
+  ]);
 
-  const handleEdit = (id: string) => {
-    const locationToEdit = localizacoes.find((loc) => loc.id === id);
-    if (locationToEdit) {
-      setNomeLocalizacao(locationToEdit.nomeLocalizacao || '');
-      setDescricao(locationToEdit.descricao || '');
-      setTipoSelecionado(locationToEdit.tipo || null);
-      setEditWarehouseId(id);
-      handleOpen();
-    } else {
-      setAlert({ severity: 'error', message: 'Localização não encontrada para edição' });
-      setTimeout(() => setAlert(null), 5000);
+  const handleEdit = useCallback(
+    (id: string) => {
+      if (!canUpdate) {
+        setAlert({
+          severity: 'error',
+          message: 'Você não tem permissão para atualizar localizações!',
+        });
+        log('Permissão de atualização negada');
+        return;
+      }
+      const locationToEdit = localizacoes.find((loc) => loc.id === id);
+      if (locationToEdit) {
+        setNomeLocalizacao(locationToEdit.nomeLocalizacao || '');
+        setDescricao(locationToEdit.descricao || '');
+        setTipoSelecionado(locationToEdit.tipo || null);
+        setEditWarehouseId(id);
+        handleOpen();
+        log('Editando localização:', locationToEdit);
+      } else {
+        setAlert({ severity: 'error', message: 'Localização não encontrada para edição' });
+      }
+    },
+    [canUpdate, localizacoes, handleOpen],
+  );
+
+  const handleDelete = useCallback(async () => {
+    if (!canDelete) {
+      setAlert({
+        severity: 'error',
+        message: 'Você não tem permissão para excluir localizações!',
+      });
+      log('Permissão de exclusão negada');
+      return;
     }
-  };
-
-  const handleDelete = async () => {
     if (!deleteWarehouseId) {
       setAlert({ severity: 'error', message: 'ID da localização não fornecido' });
-      setTimeout(() => setAlert(null), 5000);
       return;
     }
 
     try {
       setLoading(true);
-      
-      // Verifica se a localização existe localmente
-      const locationExists = localizacoes.some(loc => loc.id === deleteWarehouseId);
-      if (!locationExists) {
+      setAlert(null);
+
+      // Cache the location for rollback
+      const locationToDelete = localizacoes.find((loc) => loc.id === deleteWarehouseId);
+      if (!locationToDelete) {
         throw new Error('Localização não encontrada');
       }
 
-      // Tenta excluir no servidor
+      // Optimistic update
+      setLocalizacoes((prev) => prev.filter((loc) => loc.id !== deleteWarehouseId));
+      setLocalizacoesFiltradas((prev) => prev.filter((loc) => loc.id !== deleteWarehouseId));
+
       await deleteLocation(deleteWarehouseId);
-      
-      // Atualização otimista - remove do estado sem recarregar tudo
-      setLocalizacoes(prev => prev.filter(loc => loc.id !== deleteWarehouseId));
-      setLocalizacoesFiltradas(prev => prev.filter(loc => loc.id !== deleteWarehouseId));
-      
       setAlert({ severity: 'success', message: 'Localização excluída com sucesso!' });
+      log('Localização excluída:', deleteWarehouseId);
       handleCloseConfirmDelete();
     } catch (error: any) {
       console.error('Erro ao excluir localização:', error);
-      
       let errorMessage = 'Erro ao excluir localização';
-      if (error.message) {
-        errorMessage = error.message;
-      } else if (error.response) {
+      if (error.response) {
         if (error.response.status === 404) {
           errorMessage = 'Localização não encontrada no servidor';
         } else if (error.response.status === 400) {
-          errorMessage = error.response.data?.message || 'Localização não pode ser excluída (possivelmente em uso)';
+          errorMessage =
+            error.response.data?.message ||
+            'Localização não pode ser excluída (possivelmente em uso)';
+        } else if (error.response.status === 403) {
+          errorMessage = 'Permissão negada para excluir localizações';
         } else if (error.response.status === 500) {
-          errorMessage = 'Erro interno no servidor ao tentar excluir';
+          errorMessage = 'Erro interno no servidor';
         }
       }
-      
+
+      // Rollback optimistic update
+      if (locationToDelete) {
+        setLocalizacoes((prev) =>
+          [...prev, locationToDelete].sort((a, b) =>
+            (a.nomeLocalizacao || '').localeCompare(b.nomeLocalizacao || ''),
+          ),
+        );
+        setLocalizacoesFiltradas((prev) =>
+          [...prev, locationToDelete].sort((a, b) =>
+            (a.nomeLocalizacao || '').localeCompare(b.nomeLocalizacao || ''),
+          ),
+        );
+      }
+
       setAlert({ severity: 'error', message: errorMessage });
-      setTimeout(() => setAlert(null), 5000);
     } finally {
       setLoading(false);
     }
-  };
+  }, [canDelete, deleteWarehouseId, localizacoes, handleCloseConfirmDelete]);
 
-  const handleSearch = () => {
+  const handleSearch = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
     if (!query) {
       setLocalizacoesFiltradas(localizacoes);
     } else {
       const filtered = localizacoes.filter(
         (loc) =>
-          (loc.nomeLocalizacao?.toLowerCase().includes(query) || '') ||
-          (loc.descricao?.toLowerCase().includes(query) || '') ||
-          getTipoLabel(loc.tipo).toLowerCase().includes(query)
+          (loc.nomeLocalizacao?.toLowerCase()?.includes(query) ?? false) ||
+          (loc.descricao?.toLowerCase()?.includes(query) ?? false) ||
+          getTipoLabel(loc.tipo).toLowerCase().includes(query),
       );
       setLocalizacoesFiltradas(filtered);
     }
     setPage(0);
-  };
+  }, [searchQuery, localizacoes, getTipoLabel]);
 
-  const handleChangePage = (
-    _event: React.MouseEvent<HTMLButtonElement> | null,
-    newPage: number,
-  ) => {
-    setPage(newPage);
-  };
+  useEffect(() => {
+    handleSearch;
+  }, [searchQuery, localizacoes]);
 
-  const paginatedLocations = localizacoesFiltradas.slice(
-    page * rowsPerPage,
-    page * rowsPerPage + rowsPerPage
+  useEffect(() => {
+    if (alert) {
+      const timer = setTimeout(() => setAlert(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [alert]);
+
+  const handleChangePage = useCallback(
+    (_event: React.MouseEvent<HTMLButtonElement> | null, newPage: number) => {
+      setPage(newPage);
+    },
+    [],
+  );
+
+  const paginatedLocations = useMemo(
+    () => localizacoesFiltradas.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
+    [localizacoesFiltradas, page, rowsPerPage],
   );
 
   return (
     <>
       {alert && (
-        <Box sx={{ position: 'fixed', top: 20, right: 40, zIndex: 9999 }}>
+        <Box sx={{ position: 'fixed', top: 20, right: 40, zIndex: 9999, minWidth: 300 }}>
           <Alert severity={alert.severity}>{alert.message}</Alert>
         </Box>
       )}
@@ -285,23 +476,16 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 label="Pesquisar Localização"
                 variant="outlined"
                 size="small"
-                disabled={loading}
+                disabled={loading || !canRead}
+                title={!canRead ? 'Você não tem permissão para visualizar localizações' : ''}
               />
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={handleSearch}
-                disabled={loading}
-                startIcon={<IconifyIcon icon="material-symbols:search" />}
-              >
-                Pesquisar
-              </Button>
               <Button
                 variant="contained"
                 color="secondary"
                 onClick={handleOpen}
-                disabled={loading}
+                disabled={loading || !canCreate}
                 startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
+                title={!canCreate ? 'Você não tem permissão para criar localizações' : ''}
               >
                 Localização
               </Button>
@@ -317,6 +501,7 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
           </Typography>
           <Stack spacing={2} sx={{ width: '100%' }}>
             <TextField
+              id="nome-localizacao"
               label="Nome da Localização"
               value={nomeLocalizacao}
               onChange={(e) => setNomeLocalizacao(e.target.value)}
@@ -328,6 +513,7 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               required
             />
             <TextField
+              id="descricao"
               label="Descrição"
               value={descricao}
               onChange={(e) => setDescricao(e.target.value)}
@@ -339,8 +525,10 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               required
             />
             <FormControl variant="filled" fullWidth error={Boolean(errors.tipo)} required>
-              <InputLabel>Tipo de Localização</InputLabel>
+              <InputLabel id="tipo-label">Tipo de Localização</InputLabel>
               <Select
+                labelId="tipo-label"
+                id="tipo"
                 value={tipoSelecionado || ''}
                 onChange={(e) => setTipoSelecionado(e.target.value as tipo)}
                 disabled={loading}
@@ -357,8 +545,17 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               variant="contained"
               color="secondary"
               onClick={handleAddLocation}
-              disabled={loading}
+              disabled={
+                loading || (!canCreate && !editWarehouseId) || (!canUpdate && editWarehouseId)
+              }
               fullWidth
+              title={
+                !canCreate && !editWarehouseId
+                  ? 'Você não tem permissão para criar localizações'
+                  : !canUpdate && editWarehouseId
+                    ? 'Você não tem permissão para atualizar localizações'
+                    : ''
+              }
             >
               {loading ? 'Salvando...' : editWarehouseId ? 'Atualizar' : 'Cadastrar'}
             </Button>
@@ -375,17 +572,25 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell><strong>Nome</strong></TableCell>
-                  <TableCell><strong>Descrição</strong></TableCell>
-                  <TableCell><strong>Tipo</strong></TableCell>
-                  <TableCell align="right"><strong>Ações</strong></TableCell>
+                  <TableCell>
+                    <strong>Nome</strong>
+                  </TableCell>
+                  <TableCell>
+                    <strong>Descrição</strong>
+                  </TableCell>
+                  <TableCell>
+                    <strong>Tipo</strong>
+                  </TableCell>
+                  <TableCell align="right">
+                    <strong>Ações</strong>
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {loading ? (
                   <TableRow>
                     <TableCell colSpan={4} align="center">
-                      Carregando...
+                      <CircularProgress size={24} />
                     </TableCell>
                   </TableRow>
                 ) : paginatedLocations.length > 0 ? (
@@ -404,14 +609,20 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                         <IconButton
                           color="primary"
                           onClick={() => handleEdit(location.id!)}
-                          disabled={loading}
+                          disabled={loading || !canUpdate}
+                          title={
+                            !canUpdate ? 'Você não tem permissão para atualizar localizações' : ''
+                          }
                         >
                           <Edit />
                         </IconButton>
                         <IconButton
                           color="error"
                           onClick={() => handleOpenConfirmDelete(location.id!)}
-                          disabled={loading}
+                          disabled={loading || !canDelete}
+                          title={
+                            !canDelete ? 'Você não tem permissão para excluir localizações' : ''
+                          }
                         >
                           <Delete />
                         </IconButton>
@@ -437,6 +648,7 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             onPageChange={handleChangePage}
             labelRowsPerPage="Itens por página"
             labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+            disabled={loading || !canRead}
           />
         </CardContent>
       </Card>
@@ -454,6 +666,11 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
           <Typography id="confirm-delete-modal-description" sx={{ mb: 3 }}>
             Tem certeza que deseja excluir esta localização?
           </Typography>
+          {loading && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+              <CircularProgress size={24} />
+            </Box>
+          )}
           <Stack direction="row" spacing={2} justifyContent="flex-end">
             <Button
               variant="outlined"
@@ -467,7 +684,8 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               variant="contained"
               color="error"
               onClick={handleDelete}
-              disabled={loading}
+              disabled={loading || !canDelete}
+              title={!canDelete ? 'Você não tem permissão para excluir localizações' : ''}
             >
               {loading ? 'Excluindo...' : 'Excluir'}
             </Button>
