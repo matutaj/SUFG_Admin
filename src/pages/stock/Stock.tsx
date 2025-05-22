@@ -124,7 +124,13 @@ const Stock: React.FC = () => {
   const [openConfirmDeleteEntry, setOpenConfirmDeleteEntry] = useState(false);
   const [openLocationModal, setOpenLocationModal] = useState(false);
   const [openDetailsModal, setOpenDetailsModal] = useState(false);
-  const [selectedEntry, setSelectedEntry] = useState<DadosEntradaEstoque | null>(null);
+  const [selectedEntry, setSelectedEntry] = useState<{
+    id: string;
+    dataEntrada: Date;
+    id_fornecedor: string;
+    id_funcionario: string;
+    entries: DadosEntradaEstoque[];
+  } | null>(null);
   const [deleteStockId, setDeleteStockId] = useState<string | null>(null);
   const [deleteEntryId, setDeleteEntryId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -190,6 +196,28 @@ const Stock: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
 
+  const groupStockEntries = (entries: DadosEntradaEstoque[]) => {
+    const grouped: { [key: string]: DadosEntradaEstoque[] } = {};
+  
+    entries.forEach((entry) => {
+      const dataEntrada = new Date(entry.dataEntrada); // Garantir que é Date
+      const key = `${dataEntrada.toISOString()}-${entry.id_fornecedor}-${entry.id_funcionario}`;
+      if (!grouped[key]) {
+        grouped[key] = [];
+      }
+      grouped[key].push(entry);
+    });
+  
+    return Object.values(grouped).map((entries, index) => ({
+      id: `group-${index}`, // ID único para o grupo
+      dataEntrada: new Date(entries[0].dataEntrada), // Garantir que é Date
+      id_fornecedor: entries[0].id_fornecedor,
+      id_funcionario: entries[0].id_funcionario,
+      entries, // Lista de entradas no grupo
+    }));
+  };
+  const groupedStockEntries = useMemo(() => groupStockEntries(filteredStockEntries), [filteredStockEntries]);
+  
   useEffect(() => {
     fetchData();
   }, []);
@@ -370,8 +398,14 @@ const Stock: React.FC = () => {
     setLocationIndex(0);
   }, []);
 
-  const handleOpenDetailsModal = useCallback((entry: DadosEntradaEstoque) => {
-    setSelectedEntry(entry);
+  const handleOpenDetailsModal = useCallback((group: {
+    id: string;
+    dataEntrada: Date;
+    id_fornecedor: string;
+    id_funcionario: string;
+    entries: DadosEntradaEstoque[];
+  }) => {
+    setSelectedEntry(group);
     setOpenDetailsModal(true);
   }, []);
 
@@ -784,17 +818,52 @@ const Stock: React.FC = () => {
     setForm({
       id_fornecedor: entry.id_fornecedor,
       id_funcionario: entry.id_funcionario,
-      dataEntrada: new Date(entry.dataEntrada),
+      dataEntrada: new Date(entry.dataEntrada), // Garantir que é Date
       products: [{
         id_produto: entry.id_produto,
         quantidadeRecebida: entry.quantidadeRecebida,
         custoUnitario: entry.custoUnitario,
         lote: entry.lote,
-        dataValidadeLote: new Date(entry.dataValidadeLote),
+        dataValidadeLote: new Date(entry.dataValidadeLote), // Garantir que é Date
       }],
     });
     setErrors({});
     setOpenModal(true);
+  }, []);
+  const handleEditGroup = useCallback((group: {
+    id: string;
+    dataEntrada: Date;
+    id_fornecedor: string;
+    id_funcionario: string;
+    entries: DadosEntradaEstoque[];
+  }) => {
+    setIsEditing(true);
+    setEditEntryId(group.id); // Usamos o ID do grupo como identificador
+    setForm({
+      id_fornecedor: group.id_fornecedor,
+      id_funcionario: group.id_funcionario,
+      dataEntrada: group.dataEntrada,
+      products: group.entries.map((entry) => ({
+        id_produto: entry.id_produto,
+        quantidadeRecebida: entry.quantidadeRecebida,
+        custoUnitario: entry.custoUnitario,
+        lote: entry.lote,
+        dataValidadeLote: new Date(entry.dataValidadeLote),
+      })),
+    });
+    setErrors({});
+    setOpenModal(true);
+  }, []);
+  const handleDeleteGroup = useCallback((group: {
+    id: string;
+    dataEntrada: Date;
+    id_fornecedor: string;
+    id_funcionario: string;
+    entries: DadosEntradaEstoque[];
+  }) => {
+    // Armazena o grupo a ser excluído no estado selectedEntry para uso no modal de confirmação
+    setSelectedEntry(group);
+    setOpenConfirmDelete(true);
   }, []);
 
   const handleDeleteStock = useCallback(async () => {
@@ -1597,81 +1666,77 @@ const Stock: React.FC = () => {
       </Modal>
 
       <Modal
-        open={openDetailsModal}
-        onClose={handleCloseDetailsModal}
-        aria-labelledby="modal-detalhes-entrada"
+  open={openDetailsModal}
+  onClose={handleCloseDetailsModal}
+  aria-labelledby="modal-detalhes-entrada"
+>
+  <Box sx={{ ...modalStyle, width: { xs: '90%', sm: '70%', md: 800 } }}>
+    <Stack
+      direction="row"
+      justifyContent="space-between"
+      alignItems="center"
+      sx={{ mb: 2 }}
+    >
+      <Typography id="modal-detalhes-entrada" variant="h5">
+        Detalhes da Entrada de Estoque
+      </Typography>
+      <Button
+        onClick={handleCloseDetailsModal}
+        variant="outlined"
+        color="error"
+        disabled={loading}
+        aria-label="Fechar modal de detalhes da entrada"
       >
-        <Box sx={{ ...modalStyle, width: { xs: '90%', sm: '70%', md: 600 } }}>
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="center"
-            sx={{ mb: 2 }}
-          >
-            <Typography id="modal-detalhes-entrada" variant="h5">
-              Detalhes da Entrada de Estoque
-            </Typography>
-            <Button
-              onClick={handleCloseDetailsModal}
-              variant="outlined"
-              color="error"
-              disabled={loading}
-              aria-label="Fechar modal de detalhes da entrada"
-            >
-              Fechar
-            </Button>
-          </Stack>
-          {selectedEntry && (
-            <TableContainer component={Paper}>
-              <Table aria-label="Tabela de detalhes da entrada de estoque">
-                <TableBody>
-                  <TableRow>
-                    <TableCell><strong>Produto</strong></TableCell>
-                    <TableCell>
-                      {products.find((p) => p.id === selectedEntry.id_produto)?.nomeProduto ||
-                        selectedEntry.id_produto}
-                    </TableCell>
+        Fechar
+      </Button>
+    </Stack>
+    {selectedEntry ? (
+      <Stack spacing={2}>
+        <Typography variant="body1">
+          <strong>Data de Entrada:</strong> {formatDateToDisplay(selectedEntry.dataEntrada)}
+        </Typography>
+        <Typography variant="body1">
+          <strong>Fornecedor:</strong> {suppliers.find((s) => s.id === selectedEntry.id_fornecedor)?.nomeFornecedor || selectedEntry.id_fornecedor}
+        </Typography>
+        <Typography variant="body1">
+          <strong>Funcionário:</strong> {employees.find((e) => e.id === selectedEntry.id_funcionario)?.nomeFuncionario || selectedEntry.id_funcionario}
+        </Typography>
+        <Typography variant="body1">
+          <strong>Produtos:</strong>
+        </Typography>
+        <TableContainer component={Paper}>
+          <Table size="small" aria-label="Tabela de produtos da entrada">
+            <TableHead>
+              <TableRow>
+                <TableCell><strong>Produto</strong></TableCell>
+                <TableCell><strong>Quantidade</strong></TableCell>
+                <TableCell><strong>Custo Unitário</strong></TableCell>
+                <TableCell><strong>Lote</strong></TableCell>
+                <TableCell><strong>Validade</strong></TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {selectedEntry.entries.map((entry) => {
+                const produto = products.find((p) => p.id === entry.id_produto);
+                return (
+                  <TableRow key={entry.id}>
+                    <TableCell>{produto?.nomeProduto || entry.id_produto}</TableCell>
+                    <TableCell>{entry.quantidadeRecebida}</TableCell>
+                    <TableCell>{Number(entry.custoUnitario).toFixed(2)}</TableCell>
+                    <TableCell>{entry.lote}</TableCell>
+                    <TableCell>{formatDateToDisplay(entry.dataValidadeLote)}</TableCell>
                   </TableRow>
-                  <TableRow>
-                    <TableCell><strong>Fornecedor</strong></TableCell>
-                    <TableCell>
-                      {suppliers.find((s) => s.id === selectedEntry.id_fornecedor)?.nomeFornecedor ||
-                        selectedEntry.id_fornecedor}
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell><strong>Funcionário</strong></TableCell>
-                    <TableCell>
-                      {employees.find((e) => e.id === selectedEntry.id_funcionario)?.nomeFuncionario ||
-                        selectedEntry.id_funcionario}
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell><strong>Quantidade</strong></TableCell>
-                    <TableCell>{selectedEntry.quantidadeRecebida}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell><strong>Data de Entrada</strong></TableCell>
-                    <TableCell>{formatDateToDisplay(selectedEntry.dataEntrada)}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell><strong>Custo Unitário</strong></TableCell>
-                    <TableCell>{Number(selectedEntry.custoUnitario).toFixed(2)}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell><strong>Lote</strong></TableCell>
-                    <TableCell>{selectedEntry.lote}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell><strong>Validade</strong></TableCell>
-                    <TableCell>{formatDateToDisplay(selectedEntry.dataValidadeLote)}</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </Box>
-      </Modal>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Stack>
+    ) : (
+      <Typography variant="body2">Carregando detalhes...</Typography>
+    )}
+  </Box>
+</Modal>
 
       <Card sx={{ maxWidth: '100%', margin: 'auto', mt: 4 }}>
         <CardContent>
@@ -1693,81 +1758,76 @@ const Stock: React.FC = () => {
                 <Table aria-label="Tabela de entradas de estoque">
                   <TableHead>
                     <TableRow>
-                      <TableCell><strong>Produto</strong></TableCell>
                       <TableCell><strong>Quantidade</strong></TableCell>
-                      <TableCell><strong>Lote</strong></TableCell>
                       <TableCell><strong>Data de Entrada</strong></TableCell>
                       <TableCell><strong>Validade</strong></TableCell>
                       <TableCell><strong>Ações</strong></TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {loading ? (
-                      <TableRow>
-                        <TableCell colSpan={6} align="center">
-                          Carregando...
-                        </TableCell>
-                      </TableRow>
-                    ) : paginatedStockEntries.length > 0 ? (
-                      paginatedStockEntries.map((entry) => {
-                        const product = products.find((p) => p.id === entry.id_produto);
-                        return (
-                          <TableRow key={entry.id}>
-                            <TableCell>{product?.nomeProduto || entry.id_produto}</TableCell>
-                            <TableCell>{entry.quantidadeRecebida}</TableCell>
-                            <TableCell>{entry.lote}</TableCell>
-                            <TableCell>{formatDateToDisplay(entry.dataEntrada)}</TableCell>
-                            <TableCell>{formatDateToDisplay(entry.dataValidadeLote)}</TableCell>
-                            <TableCell align="right">
-                              <IconButton
-                                color="primary"
-                                onClick={() => handleEditStockEntry(entry)}
-                                disabled={loading}
-                                aria-label={`Editar entrada de estoque ${entry.id}`}
-                              >
-                                <Edit />
-                              </IconButton>
-                              <IconButton
-                                color="error"
-                                onClick={() => handleOpenConfirmDeleteEntry(entry.id!)}
-                                disabled={loading}
-                                aria-label={`Excluir entrada de estoque ${entry.id}`}
-                              >
-                                <Delete />
-                              </IconButton>
-                              <IconButton
-                                color="info"
-                                onClick={() => handleOpenDetailsModal(entry)}
-                                disabled={loading}
-                                aria-label={`Ver detalhes da entrada de estoque ${entry.id}`}
-                              >
-                                <IconifyIcon icon="mdi:eye" />
-                              </IconButton>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={6} align="center">
-                          Nenhuma entrada encontrada.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
+  {loading ? (
+    <TableRow>
+      <TableCell colSpan={4} align="center">
+        Carregando...
+      </TableCell>
+    </TableRow>
+  ) : groupedStockEntries.length > 0 ? (
+    groupedStockEntries.slice(entryPage * rowsPerPage, entryPage * rowsPerPage + rowsPerPage).map((group) => (
+      <TableRow key={group.id}>
+        <TableCell>
+          {suppliers.find((s) => s.id === group.id_fornecedor)?.nomeFornecedor || group.id_fornecedor}
+        </TableCell>
+        <TableCell>{formatDateToDisplay(group.dataEntrada)}</TableCell>
+        <TableCell>{group.entries.length} produto(s)</TableCell>
+        <TableCell align="right">
+          <IconButton
+            color="info"
+            onClick={() => handleOpenDetailsModal(group)}
+            disabled={loading}
+            aria-label={`Ver detalhes da entrada de estoque ${group.id}`}
+          >
+            <IconifyIcon icon="mdi:eye" />
+          </IconButton>
+          <IconButton
+            color="primary"
+            onClick={() => handleEditGroup(group)}
+            disabled={loading}
+            aria-label={`Editar todas as entradas do grupo ${group.id}`}
+          >
+            <Edit />
+          </IconButton>
+          <IconButton
+            color="error"
+            onClick={() => handleDeleteGroup(group)}
+            disabled={loading}
+            aria-label={`Excluir todas as entradas do grupo ${group.id}`}
+          >
+            <Delete />
+          </IconButton>
+        </TableCell>
+      </TableRow>
+    ))
+  ) : (
+    <TableRow>
+      <TableCell colSpan={4} align="center">
+        Nenhuma entrada encontrada.
+      </TableCell>
+    </TableRow>
+  )}
+</TableBody>
                 </Table>
               </TableContainer>
               <TablePagination
-                rowsPerPageOptions={[6]}
-                component="div"
-                count={filteredStockEntries.length}
-                rowsPerPage={rowsPerPage}
-                page={entryPage}
-                onPageChange={handleChangeEntryPage}
-                labelRowsPerPage="Itens por página"
-                labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
-                aria-label="Paginação de entradas de estoque"
-              />
+  rowsPerPageOptions={[6]}
+  component="div"
+  count={groupedStockEntries.length}
+  rowsPerPage={rowsPerPage}
+  page={entryPage}
+  onPageChange={handleChangeEntryPage}
+  labelRowsPerPage="Itens por página"
+  labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+  aria-label="Paginação de entradas de estoque"
+/>
             </>
           )}
         </CardContent>

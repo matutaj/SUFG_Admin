@@ -223,13 +223,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         timeoutPromise(getAllSections(), 10000),
         timeoutPromise(getAllShelves(), 10000),
         timeoutPromise(getAllCorridors(), 10000),
-        timeoutPromise(
-          getAllProductLocations(page + 1, rowsPerPage, {
-            locationId: selectedLocationType,
-            searchQuery,
-          }),
-          10000,
-        ),
+        timeoutPromise(getAllProductLocations(), 10000),
       ]);
 
       const [

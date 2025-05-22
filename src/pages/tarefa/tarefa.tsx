@@ -1,4 +1,3 @@
-
 import {
   Collapse,
   Paper,
@@ -28,7 +27,6 @@ import {
   Chip,
 } from '@mui/material';
 import IconifyIcon from 'components/base/IconifyIcon';
-import React, { useState, useEffect, useMemo } from 'react';
 import Delete from 'components/icons/factor/Delete';
 import Edit from 'components/icons/factor/Edit';
 import {
@@ -43,6 +41,7 @@ import {
   deleteTask,
 } from '../../api/methods';
 import { Tarefa, Funcionario, AtividadeDoDia } from '../../types/models';
+import React, { useState, useEffect, useMemo } from 'react';
 
 const modalStyle = {
   position: 'absolute' as const,
@@ -217,7 +216,7 @@ const TarefaComponent = () => {
       const createdAt = new Date(atividade.createdAt!).getTime();
       const group = atividades.filter((a) => {
         const aCreatedAt = new Date(a.createdAt!).getTime();
-        return Math.abs(aCreatedAt - createdAt) < 1000;
+        return Math.abs(aCreatedAt - createdAt) < 100; // Tolerância reduzida para 100ms
       });
 
       setFormActivity({
@@ -297,7 +296,7 @@ const TarefaComponent = () => {
     const groupedByTaskAndSubmission = atividades.reduce((acc, atividade) => {
       const taskId = atividade.id_tarefa;
       const createdAt = new Date(atividade.createdAt!).getTime();
-      const submissionKey = `${taskId}-${Math.floor(createdAt / 1000)}`; // Agrupar por tarefa e momento
+      const submissionKey = `${taskId}-${Math.floor(createdAt / 100)}`; // Tolerância de 100ms
 
       if (!acc[submissionKey]) {
         acc[submissionKey] = {
@@ -345,9 +344,7 @@ const TarefaComponent = () => {
         valueA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         valueB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
       } else {
-        // @ts-ignore
         valueA = a[sortBy] ?? '';
-        // @ts-ignore
         valueB = b[sortBy] ?? '';
       }
 
@@ -423,32 +420,57 @@ const TarefaComponent = () => {
     try {
       if (editAtividadeId) {
         const atividade = atividades.find((a) => a.id === editAtividadeId);
-        if (atividade) {
-          const createdAt = new Date(atividade.createdAt!).getTime();
-          const group = atividades.filter((a) => {
-            const aCreatedAt = new Date(a.createdAt!).getTime();
-            return Math.abs(aCreatedAt - createdAt) < 1000;
-          });
-
-          const deletePromises = group.map((a) => deleteDailyActivity(a.id!));
-          await Promise.all(deletePromises);
+        if (!atividade) {
+          throw new Error('Atividade não encontrada para edição.');
         }
+        const createdAt = new Date(atividade.createdAt!).getTime();
+        const group = atividades.filter((a) => {
+          const aCreatedAt = new Date(a.createdAt!).getTime();
+          return Math.abs(aCreatedAt - createdAt) < 100; // Tolerância reduzida para 100ms
+        });
+
+        const oldEmployeeIds = group.map((a) => a.id_funcionario);
+        const newEmployeeIds = formActivity.idFuncionarios;
+
+        // Deletar atividades existentes do grupo
+        const deletePromises = group.map((a) => deleteDailyActivity(a.id!));
+        await Promise.all(deletePromises);
+
+        // Criar novas atividades para todos os funcionários selecionados
+        const activityPromises = formActivity.idFuncionarios.map((idFuncionario) => {
+          const activityData: AtividadeDoDia = {
+            id_tarefa: formActivity.idTarefa,
+            id_funcionario: idFuncionario,
+            status: formActivity.status,
+            createdAt: new Date(), // Garante novo timestamp para cada atribuição
+          };
+          return createDailyActivity(activityData);
+        });
+
+        await Promise.all(activityPromises);
+
+        setAlert({
+          severity: 'success',
+          message: 'Submissão atualizada com sucesso!',
+        });
+      } else {
+        // Criar novas atividades
+        const activityPromises = formActivity.idFuncionarios.map((idFuncionario) => {
+          const activityData: AtividadeDoDia = {
+            id_tarefa: formActivity.idTarefa,
+            id_funcionario: idFuncionario,
+            status: formActivity.status,
+            createdAt: new Date(),
+          };
+          return createDailyActivity(activityData);
+        });
+
+        await Promise.all(activityPromises);
+        setAlert({
+          severity: 'success',
+          message: 'Atividades registradas com sucesso!',
+        });
       }
-
-      const activityPromises = formActivity.idFuncionarios.map((idFuncionario) => {
-        const activityData: AtividadeDoDia = {
-          id_tarefa: formActivity.idTarefa,
-          id_funcionario: idFuncionario,
-          status: formActivity.status,
-        };
-        return createDailyActivity(activityData);
-      });
-
-      await Promise.all(activityPromises);
-      setAlert({
-        severity: 'success',
-        message: editAtividadeId ? 'Submissão atualizada com sucesso!' : 'Atividades registradas com sucesso!',
-      });
 
       await fetchInitialData();
       setOpenActivityModal(false);
@@ -464,17 +486,15 @@ const TarefaComponent = () => {
       const errorMessage =
         error instanceof Error
           ? error.message
-          : 'Erro ao salvar atividade. Verifique os dados e tente novamente.';
-      const responseData = error.response?.data;
-
+          : 'Erro ao salvar atividade. Verifique a conexão com o servidor.';
       console.error('Erro ao salvar atividade:', {
         message: errorMessage,
-        response: responseData,
+        response: error.response?.data,
         stack: error.stack,
       });
       setAlert({
         severity: 'error',
-        message: responseData?.message || errorMessage,
+        message: error.response?.data?.message || errorMessage,
       });
     } finally {
       setLoading(false);
@@ -548,7 +568,7 @@ const TarefaComponent = () => {
           const createdAt = new Date(atividade.createdAt!).getTime();
           const group = atividades.filter((a) => {
             const aCreatedAt = new Date(a.createdAt!).getTime();
-            return Math.abs(aCreatedAt - createdAt) < 1000;
+            return Math.abs(aCreatedAt - createdAt) < 100;
           });
 
           const deletePromises = group.map((a) => deleteDailyActivity(a.id!));
@@ -591,6 +611,30 @@ const TarefaComponent = () => {
   const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
+  };
+
+  const handleUpdateStatus = async (
+    newStatus: 'Concluída' | 'Em Andamento' | 'Pendente',
+    atividades: AtividadeDoDia[],
+  ) => {
+    setLoading(true);
+    try {
+      const updatePromises = atividades.map((atividade) =>
+        updateDailyActivity(atividade.id!, { status: newStatus }),
+      );
+      await Promise.all(updatePromises);
+      setAlert({ severity: 'success', message: 'Status atualizado com sucesso!' });
+      await fetchInitialData();
+    } catch (error: any) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Erro ao atualizar status. Tente novamente.';
+      setAlert({ severity: 'error', message: errorMessage });
+    } finally {
+      setLoading(false);
+      setTimeout(() => setAlert(null), 3000);
+    }
   };
 
   return (
@@ -690,7 +734,7 @@ const TarefaComponent = () => {
                 value={formActivity.idTarefa}
                 onChange={(e) => handleChangeActivity(e, 'idTarefa')}
                 label="Tarefa"
-                disabled={loading}
+                disabled={!!(loading || (editAtividadeId && formActivity.status === 'Concluída'))}
                 aria-describedby="tarefa-error"
               >
                 <MenuItem value="">
@@ -717,7 +761,7 @@ const TarefaComponent = () => {
                 value={formActivity.idFuncionarios}
                 onChange={(e) => handleChangeActivity(e, 'idFuncionarios')}
                 label="Funcionários"
-                disabled={loading}
+                disabled={!!(loading || (editAtividadeId && formActivity.status === 'Concluída'))}
                 aria-describedby="funcionarios-error"
                 renderValue={(selected) => (
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
@@ -748,7 +792,7 @@ const TarefaComponent = () => {
                 value={formActivity.status}
                 onChange={(e) => handleChangeActivity(e, 'status')}
                 label="Status"
-                disabled={loading}
+                disabled={!!(loading || (editAtividadeId && formActivity.status === 'Concluída'))}
                 aria-describedby="status-error"
               >
                 <MenuItem value="Concluída">Concluída</MenuItem>
@@ -776,7 +820,7 @@ const TarefaComponent = () => {
                 variant="contained"
                 color="primary"
                 onClick={onAddActivitySubmit}
-                disabled={loading}
+                disabled={!!(loading || (editAtividadeId && formActivity.status === 'Concluída'))}
                 aria-label={editAtividadeId ? 'Atualizar atividade' : 'Registrar atividade'}
               >
                 {loading ? 'Salvando...' : editAtividadeId ? 'Atualizar' : 'Registrar'}
@@ -969,7 +1013,21 @@ const TarefaComponent = () => {
                 <strong>Descrição:</strong> {selectedTask.tarefa.descricao || 'Sem descrição'}
               </Typography>
               <Typography variant="body1">
-                <strong>Atribuições:</strong>
+                <strong>Status:</strong> {selectedTask.status}
+              </Typography>
+              <Typography variant="body1">
+                <strong>Data de Submissão:</strong> {new Date(selectedTask.createdAt).toLocaleString()}
+              </Typography>
+              <Typography variant="body1">
+                <strong>Funcionários:</strong>
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                {selectedTask.funcionarios.map((nome, index) => (
+                  <Chip key={index} label={nome} />
+                ))}
+              </Box>
+              <Typography variant="body1">
+                <strong>Histórico de Atribuições:</strong>
               </Typography>
               <Box>
                 {selectedTask.atividades.length > 0 ? (
@@ -1027,17 +1085,9 @@ const TarefaComponent = () => {
                       Tarefa {sortBy === 'id_tarefa' && (sortOrder === 'asc' ? '↑' : '↓')}
                     </strong>
                   </TableCell>
-                  <TableCell>
-                    <strong>Funcionários</strong>
-                  </TableCell>
                   <TableCell onClick={() => handleSort('status')} sx={{ cursor: 'pointer' }}>
                     <strong>
                       Status {sortBy === 'status' && (sortOrder === 'asc' ? '↑' : '↓')}
-                    </strong>
-                  </TableCell>
-                  <TableCell onClick={() => handleSort('createdAt')} sx={{ cursor: 'pointer' }}>
-                    <strong>
-                      Data de Submissão {sortBy === 'createdAt' && (sortOrder === 'asc' ? '↑' : '↓')}
                     </strong>
                   </TableCell>
                   <TableCell align="right">
@@ -1049,7 +1099,7 @@ const TarefaComponent = () => {
                 {loading ? (
                   Array.from({ length: rowsPerPage }).map((_, index) => (
                     <TableRow key={index}>
-                      <TableCell colSpan={5}>
+                      <TableCell colSpan={3}>
                         <Skeleton variant="rectangular" height={40} />
                       </TableCell>
                     </TableRow>
@@ -1059,14 +1109,27 @@ const TarefaComponent = () => {
                     <TableRow key={row.id}>
                       <TableCell>{row.tarefa.nome}</TableCell>
                       <TableCell>
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                          {row.funcionarios.map((nome, index) => (
-                            <Chip key={index} label={nome} />
-                          ))}
-                        </Box>
+                        <FormControl sx={{ minWidth: 150 }}>
+                          <InputLabel id={`status-label-${row.id}`}>Status</InputLabel>
+                          <Select
+                            labelId={`status-label-${row.id}`}
+                            value={row.status}
+                            onChange={(e) =>
+                              handleUpdateStatus(
+                                e.target.value as 'Concluída' | 'Em Andamento' | 'Pendente',
+                                row.atividades,
+                              )
+                            }
+                            label="Status"
+                            disabled={loading || row.status === 'Concluída'}
+                            aria-describedby={`status-error-${row.id}`}
+                          >
+                            <MenuItem value="Concluída">Concluída</MenuItem>
+                            <MenuItem value="Em Andamento">Em Andamento</MenuItem>
+                            <MenuItem value="Pendente">Pendente</MenuItem>
+                          </Select>
+                        </FormControl>
                       </TableCell>
-                      <TableCell>{row.status}</TableCell>
-                      <TableCell>{new Date(row.createdAt).toLocaleString()}</TableCell>
                       <TableCell align="right">
                         <Button
                           variant="outlined"
@@ -1089,7 +1152,7 @@ const TarefaComponent = () => {
                         <IconButton
                           color="secondary"
                           onClick={() => handleEditActivity(row.atividades[0].id)}
-                          disabled={loading}
+                          disabled={loading || row.status === 'Concluída'}
                           aria-label={`Editar submissão da tarefa ${row.tarefa.nome}`}
                         >
                           <IconifyIcon icon="heroicons-solid:pencil-alt" />
@@ -1105,7 +1168,7 @@ const TarefaComponent = () => {
                         <IconButton
                           color="error"
                           onClick={() => handleOpenConfirmModal(row.atividades[0].id!, 'atividade')}
-                          disabled={loading}
+                          disabled={loading || row.status === 'Concluída'}
                           aria-label={`Excluir submissão da tarefa ${row.tarefa.nome}`}
                         >
                           <Delete />
@@ -1115,7 +1178,7 @@ const TarefaComponent = () => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5} align="center">
+                    <TableCell colSpan={3} align="center">
                       Nenhuma submissão encontrada.
                     </TableCell>
                   </TableRow>
