@@ -279,8 +279,8 @@ export interface FuncaoPermissao {
   id?: string;
   id_funcao: string;
   id_permissao: string;
-  funcoes?: Funcao;
-  permissoes?: Permissao;
+  Funcoes?: Funcao;
+  Permissoes?: Permissao;
   createdAt?: string;
   updatedAt?: string;
 }
