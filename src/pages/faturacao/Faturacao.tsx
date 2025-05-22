@@ -1044,24 +1044,26 @@ const Faturacao: React.FC = () => {
       }
 
       const updates = faturaState.produtosSelecionados.map(async (produtoSelecionado) => {
+        // Buscar localizações do tipo "Loja" para o produto
         const produtoLocations = productLocations.filter(
           (loc) =>
             loc.id_produto === produtoSelecionado.id &&
             lojaLocations.some((loja) => loja.id === loc.id_localizacao),
         );
-
+      
         if (produtoLocations.length === 0) {
           throw new Error(`Produto ${produtoSelecionado.id} não encontrado em nenhuma loja.`);
         }
-
+      
         let quantidadeRestante = produtoSelecionado.quantidade;
-
+      
+        // Atualizar quantidades nas localizações
         for (const produtoLocation of produtoLocations) {
           if (quantidadeRestante <= 0) break;
-
+      
           const quantidadeAtual = produtoLocation.quantidadeProduto ?? 0;
           const quantidadeADescontar = Math.min(quantidadeAtual, quantidadeRestante);
-
+      
           if (quantidadeADescontar > 0) {
             const newQuantity = quantidadeAtual - quantidadeADescontar;
             try {
@@ -1071,6 +1073,7 @@ const Faturacao: React.FC = () => {
                 id_produto: produtoLocation.id_produto,
               };
               await updateProductLocation(produtoLocation?.id!, updatedLocation);
+              // Atualizar estado local imediatamente
               setProductLocations((prev) =>
                 prev.map((loc) => (loc.id === produtoLocation.id ? updatedLocation : loc)),
               );
@@ -1082,34 +1085,46 @@ const Faturacao: React.FC = () => {
             }
           }
         }
-
+      
         if (quantidadeRestante > 0) {
           throw new Error(
             `Quantidade insuficiente para o produto ${produtoSelecionado.id} após tentar todas as lojas.`,
           );
         }
-
-        const armazemLocation = locations.find((loc) =>
-          loc.nomeLocalizacao.toLowerCase().includes('armazém'),
-        );
-        const armazemProdutoLocation = armazemLocation
-          ? productLocations.find(
-              (loc) =>
-                loc.id_produto === produtoSelecionado.id &&
-                loc.id_localizacao === armazemLocation.id,
-            )
-          : null;
-
-        const lojaQuantity = productLocations
+      });
+      
+      // Aguardar todas as atualizações de localização
+      await Promise.all(updates);
+      
+      // Recarregar productLocations do banco de dados para garantir dados atualizados
+      const updatedProductLocations = await getAllProductLocations();
+      setProductLocations(updatedProductLocations);
+      
+      // Atualizar estoque geral e produto para cada produto selecionado
+      const stockUpdates = faturaState.produtosSelecionados.map(async (produtoSelecionado) => {
+        // Calcular lojaQuantity com base nos dados atualizados
+        const lojaQuantity = updatedProductLocations
           .filter(
             (loc) =>
               loc.id_produto === produtoSelecionado.id &&
               lojaLocations.some((loja) => loja.id === loc.id_localizacao),
           )
           .reduce((total, loc) => total + (loc.quantidadeProduto ?? 0), 0);
+      
+        const armazemLocation = locations.find((loc) =>
+          loc.nomeLocalizacao.toLowerCase().includes('armazém'),
+        );
+        const armazemProdutoLocation = armazemLocation
+          ? updatedProductLocations.find(
+              (loc) =>
+                loc.id_produto === produtoSelecionado.id &&
+                loc.id_localizacao === armazemLocation.id,
+            )
+          : null;
         const armazemQuantity = Number(armazemProdutoLocation?.quantidadeProduto) || 0;
         const estoqueGeral = lojaQuantity + armazemQuantity;
-
+      
+        // Atualizar estoque geral
         try {
           const existingStock = await getStockByProduct(produtoSelecionado.id);
           if (!existingStock || !existingStock.id) {
@@ -1127,12 +1142,13 @@ const Faturacao: React.FC = () => {
             `Falha ao atualizar estoque do produto ${produtoSelecionado.id}: ${error.message || 'Tente novamente.'}`,
           );
         }
-
+      
+        // Atualizar produto
         const produto = productsInStore.find((p) => p.id === produtoSelecionado.id);
         if (!produto || !produto.id) {
           throw new Error(`Produto ${produtoSelecionado.id} não encontrado.`);
         }
-
+      
         try {
           const updatedProduto: Produto = {
             ...produto,
@@ -1146,7 +1162,8 @@ const Faturacao: React.FC = () => {
           );
         }
       });
-
+      
+      await Promise.all(stockUpdates);
       await Promise.all(updates);
 
       const novosProdutosFatura = faturaState.produtosSelecionados.map((p) => {
