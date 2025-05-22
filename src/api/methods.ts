@@ -313,6 +313,17 @@ export const getAllFunctionPermissions = async (): Promise<FuncaoPermissao[]> =>
   }
 };
 
+export const getAllFunctionPermissionsByFunction = async (
+  id_funcao: string,
+): Promise<FuncaoPermissao[]> => {
+  try {
+    const response = await api.get(`/funcaoPermissao/funcao/${id_funcao}`);
+    return response.data;
+  } catch (error) {
+    throw new ApiError('Falha ao buscar permissões de funções');
+  }
+};
+
 export const createFunctionPermission = async (data: FuncaoPermissao): Promise<FuncaoPermissao> => {
   try {
     const response = await api.post('/funcaoPermissao', data);
@@ -425,6 +436,14 @@ export const deleteEmployeePermission = async (id: string): Promise<void> => {
 export const getAllFunctions = async (): Promise<Funcao[]> => {
   try {
     const response = await api.get('/funcao');
+    return response.data;
+  } catch (error) {
+    throw new ApiError('Falha ao buscar funções');
+  }
+};
+export const getAllFunctionsByName = async (nameFuncao: string): Promise<Funcao> => {
+  try {
+    const response = await api.get(`/funcao/${nameFuncao}`);
     return response.data;
   } catch (error) {
     throw new ApiError('Falha ao buscar funções');

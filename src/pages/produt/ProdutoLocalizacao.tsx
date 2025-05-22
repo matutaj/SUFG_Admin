@@ -95,6 +95,14 @@ interface Errors {
   };
 }
 
+interface Permissions {
+  canRead: boolean;
+  canCreateTransfer: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+  canCreateLocation: boolean;
+}
+
 const modalStyle = {
   position: 'absolute' as const,
   top: '50%',
@@ -181,13 +189,13 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   } | null>(null);
   const [isTransferSuccessful, setIsTransferSuccessful] = useState(false);
   const { addNotification } = useNotifications();
-
-  // Permission states
-  const [canRead, setCanRead] = useState(false);
-  const [canCreateTransfer, setCanCreateTransfer] = useState(false);
-  const [canUpdate, setCanUpdate] = useState(false);
-  const [canDelete, setCanDelete] = useState(false);
-  const [canCreateLocation, setCanCreateLocation] = useState(false);
+  const [permissions, setPermissions] = useState<Permissions>({
+    canRead: false,
+    canCreateTransfer: false,
+    canUpdate: false,
+    canDelete: false,
+    canCreateLocation: false,
+  });
 
   // Logging function for debugging
   const log = (message: string, ...args: any[]) => {
@@ -204,23 +212,33 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     [locations],
   );
 
-  const loadUserData = useCallback(() => {
+  const loadUserDataAndPermissions = useCallback(async () => {
     try {
-      const userData = getUserData();
+      const userData = await getUserData();
       log('Dados do usuário:', userData);
       if (!userData || !userData.id) {
         throw new Error('Usuário não autenticado');
       }
       setLoggedInFuncionarioId(userData.id);
-      setCanRead(hasPermission('listar_produto_localizacao')); // ID 3
-      setCanCreateTransfer(hasPermission('criar_tranferencia')); // ID 34
-      setCanUpdate(hasPermission('atualizar_produto_localizacao')); // ID 47
-      setCanDelete(hasPermission('eliminar_produto_localizacao')); // ID 52
-      setCanCreateLocation(hasPermission('criar_produto_localizacao')); // ID 28
-      log('Permissões:', { canRead, canCreateTransfer, canUpdate, canDelete, canCreateLocation });
+      const [canRead, canCreateTransfer, canUpdate, canDelete, canCreateLocation] =
+        await Promise.all([
+          hasPermission('listar_produto_localizacao'),
+          hasPermission('criar_tranferencia'),
+          hasPermission('atualizar_produto_localizacao'),
+          hasPermission('eliminar_produto_localizacao'),
+          hasPermission('criar_produto_localizacao'),
+        ]);
+      setPermissions({ canRead, canCreateTransfer, canUpdate, canDelete, canCreateLocation });
+      log('Permissões carregadas:', {
+        canRead,
+        canCreateTransfer,
+        canUpdate,
+        canDelete,
+        canCreateLocation,
+      });
       return userData.id;
     } catch (error: any) {
-      console.error('Erro em loadUserData:', error);
+      console.error('Erro em loadUserDataAndPermissions:', error);
       setAlert({ severity: 'error', message: error.message });
       navigate('/login');
       return '';
@@ -228,7 +246,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   }, [navigate]);
 
   const fetchData = useCallback(async () => {
-    if (!canRead) {
+    if (!permissions.canRead) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para visualizar localizações!',
@@ -298,13 +316,13 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     } finally {
       setLoading(false);
     }
-  }, [page, rowsPerPage, selectedLocationType, searchQuery, canRead]);
+  }, [permissions.canRead]);
 
   useEffect(() => {
     const initialize = async () => {
       try {
         setIsLoading(true);
-        const id = loadUserData();
+        const id = await loadUserDataAndPermissions();
         if (!id) {
           navigate('/login');
           return;
@@ -318,7 +336,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       }
     };
     initialize();
-  }, [fetchData, loadUserData, navigate]);
+  }, [fetchData, loadUserDataAndPermissions, navigate]);
 
   const updateStockData = useCallback(async () => {
     if (!idProdutoLocalizacao) {
@@ -385,7 +403,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const handleOpenConfirmModal = useCallback(
     (id: string) => {
-      if (!canDelete) {
+      if (!permissions.canDelete) {
         setAlert({
           severity: 'error',
           message: 'Você não tem permissão para excluir localizações!',
@@ -396,7 +414,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       setLocationToDelete(id);
       setOpenConfirmModal(true);
     },
-    [canDelete],
+    [permissions.canDelete],
   );
 
   const handleCloseConfirmModal = useCallback(() => {
@@ -405,7 +423,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   }, []);
 
   const handleOpenTransferModal = useCallback(() => {
-    if (!canCreateTransfer) {
+    if (!permissions.canCreateTransfer) {
       setAlert({ severity: 'error', message: 'Você não tem permissão para criar transferências!' });
       log('Permissão de criação de transferência negada');
       return;
@@ -421,7 +439,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       destinationForm: {},
     });
     setOpenTransferModal(true);
-  }, [loggedInFuncionarioId, navigate, canCreateTransfer]);
+  }, [loggedInFuncionarioId, navigate, permissions.canCreateTransfer]);
 
   const handleCloseTransferModal = useCallback(() => {
     setOpenTransferModal(false);
@@ -431,7 +449,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const handleOpenDestinationModal = useCallback(
     (transfers: TransferFormItem[]) => {
-      if (!canCreateTransfer) {
+      if (!permissions.canCreateTransfer) {
         setAlert({
           severity: 'error',
           message: 'Você não tem permissão para criar transferências!',
@@ -476,7 +494,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       setErrors({ transferItems: [], destinationForm: {} });
       setOpenDestinationModal(true);
     },
-    [canCreateTransfer],
+    [permissions.canCreateTransfer],
   );
 
   const handleCloseDestinationModal = useCallback(
@@ -689,7 +707,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const handleEditLocation = useCallback(
     (id?: string) => {
-      if (!canUpdate) {
+      if (!permissions.canUpdate) {
         setAlert({
           severity: 'error',
           message: 'Você não tem permissão para atualizar localizações!',
@@ -717,11 +735,11 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         setAlert({ severity: 'error', message: 'Localização não encontrada' });
       }
     },
-    [productLocations, canUpdate],
+    [productLocations, permissions.canUpdate],
   );
 
   const handleUpdateProductLocation = useCallback(async () => {
-    if (!canUpdate) {
+    if (!permissions.canUpdate) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para atualizar localizações!',
@@ -815,11 +833,11 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     getTotalStockInLocations,
     fetchData,
     updateStockData,
-    canUpdate,
+    permissions.canUpdate,
   ]);
 
   const handleDeleteLocation = useCallback(async () => {
-    if (!canDelete) {
+    if (!permissions.canDelete) {
       setAlert({ severity: 'error', message: 'Você não tem permissão para excluir localizações!' });
       log('Permissão de exclusão negada');
       return;
@@ -850,11 +868,11 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     handleCloseConfirmModal,
     fetchData,
     updateStockData,
-    canDelete,
+    permissions.canDelete,
   ]);
 
   const handleTransferProducts = useCallback(async () => {
-    if (!canCreateTransfer) {
+    if (!permissions.canCreateTransfer) {
       setAlert({ severity: 'error', message: 'Você não tem permissão para criar transferências!' });
       log('Permissão de criação de transferência negada');
       return;
@@ -922,16 +940,16 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     handleOpenDestinationModal,
     originalLocations,
     fetchData,
-    canCreateTransfer,
+    permissions.canCreateTransfer,
   ]);
 
   const handleSaveDestination = useCallback(async () => {
-    if (!canCreateTransfer) {
+    if (!permissions.canCreateTransfer) {
       setAlert({ severity: 'error', message: 'Você não tem permissão para criar transferências!' });
       log('Permissão de criação de transferência negada');
       return;
     }
-    if (!canCreateLocation) {
+    if (!permissions.canCreateLocation) {
       setAlert({ severity: 'error', message: 'Você não tem permissão para criar localizações!' });
       log('Permissão de criação de localização negada');
       return;
@@ -1059,8 +1077,8 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     fetchData,
     updateStockData,
     productLocations,
-    canCreateTransfer,
-    canCreateLocation,
+    permissions.canCreateTransfer,
+    permissions.canCreateLocation,
   ]);
 
   return (
@@ -1096,7 +1114,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                     }
                     displayEmpty
                     sx={{ minWidth: 200 }}
-                    disabled={loading || !canRead}
+                    disabled={loading || !permissions.canRead}
                   >
                     <MenuItem value="">Todas as Localizações</MenuItem>
                     {locations.map((loc) => (
@@ -1110,17 +1128,19 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     sx={{ minWidth: 200 }}
-                    disabled={loading || !canRead}
+                    disabled={loading || !permissions.canRead}
                     InputProps={{ endAdornment: <IconifyIcon icon="heroicons-solid:search" /> }}
                   />
                   <Button
                     variant="contained"
                     color="primary"
                     onClick={handleOpenTransferModal}
-                    disabled={loading || !canCreateTransfer}
+                    disabled={loading || !permissions.canCreateTransfer}
                     startIcon={<IconifyIcon icon="heroicons-solid:arrow-right" />}
                     title={
-                      !canCreateTransfer ? 'Você não tem permissão para criar transferências' : ''
+                      !permissions.canCreateTransfer
+                        ? 'Você não tem permissão para criar transferências'
+                        : ''
                     }
                   >
                     Transferir
@@ -1156,8 +1176,10 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                   variant="contained"
                   color="error"
                   onClick={handleDeleteLocation}
-                  disabled={loading || !canDelete}
-                  title={!canDelete ? 'Você não tem permissão para excluir localizações' : ''}
+                  disabled={loading || !permissions.canDelete}
+                  title={
+                    !permissions.canDelete ? 'Você não tem permissão para excluir localizações' : ''
+                  }
                 >
                   {loading ? 'Excluindo...' : 'Excluir'}
                 </Button>
@@ -1250,7 +1272,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                             displayEmpty
                             fullWidth
                             error={!!errors.transferItems[index]?.id_localizacao_origem}
-                            disabled={loading || !canCreateTransfer}
+                            disabled={loading || !permissions.canCreateTransfer}
                           >
                             <MenuItem value="" disabled>
                               Selecione a Origem
@@ -1280,7 +1302,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                               loading ||
                               !item.id_localizacao_origem ||
                               availableProducts.length === 0 ||
-                              !canCreateTransfer
+                              !permissions.canCreateTransfer
                             }
                           >
                             <MenuItem value="" disabled>
@@ -1324,7 +1346,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                               errors.transferItems[index]?.quantidadeTransferida ||
                               `Disponível: ${stockAvailable}`
                             }
-                            disabled={loading || !item.id_produto || !canCreateTransfer}
+                            disabled={loading || !item.id_produto || !permissions.canCreateTransfer}
                             fullWidth
                             inputProps={{ min: 0, max: stockAvailable }}
                           />
@@ -1338,11 +1360,13 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                     variant="outlined"
                     color="primary"
                     onClick={addTransferItem}
-                    disabled={loading || !canCreateTransfer}
+                    disabled={loading || !permissions.canCreateTransfer}
                     sx={{ mb: 2 }}
                     fullWidth
                     title={
-                      !canCreateTransfer ? 'Você não tem permissão para criar transferências' : ''
+                      !permissions.canCreateTransfer
+                        ? 'Você não tem permissão para criar transferências'
+                        : ''
                     }
                   >
                     Adicionar Outra Transferência
@@ -1363,10 +1387,12 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                       variant="contained"
                       color="secondary"
                       onClick={handleTransferProducts}
-                      disabled={loading || !canCreateTransfer}
+                      disabled={loading || !permissions.canCreateTransfer}
                       fullWidth
                       title={
-                        !canCreateTransfer ? 'Você não tem permissão para criar transferências' : ''
+                        !permissions.canCreateTransfer
+                          ? 'Você não tem permissão para criar transferências'
+                          : ''
                       }
                     >
                       {loading ? 'Iniciando...' : 'Iniciar Transferências'}
@@ -1416,7 +1442,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                     displayEmpty
                     fullWidth
                     error={!!errors.destinationForm.id_localizacao}
-                    disabled={loading || !canCreateTransfer}
+                    disabled={loading || !permissions.canCreateTransfer}
                   >
                     <MenuItem value="" disabled>
                       Selecione o Destino
@@ -1440,7 +1466,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                     displayEmpty
                     fullWidth
                     error={!!errors.destinationForm.id_seccao}
-                    disabled={loading || !canCreateTransfer}
+                    disabled={loading || !permissions.canCreateTransfer}
                   >
                     <MenuItem value="" disabled>
                       Selecione uma Seção
@@ -1464,7 +1490,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                     displayEmpty
                     fullWidth
                     error={!!errors.destinationForm.id_prateleira}
-                    disabled={loading || !canCreateTransfer}
+                    disabled={loading || !permissions.canCreateTransfer}
                   >
                     <MenuItem value="" disabled>
                       Selecione uma Prateleira
@@ -1488,7 +1514,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                     displayEmpty
                     fullWidth
                     error={!!errors.destinationForm.id_corredor}
-                    disabled={loading || !canCreateTransfer}
+                    disabled={loading || !permissions.canCreateTransfer}
                   >
                     <MenuItem value="" disabled>
                       Selecione um Corredor
@@ -1517,12 +1543,14 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                     variant="contained"
                     color="secondary"
                     onClick={handleSaveDestination}
-                    disabled={loading || !canCreateTransfer || !canCreateLocation}
+                    disabled={
+                      loading || !permissions.canCreateTransfer || !permissions.canCreateLocation
+                    }
                     fullWidth
                     title={
-                      !canCreateTransfer
+                      !permissions.canCreateTransfer
                         ? 'Você não tem permissão para criar transferências'
-                        : !canCreateLocation
+                        : !permissions.canCreateLocation
                           ? 'Você não tem permissão para criar localizações'
                           : ''
                     }
@@ -1674,9 +1702,9 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                                                 <IconButton
                                                   color="primary"
                                                   onClick={() => handleEditLocation(loc.id)}
-                                                  disabled={loading || !canUpdate}
+                                                  disabled={loading || !permissions.canUpdate}
                                                   title={
-                                                    !canUpdate
+                                                    !permissions.canUpdate
                                                       ? 'Você não tem permissão para atualizar localizações'
                                                       : ''
                                                   }
@@ -1686,9 +1714,9 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                                                 <IconButton
                                                   color="error"
                                                   onClick={() => handleOpenConfirmModal(loc?.id!)}
-                                                  disabled={loading || !canDelete}
+                                                  disabled={loading || !permissions.canDelete}
                                                   title={
-                                                    !canDelete
+                                                    !permissions.canDelete
                                                       ? 'Você não tem permissão para excluir localizações'
                                                       : ''
                                                   }
@@ -1727,7 +1755,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                   onRowsPerPageChange={handleChangeRowsPerPage}
                   labelRowsPerPage="Linhas por página"
                   labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
-                  disabled={!canRead}
+                  disabled={!permissions.canRead}
                 />
               </TableContainer>
             </CardContent>

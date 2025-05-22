@@ -33,6 +33,13 @@ interface CollapsedItemProps {
   open: boolean;
 }
 
+interface Permissions {
+  canRead: boolean;
+  canCreate: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+}
+
 const style = {
   position: 'absolute' as const,
   top: '50%',
@@ -90,12 +97,12 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   } | null>(null);
   const [page, setPage] = useState(0);
   const rowsPerPage = 6;
-
-  // Permission states
-  const [canRead, setCanRead] = useState(false);
-  const [canCreate, setCanCreate] = useState(false);
-  const [canUpdate, setCanUpdate] = useState(false);
-  const [canDelete, setCanDelete] = useState(false);
+  const [permissions, setPermissions] = useState<Permissions>({
+    canRead: false,
+    canCreate: false,
+    canUpdate: false,
+    canDelete: false,
+  });
 
   // Logging function for debugging
   const log = (message: string, ...args: any[]) => {
@@ -105,7 +112,7 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   };
 
   const handleOpen = useCallback(() => {
-    if (!canCreate && !editCorredorId) {
+    if (!permissions.canCreate && !editCorredorId) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para criar corredores!',
@@ -113,7 +120,7 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       log('Permissão de criação negada');
       return;
     }
-    if (!canUpdate && editCorredorId) {
+    if (!permissions.canUpdate && editCorredorId) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para atualizar corredores!',
@@ -122,7 +129,7 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       return;
     }
     setOpenCorredor(true);
-  }, [canCreate, canUpdate, editCorredorId]);
+  }, [permissions.canCreate, permissions.canUpdate, editCorredorId]);
 
   const handleClose = useCallback(() => {
     setOpenCorredor(false);
@@ -134,7 +141,7 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const handleOpenConfirmDelete = useCallback(
     (id: string) => {
-      if (!canDelete) {
+      if (!permissions.canDelete) {
         setAlert({
           severity: 'error',
           message: 'Você não tem permissão para excluir corredores!',
@@ -145,7 +152,7 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       setDeleteCorredorId(id);
       setOpenConfirmDelete(true);
     },
-    [canDelete],
+    [permissions.canDelete],
   );
 
   const handleCloseConfirmDelete = useCallback(() => {
@@ -153,21 +160,24 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     setDeleteCorredorId(null);
   }, []);
 
-  const loadUserData = useCallback(() => {
+  const loadUserDataAndPermissions = useCallback(async () => {
     try {
-      const userData = getUserData();
+      const userData = await getUserData();
       log('Dados do usuário:', userData);
       if (!userData || !userData.id) {
         throw new Error('Usuário não autenticado');
       }
-      setCanRead(hasPermission('listar_corredor'));
-      setCanCreate(hasPermission('criar_corredor'));
-      setCanUpdate(hasPermission('atualizar_corredor'));
-      setCanDelete(hasPermission('eliminar_corredor'));
-      log('Permissões:', { canRead, canCreate, canUpdate, canDelete });
+      const [canRead, canCreate, canUpdate, canDelete] = await Promise.all([
+        hasPermission('listar_corredor'),
+        hasPermission('criar_corredor'),
+        hasPermission('atualizar_corredor'),
+        hasPermission('eliminar_corredor'),
+      ]);
+      setPermissions({ canRead, canCreate, canUpdate, canDelete });
+      log('Permissões carregadas:', { canRead, canCreate, canUpdate, canDelete });
       return userData.id;
     } catch (error: any) {
-      console.error('Erro em loadUserData:', error);
+      console.error('Erro em loadUserDataAndPermissions:', error);
       setAlert({ severity: 'error', message: error.message });
       navigate('/login');
       return '';
@@ -175,7 +185,7 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   }, [navigate]);
 
   const fetchCorridors = useCallback(async () => {
-    if (!canRead) {
+    if (!permissions.canRead) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para visualizar corredores!',
@@ -215,12 +225,12 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     } finally {
       setLoading(false);
     }
-  }, [canRead]);
+  }, [permissions.canRead]);
 
   useEffect(() => {
     const initialize = async () => {
       try {
-        const id = loadUserData();
+        const id = await loadUserDataAndPermissions();
         if (!id) {
           navigate('/login');
           return;
@@ -232,11 +242,11 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       }
     };
     initialize();
-  }, [fetchCorridors, loadUserData, navigate]);
+  }, [fetchCorridors, loadUserDataAndPermissions, navigate]);
 
   const onAddCorredorSubmit = useCallback(
     async (nomeCorredor: string, descricao: string) => {
-      if (!canCreate && !editCorredorId) {
+      if (!permissions.canCreate && !editCorredorId) {
         setAlert({
           severity: 'error',
           message: 'Você não tem permissão para criar corredores!',
@@ -244,7 +254,7 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         log('Permissão de criação negada');
         return;
       }
-      if (!canUpdate && editCorredorId) {
+      if (!permissions.canUpdate && editCorredorId) {
         setAlert({
           severity: 'error',
           message: 'Você não tem permissão para atualizar corredores!',
@@ -299,12 +309,12 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         setLoading(false);
       }
     },
-    [canCreate, canUpdate, editCorredorId, handleClose, fetchCorridors],
+    [permissions.canCreate, permissions.canUpdate, editCorredorId, handleClose, fetchCorridors],
   );
 
   const handleEdit = useCallback(
     (id: string) => {
-      if (!canUpdate) {
+      if (!permissions.canUpdate) {
         setAlert({
           severity: 'error',
           message: 'Você não tem permissão para atualizar corredores!',
@@ -323,11 +333,11 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         setAlert({ severity: 'error', message: 'Corredor não encontrado para edição' });
       }
     },
-    [canUpdate, corredores, handleOpen],
+    [permissions.canUpdate, corredores, handleOpen],
   );
 
   const handleDelete = useCallback(async () => {
-    if (!canDelete) {
+    if (!permissions.canDelete) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para excluir corredores!',
@@ -357,6 +367,13 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       await deleteCorridor(deleteCorredorId);
       setAlert({ severity: 'success', message: 'Corredor excluído com sucesso!' });
       log('Corredor excluído:', deleteCorredorId);
+
+      // Adjust page if necessary
+      const totalPages = Math.ceil((filteredCorredores.length - 1) / rowsPerPage);
+      if (page >= totalPages && page > 0) {
+        setPage(page - 1);
+      }
+
       handleCloseConfirmDelete();
     } catch (error: any) {
       console.error('Erro ao excluir corredor:', error);
@@ -392,9 +409,17 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     } finally {
       setLoading(false);
     }
-  }, [canDelete, deleteCorredorId, corredores, handleCloseConfirmDelete]);
+  }, [
+    permissions.canDelete,
+    deleteCorredorId,
+    corredores,
+    filteredCorredores.length,
+    page,
+    rowsPerPage,
+    handleCloseConfirmDelete,
+  ]);
 
-  const handleSearch = useMemo(() => {
+  const handleSearch = useCallback(() => {
     const query = searchQuery.toLowerCase().trim();
     if (!query) {
       setFilteredCorredores(corredores);
@@ -410,8 +435,8 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   }, [searchQuery, corredores]);
 
   useEffect(() => {
-    handleSearch;
-  }, [searchQuery, corredores]);
+    handleSearch();
+  }, [handleSearch]);
 
   useEffect(() => {
     if (alert) {
@@ -447,9 +472,7 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             alignItems="center"
             sx={{ width: '100%', mb: 2 }}
           >
-            <Typography id="modal-modal-title" variant="h5" component="h2">
-              Cadastrar Corredor
-            </Typography>
+            <Typography variant="h5">Cadastrar Corredor</Typography>
             <Stack direction="row" spacing={2} alignItems="center">
               <TextField
                 id="search-corridor"
@@ -458,8 +481,10 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 label="Pesquisar Corredor"
                 variant="outlined"
                 size="small"
-                disabled={loading || !canRead}
-                title={!canRead ? 'Você não tem permissão para visualizar corredores' : ''}
+                disabled={loading || !permissions.canRead}
+                title={
+                  !permissions.canRead ? 'Você não tem permissão para visualizar corredores' : ''
+                }
               />
               <Button
                 variant="contained"
@@ -467,8 +492,8 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 sx={(theme) => ({ p: theme.spacing(0.625, 1.5), borderRadius: 1.5 })}
                 startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
                 onClick={handleOpen}
-                disabled={loading || !canCreate}
-                title={!canCreate ? 'Você não tem permissão para criar corredores' : ''}
+                disabled={loading || !permissions.canCreate}
+                title={!permissions.canCreate ? 'Você não tem permissão para criar corredores' : ''}
               >
                 <Typography variant="body2">Adicionar</Typography>
               </Button>
@@ -489,7 +514,7 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             alignItems="center"
             sx={{ width: '100%', mb: 2 }}
           >
-            <Typography id="modal-modal-title" variant="h5" component="h2">
+            <Typography id="modal-modal-title" variant="h5">
               {editCorredorId ? 'Editar Corredor' : 'Cadastrar Corredor'}
             </Typography>
             <Button onClick={handleClose} variant="outlined" color="error" disabled={loading}>
@@ -503,11 +528,11 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               value={nomeCorredor}
               label="Nome do Corredor"
               variant="filled"
-              sx={{ width: '100%' }}
               error={Boolean(errors.nomeCorredor)}
               helperText={errors.nomeCorredor}
               disabled={loading}
               required
+              fullWidth
             />
             <TextField
               id="corridor-description"
@@ -515,27 +540,29 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               value={descricao}
               label="Descrição"
               variant="filled"
-              sx={{ width: '100%' }}
               error={Boolean(errors.descricao)}
               helperText={errors.descricao}
               disabled={loading}
               required
+              fullWidth
             />
             <Button
               variant="contained"
               color="secondary"
-              sx={{ height: 40, width: '100%' }}
               onClick={() => onAddCorredorSubmit(nomeCorredor, descricao)}
               disabled={
-                loading || (!canCreate && !editCorredorId) || (!canUpdate && editCorredorId)
+                loading ||
+                (!permissions.canCreate && !editCorredorId) ||
+                (!permissions.canUpdate && editCorredorId)
               }
               title={
-                !canCreate && !editCorredorId
+                !permissions.canCreate && !editCorredorId
                   ? 'Você não tem permissão para criar corredores'
-                  : !canUpdate && editCorredorId
+                  : !permissions.canUpdate && editCorredorId
                     ? 'Você não tem permissão para atualizar corredores'
                     : ''
               }
+              fullWidth
             >
               <Typography variant="body2">
                 {loading ? 'Salvando...' : editCorredorId ? 'Atualizar' : 'Cadastrar'}
@@ -577,9 +604,11 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                         <IconButton
                           color="primary"
                           onClick={() => handleEdit(corredor.id!)}
-                          disabled={loading || !canUpdate}
+                          disabled={loading || !permissions.canUpdate}
                           title={
-                            !canUpdate ? 'Você não tem permissão para atualizar corredores' : ''
+                            !permissions.canUpdate
+                              ? 'Você não tem permissão para atualizar corredores'
+                              : ''
                           }
                         >
                           <Edit />
@@ -587,8 +616,12 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                         <IconButton
                           color="error"
                           onClick={() => handleOpenConfirmDelete(corredor.id!)}
-                          disabled={loading || !canDelete}
-                          title={!canDelete ? 'Você não tem permissão para excluir corredores' : ''}
+                          disabled={loading || !permissions.canDelete}
+                          title={
+                            !permissions.canDelete
+                              ? 'Você não tem permissão para excluir corredores'
+                              : ''
+                          }
                         >
                           <Delete />
                         </IconButton>
@@ -614,7 +647,7 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             onPageChange={handleChangePage}
             labelRowsPerPage="Itens por página"
             labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
-            disabled={loading || !canRead}
+            disabled={loading || !permissions.canRead}
           />
         </CardContent>
       </Card>
@@ -625,7 +658,7 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         aria-describedby="confirm-delete-modal-description"
       >
         <Box sx={confirmModalStyle}>
-          <Typography id="confirm-delete-modal-title" variant="h6" component="h2" gutterBottom>
+          <Typography id="confirm-delete-modal-title" variant="h6" gutterBottom>
             Confirmar Exclusão
           </Typography>
           <Typography id="confirm-delete-modal-description" sx={{ mb: 3 }}>
@@ -649,8 +682,8 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               variant="contained"
               color="error"
               onClick={handleDelete}
-              disabled={loading || !canDelete}
-              title={!canDelete ? 'Você não tem permissão para excluir corredores' : ''}
+              disabled={loading || !permissions.canDelete}
+              title={!permissions.canDelete ? 'Você não tem permissão para excluir corredores' : ''}
             >
               {loading ? 'Excluindo...' : 'Excluir'}
             </Button>

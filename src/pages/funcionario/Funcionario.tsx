@@ -24,6 +24,7 @@ import {
   SelectChangeEvent,
   Alert,
   CircularProgress,
+  TablePagination,
 } from '@mui/material';
 import IconifyIcon from 'components/base/IconifyIcon';
 import Delete from 'components/icons/factor/Delete';
@@ -77,6 +78,13 @@ const confirmModalStyle = {
   borderRadius: 1,
 };
 
+interface Permissions {
+  canRead: boolean;
+  canCreate: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+}
+
 const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const navigate = useNavigate();
   const [openModal, setOpenModal] = useState(false);
@@ -100,17 +108,17 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     severity: 'success' | 'error' | 'info' | 'warning';
     message: string;
   } | null>(null);
-  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(5);
   const [loadingFetch, setLoadingFetch] = useState(false);
   const [loadingSave, setLoadingSave] = useState(false);
   const [loadingDelete, setLoadingDelete] = useState(false);
-  const itemsPerPage = 5;
-
-  // Permission states
-  const [canRead, setCanRead] = useState(false);
-  const [canCreate, setCanCreate] = useState(false);
-  const [canUpdate, setCanUpdate] = useState(false);
-  const [canDelete, setCanDelete] = useState(false);
+  const [permissions, setPermissions] = useState<Permissions>({
+    canRead: false,
+    canCreate: false,
+    canUpdate: false,
+    canDelete: false,
+  });
 
   // Logging function for debugging
   const log = (message: string, ...args: any[]) => {
@@ -119,29 +127,37 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     }
   };
 
-  const loadUserData = useCallback(() => {
-    try {
-      const userData = getUserData();
-      log('Dados do usuário:', userData);
-      if (!userData || !userData.id) {
-        throw new Error('Usuário não autenticado');
+  // Carregar dados do usuário e permissões
+  useEffect(() => {
+    const loadUserDataAndPermissions = async () => {
+      try {
+        const userData = await getUserData();
+        log('Dados do usuário:', userData);
+        if (userData && userData.id) {
+          const [canRead, canCreate, canUpdate, canDelete] = await Promise.all([
+            hasPermission('listar_funcionario'),
+            hasPermission('criar_funcionario'),
+            hasPermission('atualizar_funcionario'),
+            hasPermission('eliminar_funcionario'),
+          ]);
+          setPermissions({ canRead, canCreate, canUpdate, canDelete });
+          log('Permissões carregadas:', { canRead, canCreate, canUpdate, canDelete });
+        } else {
+          setAlert({ severity: 'error', message: 'Usuário não autenticado!' });
+          log('Nenhum usuário autenticado encontrado');
+          navigate('/login');
+        }
+      } catch (error: any) {
+        setAlert({ severity: 'error', message: 'Erro ao carregar dados do usuário!' });
+        log('Erro ao carregar dados do usuário:', error);
+        navigate('/login');
       }
-      setCanRead(hasPermission('listar_funcionario'));
-      setCanCreate(hasPermission('criar_funcionario'));
-      setCanUpdate(hasPermission('atualizar_funcionario'));
-      setCanDelete(hasPermission('eliminar_funcionario'));
-      log('Permissões:', { canRead, canCreate, canUpdate, canDelete });
-      return userData.id;
-    } catch (error: any) {
-      console.error('Erro em loadUserData:', error);
-      setAlert({ severity: 'error', message: error.message });
-      navigate('/login');
-      return '';
-    }
+    };
+    loadUserDataAndPermissions();
   }, [navigate]);
 
   const fetchData = useCallback(async () => {
-    if (!canRead) {
+    if (!permissions.canRead) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para visualizar funcionários!',
@@ -167,10 +183,9 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       }
       setFuncionarios(employeesData ?? []);
       setFuncoes(functionsData ?? []);
-      setCurrentPage(1);
+      setPage(0);
       log('Dados carregados:', { employees: employeesData, functions: functionsData });
     } catch (error: any) {
-      console.error('Erro ao buscar dados:', error);
       let errorMessage = 'Erro ao carregar dados';
       if (error.response) {
         if (error.response.status === 403) {
@@ -182,30 +197,20 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         errorMessage = 'A requisição demorou muito para responder';
       }
       setAlert({ severity: 'error', message: errorMessage });
+      log('Erro ao buscar dados:', error);
     } finally {
       setLoadingFetch(false);
     }
-  }, [canRead]);
+  }, [permissions.canRead]);
 
   useEffect(() => {
-    const initialize = async () => {
-      try {
-        const id = loadUserData();
-        if (!id) {
-          navigate('/login');
-          return;
-        }
-        await fetchData();
-      } catch (error) {
-        console.error('Erro no initialize:', error);
-        setAlert({ severity: 'error', message: 'Erro ao inicializar a página' });
-      }
-    };
-    initialize();
-  }, [fetchData, loadUserData, navigate]);
+    if (permissions.canRead) {
+      fetchData();
+    }
+  }, [fetchData, permissions.canRead]);
 
   const handleOpen = useCallback(() => {
-    if (!canCreate && !isEditing) {
+    if (!permissions.canCreate && !isEditing) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para criar funcionários!',
@@ -213,7 +218,7 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       log('Permissão de criação negada');
       return;
     }
-    if (!canUpdate && isEditing) {
+    if (!permissions.canUpdate && isEditing) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para atualizar funcionários!',
@@ -234,7 +239,7 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     });
     setErrors({});
     setOpenModal(true);
-  }, [canCreate, canUpdate, isEditing]);
+  }, [permissions.canCreate, permissions.canUpdate, isEditing]);
 
   const handleClose = useCallback(() => {
     setOpenModal(false);
@@ -254,7 +259,7 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const handleOpenConfirmDelete = useCallback(
     (id: string) => {
-      if (!canDelete) {
+      if (!permissions.canDelete) {
         setAlert({
           severity: 'error',
           message: 'Você não tem permissão para excluir funcionários!',
@@ -265,7 +270,7 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       setDeleteFuncionarioId(id);
       setOpenConfirmDelete(true);
     },
-    [canDelete],
+    [permissions.canDelete],
   );
 
   const handleCloseConfirmDelete = useCallback(() => {
@@ -314,7 +319,7 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const onSubmit = useCallback(async () => {
     if (!validateForm()) return;
-    if (!canCreate && !isEditing) {
+    if (!permissions.canCreate && !isEditing) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para criar funcionários!',
@@ -322,7 +327,7 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       log('Permissão de criação negada');
       return;
     }
-    if (!canUpdate && isEditing) {
+    if (!permissions.canUpdate && isEditing) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para atualizar funcionários!',
@@ -356,9 +361,8 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         log('Funcionário criado:', newEmployee);
       }
       handleClose();
-      setCurrentPage(1);
+      setPage(0);
     } catch (error: any) {
-      console.error('Erro ao salvar funcionário:', error);
       let errorMessage = 'Erro ao salvar funcionário';
       if (error.response) {
         if (error.response.status === 409) {
@@ -371,13 +375,14 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       }
       setAlert({ severity: 'error', message: errorMessage });
       setErrors({ nomeFuncionario: 'Erro ao salvar. Tente novamente.' });
+      log('Erro ao salvar funcionário:', error);
     } finally {
       setLoadingSave(false);
     }
-  }, [canCreate, canUpdate, isEditing, editId, form, handleClose]);
+  }, [permissions.canCreate, permissions.canUpdate, isEditing, editId, form, handleClose]);
 
   const handleDelete = useCallback(async () => {
-    if (!canDelete) {
+    if (!permissions.canDelete) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para excluir funcionários!',
@@ -400,14 +405,12 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       await deleteEmployee(deleteFuncionarioId);
       setAlert({ severity: 'success', message: 'Funcionário excluído com sucesso!' });
       log('Funcionário excluído:', deleteFuncionarioId);
-      const totalItems = funcionarios.length - 1;
-      const totalPages = Math.ceil(totalItems / itemsPerPage);
-      if (currentPage > totalPages && totalPages > 0) {
-        setCurrentPage(totalPages);
+      const totalPages = Math.ceil((funcionarios.length - 1) / rowsPerPage);
+      if (page >= totalPages && page > 0) {
+        setPage(page - 1);
       }
       handleCloseConfirmDelete();
     } catch (error: any) {
-      console.error('Erro ao excluir funcionário:', error);
       let errorMessage = 'Erro ao excluir funcionário';
       if (error.response) {
         if (error.response.status === 404) {
@@ -430,14 +433,22 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         );
       }
       setAlert({ severity: 'error', message: errorMessage });
+      log('Erro ao excluir funcionário:', error);
     } finally {
       setLoadingDelete(false);
     }
-  }, [canDelete, deleteFuncionarioId, funcionarios, currentPage, handleCloseConfirmDelete]);
+  }, [
+    permissions.canDelete,
+    deleteFuncionarioId,
+    funcionarios,
+    page,
+    rowsPerPage,
+    handleCloseConfirmDelete,
+  ]);
 
   const handleEdit = useCallback(
     (funcionario: Funcionario) => {
-      if (!canUpdate) {
+      if (!permissions.canUpdate) {
         setAlert({
           severity: 'error',
           message: 'Você não tem permissão para atualizar funcionários!',
@@ -464,8 +475,18 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       setOpenModal(true);
       log('Editando funcionário:', funcionario);
     },
-    [canUpdate],
+    [permissions.canUpdate],
   );
+
+  const handleChangePage = useCallback((event: unknown, newPage: number) => {
+    setPage(newPage);
+  }, []);
+
+  const handleChangeRowsPerPage = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const newRowsPerPage = parseInt(event.target.value, 10);
+    setRowsPerPage(newRowsPerPage);
+    setPage(0);
+  }, []);
 
   useEffect(() => {
     if (alert) {
@@ -474,19 +495,9 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     }
   }, [alert]);
 
-  const totalItems = funcionarios.length;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedFuncionarios = funcionarios.slice(startIndex, endIndex);
-
-  const handlePageChange = useCallback(
-    (newPage: number) => {
-      if (newPage >= 1 && newPage <= totalPages) {
-        setCurrentPage(newPage);
-      }
-    },
-    [totalPages],
+  const paginatedFuncionarios = funcionarios.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage,
   );
 
   return (
@@ -510,8 +521,8 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               color="secondary"
               onClick={handleOpen}
               startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
-              disabled={loadingFetch || loadingSave || !canCreate}
-              title={!canCreate ? 'Você não tem permissão para criar funcionários' : ''}
+              disabled={loadingFetch || loadingSave || !permissions.canCreate}
+              title={!permissions.canCreate ? 'Você não tem permissão para criar funcionários' : ''}
             >
               <Typography variant="body2">Adicionar</Typography>
             </Button>
@@ -546,8 +557,19 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 onChange={handleInputChange}
                 error={!!errors.numeroBI}
                 helperText={errors.numeroBI}
-                disabled={loadingSave}
+                disabled={
+                  loadingSave || (isEditing ? !permissions.canUpdate : !permissions.canCreate)
+                }
                 required
+                title={
+                  isEditing
+                    ? !permissions.canUpdate
+                      ? 'Você não tem permissão para atualizar funcionários'
+                      : ''
+                    : !permissions.canCreate
+                      ? 'Você não tem permissão para criar funcionários'
+                      : ''
+                }
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -560,8 +582,19 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 onChange={handleInputChange}
                 error={!!errors.nomeFuncionario}
                 helperText={errors.nomeFuncionario}
-                disabled={loadingSave}
+                disabled={
+                  loadingSave || (isEditing ? !permissions.canUpdate : !permissions.canCreate)
+                }
                 required
+                title={
+                  isEditing
+                    ? !permissions.canUpdate
+                      ? 'Você não tem permissão para atualizar funcionários'
+                      : ''
+                    : !permissions.canCreate
+                      ? 'Você não tem permissão para criar funcionários'
+                      : ''
+                }
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -575,8 +608,19 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 onChange={handleInputChange}
                 error={!!errors.telefoneFuncionario}
                 helperText={errors.telefoneFuncionario}
-                disabled={loadingSave}
+                disabled={
+                  loadingSave || (isEditing ? !permissions.canUpdate : !permissions.canCreate)
+                }
                 required
+                title={
+                  isEditing
+                    ? !permissions.canUpdate
+                      ? 'Você não tem permissão para atualizar funcionários'
+                      : ''
+                    : !permissions.canCreate
+                      ? 'Você não tem permissão para criar funcionários'
+                      : ''
+                }
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -588,7 +632,18 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 fullWidth
                 value={form.emailFuncionario}
                 onChange={handleInputChange}
-                disabled={loadingSave}
+                disabled={
+                  loadingSave || (isEditing ? !permissions.canUpdate : !permissions.canCreate)
+                }
+                title={
+                  isEditing
+                    ? !permissions.canUpdate
+                      ? 'Você não tem permissão para atualizar funcionários'
+                      : ''
+                    : !permissions.canCreate
+                      ? 'Você não tem permissão para criar funcionários'
+                      : ''
+                }
               />
             </Grid>
             <Grid item xs={12}>
@@ -599,7 +654,18 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 fullWidth
                 value={form.moradaFuncionario}
                 onChange={handleInputChange}
-                disabled={loadingSave}
+                disabled={
+                  loadingSave || (isEditing ? !permissions.canUpdate : !permissions.canCreate)
+                }
+                title={
+                  isEditing
+                    ? !permissions.canUpdate
+                      ? 'Você não tem permissão para atualizar funcionários'
+                      : ''
+                    : !permissions.canCreate
+                      ? 'Você não tem permissão para criar funcionários'
+                      : ''
+                }
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -607,10 +673,25 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 variant="filled"
                 fullWidth
                 error={!!errors.id_funcao}
-                disabled={loadingSave}
+                disabled={
+                  loadingSave || (isEditing ? !permissions.canUpdate : !permissions.canCreate)
+                }
               >
                 <InputLabel>Função</InputLabel>
-                <Select name="id_funcao" value={form.id_funcao} onChange={handleSelectChange}>
+                <Select
+                  name="id_funcao"
+                  value={form.id_funcao}
+                  onChange={handleSelectChange}
+                  title={
+                    isEditing
+                      ? !permissions.canUpdate
+                        ? 'Você não tem permissão para atualizar funcionários'
+                        : ''
+                      : !permissions.canCreate
+                        ? 'Você não tem permissão para criar funcionários'
+                        : ''
+                  }
+                >
                   <MenuItem value="">
                     <em>Selecione uma função</em>
                   </MenuItem>
@@ -639,8 +720,11 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                   onChange={handleInputChange}
                   error={!!errors.senha}
                   helperText={errors.senha}
-                  disabled={loadingSave}
+                  disabled={loadingSave || !permissions.canCreate}
                   required
+                  title={
+                    !permissions.canCreate ? 'Você não tem permissão para criar funcionários' : ''
+                  }
                 />
               </Grid>
             )}
@@ -650,12 +734,16 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 color="secondary"
                 sx={{ height: 40, width: '100%' }}
                 onClick={onSubmit}
-                disabled={loadingSave || (!canCreate && !isEditing) || (!canUpdate && isEditing)}
+                disabled={
+                  loadingSave || (isEditing ? !permissions.canUpdate : !permissions.canCreate)
+                }
                 title={
-                  !canCreate && !isEditing
-                    ? 'Você não tem permissão para criar funcionários'
-                    : !canUpdate && isEditing
+                  isEditing
+                    ? !permissions.canUpdate
                       ? 'Você não tem permissão para atualizar funcionários'
+                      : ''
+                    : !permissions.canCreate
+                      ? 'Você não tem permissão para criar funcionários'
                       : ''
                 }
               >
@@ -706,9 +794,11 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                           <IconButton
                             color="primary"
                             onClick={() => handleEdit(item)}
-                            disabled={loadingFetch || loadingDelete || !canUpdate}
+                            disabled={loadingFetch || loadingDelete || !permissions.canUpdate}
                             title={
-                              !canUpdate ? 'Você não tem permissão para atualizar funcionários' : ''
+                              !permissions.canUpdate
+                                ? 'Você não tem permissão para atualizar funcionários'
+                                : ''
                             }
                           >
                             <Edit />
@@ -716,9 +806,11 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                           <IconButton
                             color="error"
                             onClick={() => handleOpenConfirmDelete(item.id!)}
-                            disabled={loadingFetch || loadingDelete || !canDelete}
+                            disabled={loadingFetch || loadingDelete || !permissions.canDelete}
                             title={
-                              !canDelete ? 'Você não tem permissão para excluir funcionários' : ''
+                              !permissions.canDelete
+                                ? 'Você não tem permissão para excluir funcionários'
+                                : ''
                             }
                           >
                             <Delete />
@@ -738,33 +830,20 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             </Table>
           </TableContainer>
 
-          {totalItems > itemsPerPage && (
-            <Stack
-              direction="row"
-              justifyContent="flex-end"
-              alignItems="center"
-              spacing={2}
-              sx={{ mt: 2 }}
-            >
-              <Button
-                variant="outlined"
-                disabled={currentPage === 1 || loadingFetch || loadingDelete}
-                onClick={() => handlePageChange(currentPage - 1)}
-              >
-                Anterior
-              </Button>
-              <Typography>
-                Página {currentPage} de {totalPages}
-              </Typography>
-              <Button
-                variant="outlined"
-                disabled={currentPage === totalPages || loadingFetch || loadingDelete}
-                onClick={() => handlePageChange(currentPage + 1)}
-              >
-                Próximo
-              </Button>
-            </Stack>
-          )}
+          <TablePagination
+            rowsPerPageOptions={[5, 10, 25]}
+            component="div"
+            count={funcionarios.length}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={handleChangePage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+            labelRowsPerPage="Linhas por página:"
+            labelDisplayedRows={({ from, to, count }) =>
+              `${from}–${to} de ${count !== -1 ? count : `mais de ${to}`}`
+            }
+            disabled={!permissions.canRead}
+          />
         </CardContent>
       </Card>
 
@@ -779,7 +858,9 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             Confirmar Exclusão
           </Typography>
           <Typography id="confirm-delete-modal-description" sx={{ mb: 3 }}>
-            Tem certeza que deseja excluir este funcionário?
+            Tem certeza que deseja excluir o funcionário "
+            {funcionarios.find((f) => f.id === deleteFuncionarioId)?.nomeFuncionario}"? Esta ação
+            não pode ser desfeita.
           </Typography>
           {loadingDelete && (
             <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
@@ -799,8 +880,10 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               variant="contained"
               color="error"
               onClick={handleDelete}
-              disabled={loadingDelete || !canDelete}
-              title={!canDelete ? 'Você não tem permissão para excluir funcionários' : ''}
+              disabled={loadingDelete || !permissions.canDelete}
+              title={
+                !permissions.canDelete ? 'Você não tem permissão para excluir funcionários' : ''
+              }
             >
               {loadingDelete ? 'Excluindo...' : 'Excluir'}
             </Button>

@@ -68,6 +68,13 @@ const confirmModalStyle = {
   borderRadius: 1,
 };
 
+interface Permissions {
+  canRead: boolean;
+  canCreate: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+}
+
 const PrateleiraComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const navigate = useNavigate();
   const [openPrateleira, setOpenPrateleira] = useState(false);
@@ -89,93 +96,52 @@ const PrateleiraComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     message: string;
   } | null>(null);
   const [page, setPage] = useState(0);
-  const rowsPerPage = 6;
-
-  // Permission states
-  const [canRead, setCanRead] = useState(false);
-  const [canCreate, setCanCreate] = useState(false);
-  const [canUpdate, setCanUpdate] = useState(false);
-  const [canDelete, setCanDelete] = useState(false);
+  const [rowsPerPage, setRowsPerPage] = useState(6);
+  const [permissions, setPermissions] = useState<Permissions>({
+    canRead: false,
+    canCreate: false,
+    canUpdate: false,
+    canDelete: false,
+  });
 
   // Logging function for debugging
   const log = (message: string, ...args: any[]) => {
     if (process.env.NODE_ENV !== 'production') {
-      console.log(message, ...args);
+      console.log(`[PrateleiraComponent] ${message}`, ...args);
     }
   };
 
-  const handleOpen = useCallback(() => {
-    if (!canCreate && !editPrateleiraId) {
-      setAlert({
-        severity: 'error',
-        message: 'Você não tem permissão para criar prateleiras!',
-      });
-      log('Permissão de criação negada');
-      return;
-    }
-    if (!canUpdate && editPrateleiraId) {
-      setAlert({
-        severity: 'error',
-        message: 'Você não tem permissão para atualizar prateleiras!',
-      });
-      log('Permissão de atualização negada');
-      return;
-    }
-    setOpenPrateleira(true);
-  }, [canCreate, canUpdate, editPrateleiraId]);
-
-  const handleClose = useCallback(() => {
-    setOpenPrateleira(false);
-    setEditPrateleiraId(null);
-    setNomePrateleira('');
-    setDescricao('');
-    setErrors({});
-  }, []);
-
-  const handleOpenConfirmDelete = useCallback(
-    (id: string) => {
-      if (!canDelete) {
-        setAlert({
-          severity: 'error',
-          message: 'Você não tem permissão para excluir prateleiras!',
-        });
-        log('Permissão de exclusão negada');
-        return;
+  // Carregar dados do usuário e permissões
+  useEffect(() => {
+    const loadUserDataAndPermissions = async () => {
+      try {
+        const userData = await getUserData();
+        log('Dados do usuário:', userData);
+        if (userData && userData.id) {
+          const [canRead, canCreate, canUpdate, canDelete] = await Promise.all([
+            hasPermission('listar_prateleira'),
+            hasPermission('criar_prateleira'),
+            hasPermission('atualizar_prateleira'),
+            hasPermission('eliminar_prateleira'),
+          ]);
+          setPermissions({ canRead, canCreate, canUpdate, canDelete });
+          log('Permissões carregadas:', { canRead, canCreate, canUpdate, canDelete });
+        } else {
+          setAlert({ severity: 'error', message: 'Usuário não autenticado!' });
+          log('Nenhum usuário autenticado encontrado');
+          navigate('/login');
+        }
+      } catch (error: any) {
+        setAlert({ severity: 'error', message: 'Erro ao carregar dados do usuário!' });
+        log('Erro ao carregar dados do usuário:', error);
+        navigate('/login');
       }
-      setDeletePrateleiraId(id);
-      setOpenConfirmDelete(true);
-    },
-    [canDelete],
-  );
-
-  const handleCloseConfirmDelete = useCallback(() => {
-    setOpenConfirmDelete(false);
-    setDeletePrateleiraId(null);
-  }, []);
-
-  const loadUserData = useCallback(() => {
-    try {
-      const userData = getUserData();
-      log('Dados do usuário:', userData);
-      if (!userData || !userData.id) {
-        throw new Error('Usuário não autenticado');
-      }
-      setCanRead(hasPermission('listar_prateleira'));
-      setCanCreate(hasPermission('criar_prateleira'));
-      setCanUpdate(hasPermission('atualizar_prateleira'));
-      setCanDelete(hasPermission('eliminar_prateleira'));
-      log('Permissões:', { canRead, canCreate, canUpdate, canDelete });
-      return userData.id;
-    } catch (error: any) {
-      console.error('Erro em loadUserData:', error);
-      setAlert({ severity: 'error', message: error.message });
-      navigate('/login');
-      return '';
-    }
+    };
+    loadUserDataAndPermissions();
   }, [navigate]);
 
   const fetchShelves = useCallback(async () => {
-    if (!canRead) {
+    if (!permissions.canRead) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para visualizar prateleiras!',
@@ -198,9 +164,9 @@ const PrateleiraComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       }
       setPrateleiras(data ?? []);
       setFilteredPrateleiras(data ?? []);
+      setPage(0);
       log('Prateleiras carregadas:', data);
     } catch (error: any) {
-      console.error('Erro ao buscar prateleiras:', error);
       let errorMessage = 'Erro ao carregar prateleiras';
       if (error.response) {
         if (error.response.status === 403) {
@@ -212,31 +178,70 @@ const PrateleiraComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         errorMessage = 'A requisição demorou muito para responder';
       }
       setAlert({ severity: 'error', message: errorMessage });
+      log('Erro ao buscar prateleiras:', error);
     } finally {
       setLoading(false);
     }
-  }, [canRead]);
+  }, [permissions.canRead]);
 
   useEffect(() => {
-    const initialize = async () => {
-      try {
-        const id = loadUserData();
-        if (!id) {
-          navigate('/login');
-          return;
-        }
-        await fetchShelves();
-      } catch (error) {
-        console.error('Erro no initialize:', error);
-        setAlert({ severity: 'error', message: 'Erro ao inicializar a página' });
+    if (permissions.canRead) {
+      fetchShelves();
+    }
+  }, [fetchShelves, permissions.canRead]);
+
+  const handleOpen = useCallback(() => {
+    if (!permissions.canCreate && !editPrateleiraId) {
+      setAlert({
+        severity: 'error',
+        message: 'Você não tem permissão para criar prateleiras!',
+      });
+      log('Permissão de criação negada');
+      return;
+    }
+    if (!permissions.canUpdate && editPrateleiraId) {
+      setAlert({
+        severity: 'error',
+        message: 'Você não tem permissão para atualizar prateleiras!',
+      });
+      log('Permissão de atualização negada');
+      return;
+    }
+    setOpenPrateleira(true);
+  }, [permissions.canCreate, permissions.canUpdate, editPrateleiraId]);
+
+  const handleClose = useCallback(() => {
+    setOpenPrateleira(false);
+    setEditPrateleiraId(null);
+    setNomePrateleira('');
+    setDescricao('');
+    setErrors({});
+  }, []);
+
+  const handleOpenConfirmDelete = useCallback(
+    (id: string) => {
+      if (!permissions.canDelete) {
+        setAlert({
+          severity: 'error',
+          message: 'Você não tem permissão para excluir prateleiras!',
+        });
+        log('Permissão de exclusão negada');
+        return;
       }
-    };
-    initialize();
-  }, [fetchShelves, loadUserData, navigate]);
+      setDeletePrateleiraId(id);
+      setOpenConfirmDelete(true);
+    },
+    [permissions.canDelete],
+  );
+
+  const handleCloseConfirmDelete = useCallback(() => {
+    setOpenConfirmDelete(false);
+    setDeletePrateleiraId(null);
+  }, []);
 
   const onAddPrateleiraSubmit = useCallback(
     async (nomePrateleira: string, descricao: string) => {
-      if (!canCreate && !editPrateleiraId) {
+      if (!permissions.canCreate && !editPrateleiraId) {
         setAlert({
           severity: 'error',
           message: 'Você não tem permissão para criar prateleiras!',
@@ -244,7 +249,7 @@ const PrateleiraComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         log('Permissão de criação negada');
         return;
       }
-      if (!canUpdate && editPrateleiraId) {
+      if (!permissions.canUpdate && editPrateleiraId) {
         setAlert({
           severity: 'error',
           message: 'Você não tem permissão para atualizar prateleiras!',
@@ -269,7 +274,13 @@ const PrateleiraComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         };
 
         if (editPrateleiraId) {
-          await updateShelf(editPrateleiraId, shelfData);
+          const updatedShelf = await updateShelf(editPrateleiraId, shelfData);
+          setPrateleiras((prev) =>
+            prev.map((prat) => (prat.id === editPrateleiraId ? updatedShelf : prat)),
+          );
+          setFilteredPrateleiras((prev) =>
+            prev.map((prat) => (prat.id === editPrateleiraId ? updatedShelf : prat)),
+          );
           setAlert({ severity: 'success', message: 'Prateleira atualizada com sucesso!' });
           log('Prateleira atualizada:', { id: editPrateleiraId, ...shelfData });
         } else {
@@ -279,10 +290,9 @@ const PrateleiraComponent: React.FC<CollapsedItemProps> = ({ open }) => {
           setAlert({ severity: 'success', message: 'Prateleira cadastrada com sucesso!' });
           log('Prateleira criada:', newShelf);
         }
-        await fetchShelves();
+        setPage(0);
         handleClose();
       } catch (error: any) {
-        console.error('Erro ao salvar prateleira:', error);
         let errorMessage = 'Erro ao salvar prateleira';
         if (error.response) {
           if (error.response.status === 409) {
@@ -295,16 +305,17 @@ const PrateleiraComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         }
         setAlert({ severity: 'error', message: errorMessage });
         setErrors({ nomePrateleira: 'Erro ao salvar. Tente novamente.' });
+        log('Erro ao salvar prateleira:', error);
       } finally {
         setLoading(false);
       }
     },
-    [canCreate, canUpdate, editPrateleiraId, handleClose, fetchShelves],
+    [permissions.canCreate, permissions.canUpdate, editPrateleiraId, handleClose],
   );
 
   const handleEdit = useCallback(
     (id: string) => {
-      if (!canUpdate) {
+      if (!permissions.canUpdate) {
         setAlert({
           severity: 'error',
           message: 'Você não tem permissão para atualizar prateleiras!',
@@ -323,11 +334,11 @@ const PrateleiraComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         setAlert({ severity: 'error', message: 'Prateleira não encontrada para edição' });
       }
     },
-    [canUpdate, prateleiras, handleOpen],
+    [permissions.canUpdate, prateleiras, handleOpen],
   );
 
   const handleDelete = useCallback(async () => {
-    if (!canDelete) {
+    if (!permissions.canDelete) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para excluir prateleiras!',
@@ -343,23 +354,21 @@ const PrateleiraComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     try {
       setLoading(true);
       setAlert(null);
-
-      // Cache for rollback
       const shelfToDelete = prateleiras.find((prat) => prat.id === deletePrateleiraId);
       if (!shelfToDelete) {
         throw new Error('Prateleira não encontrada');
       }
-
-      // Optimistic update
       setPrateleiras((prev) => prev.filter((prat) => prat.id !== deletePrateleiraId));
       setFilteredPrateleiras((prev) => prev.filter((prat) => prat.id !== deletePrateleiraId));
-
       await deleteShelf(deletePrateleiraId);
       setAlert({ severity: 'success', message: 'Prateleira excluída com sucesso!' });
       log('Prateleira excluída:', deletePrateleiraId);
+      const totalPages = Math.ceil((prateleiras.length - 1) / rowsPerPage);
+      if (page >= totalPages && page > 0) {
+        setPage(page - 1);
+      }
       handleCloseConfirmDelete();
     } catch (error: any) {
-      console.error('Erro ao excluir prateleira:', error);
       let errorMessage = 'Erro ao excluir prateleira';
       if (error.response) {
         if (error.response.status === 404) {
@@ -374,8 +383,6 @@ const PrateleiraComponent: React.FC<CollapsedItemProps> = ({ open }) => {
           errorMessage = 'Erro interno no servidor';
         }
       }
-
-      // Rollback
       if (shelfToDelete) {
         setPrateleiras((prev) =>
           [...prev, shelfToDelete].sort((a, b) =>
@@ -388,14 +395,21 @@ const PrateleiraComponent: React.FC<CollapsedItemProps> = ({ open }) => {
           ),
         );
       }
-
       setAlert({ severity: 'error', message: errorMessage });
+      log('Erro ao excluir prateleira:', error);
     } finally {
       setLoading(false);
     }
-  }, [canDelete, deletePrateleiraId, prateleiras, handleCloseConfirmDelete]);
+  }, [
+    permissions.canDelete,
+    deletePrateleiraId,
+    prateleiras,
+    page,
+    rowsPerPage,
+    handleCloseConfirmDelete,
+  ]);
 
-  const handleSearch = useMemo(() => {
+  const handleSearch = useCallback(() => {
     const query = searchQuery.toLowerCase().trim();
     if (!query) {
       setFilteredPrateleiras(prateleiras);
@@ -411,8 +425,8 @@ const PrateleiraComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   }, [searchQuery, prateleiras]);
 
   useEffect(() => {
-    handleSearch;
-  }, [searchQuery, prateleiras]);
+    handleSearch();
+  }, [handleSearch]);
 
   useEffect(() => {
     if (alert) {
@@ -421,12 +435,15 @@ const PrateleiraComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     }
   }, [alert]);
 
-  const handleChangePage = useCallback(
-    (_event: React.MouseEvent<HTMLButtonElement> | null, newPage: number) => {
-      setPage(newPage);
-    },
-    [],
-  );
+  const handleChangePage = useCallback((event: unknown, newPage: number) => {
+    setPage(newPage);
+  }, []);
+
+  const handleChangeRowsPerPage = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const newRowsPerPage = parseInt(event.target.value, 10);
+    setRowsPerPage(newRowsPerPage);
+    setPage(0);
+  }, []);
 
   const paginatedPrateleiras = useMemo(
     () => filteredPrateleiras.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
@@ -459,8 +476,10 @@ const PrateleiraComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 label="Pesquisar Prateleira"
                 variant="outlined"
                 size="small"
-                disabled={loading || !canRead}
-                title={!canRead ? 'Você não tem permissão para visualizar prateleiras' : ''}
+                disabled={loading || !permissions.canRead}
+                title={
+                  !permissions.canRead ? 'Você não tem permissão para visualizar prateleiras' : ''
+                }
               />
               <Button
                 variant="contained"
@@ -468,8 +487,10 @@ const PrateleiraComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 sx={(theme) => ({ p: theme.spacing(0.625, 1.5), borderRadius: 1.5 })}
                 startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
                 onClick={handleOpen}
-                disabled={loading || !canCreate}
-                title={!canCreate ? 'Você não tem permissão para criar prateleiras' : ''}
+                disabled={loading || !permissions.canCreate}
+                title={
+                  !permissions.canCreate ? 'Você não tem permissão para criar prateleiras' : ''
+                }
               >
                 <Typography variant="body2">Adicionar</Typography>
               </Button>
@@ -507,8 +528,19 @@ const PrateleiraComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               sx={{ width: '100%' }}
               error={Boolean(errors.nomePrateleira)}
               helperText={errors.nomePrateleira}
-              disabled={loading}
+              disabled={
+                loading || (editPrateleiraId ? !permissions.canUpdate : !permissions.canCreate)
+              }
               required
+              title={
+                editPrateleiraId
+                  ? !permissions.canUpdate
+                    ? 'Você não tem permissão para atualizar prateleiras'
+                    : ''
+                  : !permissions.canCreate
+                    ? 'Você não tem permissão para criar prateleiras'
+                    : ''
+              }
             />
             <TextField
               id="shelf-description"
@@ -519,8 +551,19 @@ const PrateleiraComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               sx={{ width: '100%' }}
               error={Boolean(errors.descricao)}
               helperText={errors.descricao}
-              disabled={loading}
+              disabled={
+                loading || (editPrateleiraId ? !permissions.canUpdate : !permissions.canCreate)
+              }
               required
+              title={
+                editPrateleiraId
+                  ? !permissions.canUpdate
+                    ? 'Você não tem permissão para atualizar prateleiras'
+                    : ''
+                  : !permissions.canCreate
+                    ? 'Você não tem permissão para criar prateleiras'
+                    : ''
+              }
             />
             <Button
               variant="contained"
@@ -528,13 +571,15 @@ const PrateleiraComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               sx={{ height: 40, width: '100%' }}
               onClick={() => onAddPrateleiraSubmit(nomePrateleira, descricao)}
               disabled={
-                loading || (!canCreate && !editPrateleiraId) || (!canUpdate && editPrateleiraId)
+                loading || (editPrateleiraId ? !permissions.canUpdate : !permissions.canCreate)
               }
               title={
-                !canCreate && !editPrateleiraId
-                  ? 'Você não tem permissão para criar prateleiras'
-                  : !canUpdate && editPrateleiraId
+                editPrateleiraId
+                  ? !permissions.canUpdate
                     ? 'Você não tem permissão para atualizar prateleiras'
+                    : ''
+                  : !permissions.canCreate
+                    ? 'Você não tem permissão para criar prateleiras'
                     : ''
               }
             >
@@ -578,9 +623,11 @@ const PrateleiraComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                         <IconButton
                           color="primary"
                           onClick={() => handleEdit(prateleira.id!)}
-                          disabled={loading || !canUpdate}
+                          disabled={loading || !permissions.canUpdate}
                           title={
-                            !canUpdate ? 'Você não tem permissão para atualizar prateleiras' : ''
+                            !permissions.canUpdate
+                              ? 'Você não tem permissão para atualizar prateleiras'
+                              : ''
                           }
                         >
                           <Edit />
@@ -588,9 +635,11 @@ const PrateleiraComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                         <IconButton
                           color="error"
                           onClick={() => handleOpenConfirmDelete(prateleira.id!)}
-                          disabled={loading || !canDelete}
+                          disabled={loading || !permissions.canDelete}
                           title={
-                            !canDelete ? 'Você não tem permissão para excluir prateleiras' : ''
+                            !permissions.canDelete
+                              ? 'Você não tem permissão para excluir prateleiras'
+                              : ''
                           }
                         >
                           <Delete />
@@ -609,15 +658,18 @@ const PrateleiraComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             </Table>
           </TableContainer>
           <TablePagination
-            rowsPerPageOptions={[rowsPerPage]}
+            rowsPerPageOptions={[6, 12, 24]}
             component="div"
             count={filteredPrateleiras.length}
             rowsPerPage={rowsPerPage}
             page={page}
             onPageChange={handleChangePage}
-            labelRowsPerPage="Itens por página"
-            labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
-            disabled={loading || !canRead}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+            labelRowsPerPage="Itens por página:"
+            labelDisplayedRows={({ from, to, count }) =>
+              `${from}–${to} de ${count !== -1 ? count : `mais de ${to}`}`
+            }
+            disabled={loading || !permissions.canRead}
           />
         </CardContent>
       </Card>
@@ -632,7 +684,9 @@ const PrateleiraComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             Confirmar Exclusão
           </Typography>
           <Typography id="confirm-delete-modal-description" sx={{ mb: 3 }}>
-            Tem certeza que deseja excluir esta prateleira?
+            Tem certeza que deseja excluir a prateleira "
+            {prateleiras.find((p) => p.id === deletePrateleiraId)?.nomePrateleira}"? Esta ação não
+            pode ser desfeita.
           </Typography>
           {loading && (
             <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
@@ -652,8 +706,10 @@ const PrateleiraComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               variant="contained"
               color="error"
               onClick={handleDelete}
-              disabled={loading || !canDelete}
-              title={!canDelete ? 'Você não tem permissão para excluir prateleiras' : ''}
+              disabled={loading || !permissions.canDelete}
+              title={
+                !permissions.canDelete ? 'Você não tem permissão para excluir prateleiras' : ''
+              }
             >
               {loading ? 'Excluindo...' : 'Excluir'}
             </Button>

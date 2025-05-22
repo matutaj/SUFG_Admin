@@ -1421,7 +1421,7 @@ const Faturacao: React.FC = () => {
       field: name as keyof CaixaState,
       value,
     });
-  
+
     // Se o campo alterado for caixaId, buscar o último valor total do caixa
     if (name === 'caixaId' && value) {
       const ultimoCaixa = funcionariosCaixa
@@ -1431,11 +1431,10 @@ const Faturacao: React.FC = () => {
           const dateB = b.horarioFechamento || b.horarioAbertura || new Date(0);
           return new Date(dateB).getTime() - new Date(dateA).getTime();
         })[0];
-  
+
       if (ultimoCaixa) {
         const ultimoValorTotal =
-          (Number(ultimoCaixa.valorInicial) || 0) +
-          (Number(ultimoCaixa.quantidadaFaturada) || 0);
+          (Number(ultimoCaixa.valorInicial) || 0) + (Number(ultimoCaixa.quantidadaFaturada) || 0);
         dispatchCaixa({
           type: 'UPDATE_FIELD',
           field: 'valorInicial',
@@ -1457,11 +1456,11 @@ const Faturacao: React.FC = () => {
       navigate('/login');
       return;
     }
-  
+
     const errors = validateCaixa(caixaState, funcionarios, caixas, funcionariosCaixa);
     dispatchCaixa({ type: 'SET_ERRORS', errors });
     if (Object.keys(errors).length > 0) return;
-  
+
     try {
       setLoading(true);
       const newFuncionarioCaixa: FuncionarioCaixa = {
@@ -1473,13 +1472,13 @@ const Faturacao: React.FC = () => {
         horarioAbertura: new Date(),
         horarioFechamento: null,
       };
-  
+
       const createdCaixa = await createEmployeeCashRegister(newFuncionarioCaixa);
       console.log('Caixa criado:', createdCaixa);
       if (!createdCaixa.id) {
         throw new Error('ID do caixa não retornado pela API.');
       }
-  
+
       // Adicionar o caixa criado ao estado imediatamente
       setFuncionariosCaixa((prev) => [
         ...prev,
@@ -1490,7 +1489,7 @@ const Faturacao: React.FC = () => {
           Funcionarios: funcionarios.find((f) => f.id === loggedInFuncionarioId), // Adiciona informações do funcionário
         },
       ]);
-  
+
       // Atualizar a lista com dados da API
       const updatedFuncionariosCaixa = await getAllEmployeeCashRegisters();
       console.log('Lista de caixas atualizada:', updatedFuncionariosCaixa);
@@ -1854,155 +1853,155 @@ const Faturacao: React.FC = () => {
       </Modal>
 
       <Modal open={openCaixaModal} onClose={handleCloseCaixaModal}>
-  <Box sx={modalStyle}>
-    <Typography variant="h5" fontWeight="bold" color="primary" sx={{ mb: 3 }}>
-      Abrir Novo Caixa
-    </Typography>
-    <Stack spacing={3}>
-      <Grid container spacing={2}>
-        <Grid item xs={12} sm={6}>
-          <TextField
-            fullWidth
-            variant="outlined"
-            label="Funcionário"
-            value={
-              funcionarios.find((f) => f.id === loggedInFuncionarioId)?.nomeFuncionario ||
-              'N/A'
-            }
-            disabled
-            sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
-            error={Boolean(caixaState.errors.funcionarioId)}
-            helperText={caixaState.errors.funcionarioId}
-          />
-        </Grid>
-        <Grid item xs={12} sm={6}>
-          <FormControl
-            fullWidth
-            variant="outlined"
-            error={Boolean(caixaState.errors.caixaId)}
-          >
-            <InputLabel>Caixa</InputLabel>
-            <Select
-              name="caixaId"
-              value={caixaState.caixaId}
-              onChange={handleCaixaSelectChange}
-              sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
+        <Box sx={modalStyle}>
+          <Typography variant="h5" fontWeight="bold" color="primary" sx={{ mb: 3 }}>
+            Abrir Novo Caixa
+          </Typography>
+          <Stack spacing={3}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  variant="outlined"
+                  label="Funcionário"
+                  value={
+                    funcionarios.find((f) => f.id === loggedInFuncionarioId)?.nomeFuncionario ||
+                    'N/A'
+                  }
+                  disabled
+                  sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
+                  error={Boolean(caixaState.errors.funcionarioId)}
+                  helperText={caixaState.errors.funcionarioId}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl
+                  fullWidth
+                  variant="outlined"
+                  error={Boolean(caixaState.errors.caixaId)}
+                >
+                  <InputLabel>Caixa</InputLabel>
+                  <Select
+                    name="caixaId"
+                    value={caixaState.caixaId}
+                    onChange={handleCaixaSelectChange}
+                    sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
+                  >
+                    <MenuItem value="">
+                      <em>Selecione um caixa</em>
+                    </MenuItem>
+                    {caixas.map((caixa) => (
+                      <MenuItem key={caixa.id} value={caixa.id}>
+                        {caixa.nomeCaixa}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                  {caixaState.errors.caixaId && (
+                    <FormHelperText>{caixaState.errors.caixaId}</FormHelperText>
+                  )}
+                </FormControl>
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  variant="outlined"
+                  label="Valor Inicial (Kz)"
+                  name="valorInicial"
+                  type="number"
+                  value={caixaState.valorInicial}
+                  onChange={(e) =>
+                    dispatchCaixa({
+                      type: 'UPDATE_FIELD',
+                      field: 'valorInicial',
+                      value: e.target.value,
+                    })
+                  }
+                  inputProps={{ min: 0, step: '0.01' }}
+                  sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
+                  error={Boolean(caixaState.errors.valorInicial)}
+                  helperText={
+                    caixaState.errors.valorInicial ||
+                    (caixaState.caixaId
+                      ? 'Último valor total do caixa selecionado. Você pode alterá-lo.'
+                      : '')
+                  }
+                />
+              </Grid>
+            </Grid>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={onAddCaixaSubmit}
+              sx={{ alignSelf: 'flex-end', borderRadius: 1 }}
+              disabled={!loggedInFuncionarioId || loading}
             >
-              <MenuItem value="">
-                <em>Selecione um caixa</em>
-              </MenuItem>
-              {caixas.map((caixa) => (
-                <MenuItem key={caixa.id} value={caixa.id}>
-                  {caixa.nomeCaixa}
-                </MenuItem>
-              ))}
-            </Select>
-            {caixaState.errors.caixaId && (
-              <FormHelperText>{caixaState.errors.caixaId}</FormHelperText>
-            )}
-          </FormControl>
-        </Grid>
-        <Grid item xs={12}>
-          <TextField
-            fullWidth
-            variant="outlined"
-            label="Valor Inicial (Kz)"
-            name="valorInicial"
-            type="number"
-            value={caixaState.valorInicial}
-            onChange={(e) =>
-              dispatchCaixa({
-                type: 'UPDATE_FIELD',
-                field: 'valorInicial',
-                value: e.target.value,
-              })
-            }
-            inputProps={{ min: 0, step: '0.01' }}
-            sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
-            error={Boolean(caixaState.errors.valorInicial)}
-            helperText={
-              caixaState.errors.valorInicial ||
-              (caixaState.caixaId
-                ? 'Último valor total do caixa selecionado. Você pode alterá-lo.'
-                : '')
-            }
-          />
-        </Grid>
-      </Grid>
-      <Button
-        variant="contained"
-        color="primary"
-        onClick={onAddCaixaSubmit}
-        sx={{ alignSelf: 'flex-end', borderRadius: 1 }}
-        disabled={!loggedInFuncionarioId || loading}
-      >
-        {loading ? 'Abrindo...' : 'Abrir Caixa'}
-      </Button>
-    </Stack>
-  </Box>
-</Modal>
-<Modal open={openCaixaListModal} onClose={handleCloseCaixaListModal}>
-  <Box sx={modalStyle}>
-    <Typography variant="h5" fontWeight="bold" color="primary" sx={{ mb: 3 }}>
-      Caixas Abertos
-    </Typography>
-    <TableContainer component={Paper}>
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell sx={{ fontWeight: 'bold' }}>Caixa</TableCell>
-            <TableCell sx={{ fontWeight: 'bold' }}>Funcionário</TableCell>
-            <TableCell sx={{ fontWeight: 'bold' }}>Estado</TableCell>
-            <TableCell sx={{ fontWeight: 'bold' }}>Valor Inicial</TableCell>
-            <TableCell sx={{ fontWeight: 'bold' }}>Valor Faturado</TableCell>
-            <TableCell sx={{ fontWeight: 'bold' }}>Total Final</TableCell>
-            <TableCell sx={{ fontWeight: 'bold' }}>Ações</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {getCaixasExibidas().length > 0 ? (
-            getCaixasExibidas().map((item) => {
-              const valorInicial = Number(item.valorInicial) || 0;
-              const quantidadaFaturada = Number(item.quantidadaFaturada) || 0;
-              const totalFinal = valorInicial + quantidadaFaturada;
-              return (
-                <TableRow key={item.id}>
-                  <TableCell>{item.caixas?.nomeCaixa || 'N/A'}</TableCell>
-                  <TableCell>{item.Funcionarios?.nomeFuncionario || 'N/A'}</TableCell>
-                  <TableCell>{item.estadoCaixa ? 'Aberto' : 'Fechado'}</TableCell>
-                  <TableCell>{valorInicial.toFixed(2)} Kz</TableCell>
-                  <TableCell>{quantidadaFaturada.toFixed(2)} Kz</TableCell>
-                  <TableCell>{totalFinal.toFixed(2)} Kz</TableCell>
-                  <TableCell>
-                    {item.estadoCaixa && item.id && (
-                      <Button
-                        variant="contained"
-                        color="error"
-                        onClick={() => handleFecharCaixa(item.id ?? '')}
-                        size="small"
-                        disabled={loading}
-                      >
-                        {loading ? 'Fechando...' : 'Fechar'}
-                      </Button>
-                    )}
-                  </TableCell>
+              {loading ? 'Abrindo...' : 'Abrir Caixa'}
+            </Button>
+          </Stack>
+        </Box>
+      </Modal>
+      <Modal open={openCaixaListModal} onClose={handleCloseCaixaListModal}>
+        <Box sx={modalStyle}>
+          <Typography variant="h5" fontWeight="bold" color="primary" sx={{ mb: 3 }}>
+            Caixas Abertos
+          </Typography>
+          <TableContainer component={Paper}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Caixa</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Funcionário</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Estado</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Valor Inicial</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Valor Faturado</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Total Final</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Ações</TableCell>
                 </TableRow>
-              );
-            })
-          ) : (
-            <TableRow>
-              <TableCell colSpan={7} align="center">
-                <Typography variant="body2" color="text.secondary">
-                  Nenhum caixa aberto encontrado
-                </Typography>
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </TableContainer>
-  </Box>
-</Modal>
+              </TableHead>
+              <TableBody>
+                {getCaixasExibidas().length > 0 ? (
+                  getCaixasExibidas().map((item) => {
+                    const valorInicial = Number(item.valorInicial) || 0;
+                    const quantidadaFaturada = Number(item.quantidadaFaturada) || 0;
+                    const totalFinal = valorInicial + quantidadaFaturada;
+                    return (
+                      <TableRow key={item.id}>
+                        <TableCell>{item.caixas?.nomeCaixa || 'N/A'}</TableCell>
+                        <TableCell>{item.Funcionarios?.nomeFuncionario || 'N/A'}</TableCell>
+                        <TableCell>{item.estadoCaixa ? 'Aberto' : 'Fechado'}</TableCell>
+                        <TableCell>{valorInicial.toFixed(2)} Kz</TableCell>
+                        <TableCell>{quantidadaFaturada.toFixed(2)} Kz</TableCell>
+                        <TableCell>{totalFinal.toFixed(2)} Kz</TableCell>
+                        <TableCell>
+                          {item.estadoCaixa && item.id && (
+                            <Button
+                              variant="contained"
+                              color="error"
+                              onClick={() => handleFecharCaixa(item.id ?? '')}
+                              size="small"
+                              disabled={loading}
+                            >
+                              {loading ? 'Fechando...' : 'Fechar'}
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={7} align="center">
+                      <Typography variant="body2" color="text.secondary">
+                        Nenhum caixa aberto encontrado
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Box>
+      </Modal>
 
       <Modal open={openConfirmModal} onClose={handleCloseConfirmModal}>
         <Box sx={confirmModalStyle}>

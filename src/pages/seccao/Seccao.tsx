@@ -33,6 +33,13 @@ interface CollapsedItemProps {
   open: boolean;
 }
 
+interface Permissions {
+  canRead: boolean;
+  canCreate: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+}
+
 const style = {
   position: 'absolute' as const,
   top: '50%',
@@ -90,12 +97,12 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   } | null>(null);
   const [page, setPage] = useState(0);
   const rowsPerPage = 6;
-
-  // Permission states
-  const [canRead, setCanRead] = useState(false);
-  const [canCreate, setCanCreate] = useState(false);
-  const [canUpdate, setCanUpdate] = useState(false);
-  const [canDelete, setCanDelete] = useState(false);
+  const [permissions, setPermissions] = useState<Permissions>({
+    canRead: false,
+    canCreate: false,
+    canUpdate: false,
+    canDelete: false,
+  });
 
   // Logging function for debugging
   const log = (message: string, ...args: any[]) => {
@@ -105,7 +112,7 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   };
 
   const handleOpen = useCallback(() => {
-    if (!canCreate && !editSeccaoId) {
+    if (!permissions.canCreate && !editSeccaoId) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para criar seções!',
@@ -113,7 +120,7 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       log('Permissão de criação negada');
       return;
     }
-    if (!canUpdate && editSeccaoId) {
+    if (!permissions.canUpdate && editSeccaoId) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para atualizar seções!',
@@ -122,7 +129,7 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       return;
     }
     setOpenSeccao(true);
-  }, [canCreate, canUpdate, editSeccaoId]);
+  }, [permissions.canCreate, permissions.canUpdate, editSeccaoId]);
 
   const handleClose = useCallback(() => {
     setOpenSeccao(false);
@@ -134,7 +141,7 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const handleOpenConfirmDelete = useCallback(
     (id: string) => {
-      if (!canDelete) {
+      if (!permissions.canDelete) {
         setAlert({
           severity: 'error',
           message: 'Você não tem permissão para excluir seções!',
@@ -145,7 +152,7 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       setDeleteSeccaoId(id);
       setOpenConfirmDelete(true);
     },
-    [canDelete],
+    [permissions.canDelete],
   );
 
   const handleCloseConfirmDelete = useCallback(() => {
@@ -153,21 +160,24 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     setDeleteSeccaoId(null);
   }, []);
 
-  const loadUserData = useCallback(() => {
+  const loadUserDataAndPermissions = useCallback(async () => {
     try {
-      const userData = getUserData();
+      const userData = await getUserData();
       log('Dados do usuário:', userData);
       if (!userData || !userData.id) {
         throw new Error('Usuário não autenticado');
       }
-      setCanRead(hasPermission('listar_seccao'));
-      setCanCreate(hasPermission('criar_seccao'));
-      setCanUpdate(hasPermission('atualizar_seccao'));
-      setCanDelete(hasPermission('eliminar_seccao'));
-      log('Permissões:', { canRead, canCreate, canUpdate, canDelete });
+      const [canRead, canCreate, canUpdate, canDelete] = await Promise.all([
+        hasPermission('listar_seccao'),
+        hasPermission('criar_seccao'),
+        hasPermission('atualizar_seccao'),
+        hasPermission('eliminar_seccao'),
+      ]);
+      setPermissions({ canRead, canCreate, canUpdate, canDelete });
+      log('Permissões carregadas:', { canRead, canCreate, canUpdate, canDelete });
       return userData.id;
     } catch (error: any) {
-      console.error('Erro em loadUserData:', error);
+      console.error('Erro em loadUserDataAndPermissions:', error);
       setAlert({ severity: 'error', message: error.message });
       navigate('/login');
       return '';
@@ -175,7 +185,7 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   }, [navigate]);
 
   const fetchSections = useCallback(async () => {
-    if (!canRead) {
+    if (!permissions.canRead) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para visualizar seções!',
@@ -215,12 +225,12 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     } finally {
       setLoading(false);
     }
-  }, [canRead]);
+  }, [permissions.canRead]);
 
   useEffect(() => {
     const initialize = async () => {
       try {
-        const id = loadUserData();
+        const id = await loadUserDataAndPermissions();
         if (!id) {
           navigate('/login');
           return;
@@ -232,76 +242,79 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       }
     };
     initialize();
-  }, [fetchSections, loadUserData, navigate]);
+  }, [fetchSections, loadUserDataAndPermissions, navigate]);
 
-  const onAddSeccaoSubmit = useCallback(async () => {
-    if (!canCreate && !editSeccaoId) {
-      setAlert({
-        severity: 'error',
-        message: 'Você não tem permissão para criar seções!',
-      });
-      log('Permissão de criação negada');
-      return;
-    }
-    if (!canUpdate && editSeccaoId) {
-      setAlert({
-        severity: 'error',
-        message: 'Você não tem permissão para atualizar seções!',
-      });
-      log('Permissão de atualização negada');
-      return;
-    }
-    const newErrors: { nomeSeccao?: string; descricao?: string } = {};
-    if (!nomeSeccao.trim()) newErrors.nomeSeccao = 'O nome da seção é obrigatório.';
-    if (!descricao.trim()) newErrors.descricao = 'A descrição é obrigatória.';
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setAlert(null);
-      const sectionData: Seccao = {
-        nomeSeccao: nomeSeccao.trim(),
-        descricao: descricao.trim(),
-      };
-
-      if (editSeccaoId) {
-        await updateSection(editSeccaoId, sectionData);
-        setAlert({ severity: 'success', message: 'Seção atualizada com sucesso!' });
-        log('Seção atualizada:', { id: editSeccaoId, ...sectionData });
-      } else {
-        const newSection = await createSection(sectionData);
-        setSecoes((prev) => [...prev, newSection]);
-        setFilteredSecoes((prev) => [...prev, newSection]);
-        setAlert({ severity: 'success', message: 'Seção cadastrada com sucesso!' });
-        log('Seção criada:', newSection);
+  const onAddSeccaoSubmit = useCallback(
+    async (nomeSeccao: string, descricao: string) => {
+      if (!permissions.canCreate && !editSeccaoId) {
+        setAlert({
+          severity: 'error',
+          message: 'Você não tem permissão para criar seções!',
+        });
+        log('Permissão de criação negada');
+        return;
       }
-      await fetchSections();
-      handleClose();
-    } catch (error: any) {
-      console.error('Erro ao salvar seção:', error);
-      let errorMessage = 'Erro ao salvar seção';
-      if (error.response) {
-        if (error.response.status === 409) {
-          errorMessage = 'Já existe uma seção com esse nome';
-        } else if (error.response.status === 403) {
-          errorMessage = `Permissão negada para ${editSeccaoId ? 'atualizar' : 'criar'} seções`;
-        } else if (error.response.status === 400) {
-          errorMessage = error.response.data?.message || 'Dados inválidos';
+      if (!permissions.canUpdate && editSeccaoId) {
+        setAlert({
+          severity: 'error',
+          message: 'Você não tem permissão para atualizar seções!',
+        });
+        log('Permissão de atualização negada');
+        return;
+      }
+      const newErrors: { nomeSeccao?: string; descricao?: string } = {};
+      if (!nomeSeccao.trim()) newErrors.nomeSeccao = 'O nome da seção é obrigatório.';
+      if (!descricao.trim()) newErrors.descricao = 'A descrição é obrigatória.';
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setAlert(null);
+        const sectionData: Seccao = {
+          nomeSeccao: nomeSeccao.trim(),
+          descricao: descricao.trim(),
+        };
+
+        if (editSeccaoId) {
+          await updateSection(editSeccaoId, sectionData);
+          setAlert({ severity: 'success', message: 'Seção atualizada com sucesso!' });
+          log('Seção atualizada:', { id: editSeccaoId, ...sectionData });
+        } else {
+          const newSection = await createSection(sectionData);
+          setSecoes((prev) => [...prev, newSection]);
+          setFilteredSecoes((prev) => [...prev, newSection]);
+          setAlert({ severity: 'success', message: 'Seção cadastrada com sucesso!' });
+          log('Seção criada:', newSection);
         }
+        await fetchSections();
+        handleClose();
+      } catch (error: any) {
+        console.error('Erro ao salvar seção:', error);
+        let errorMessage = 'Erro ao salvar seção';
+        if (error.response) {
+          if (error.response.status === 409) {
+            errorMessage = 'Já existe uma seção com esse nome';
+          } else if (error.response.status === 403) {
+            errorMessage = `Permissão negada para ${editSeccaoId ? 'atualizar' : 'criar'} seções`;
+          } else if (error.response.status === 400) {
+            errorMessage = error.response.data?.message || 'Dados inválidos';
+          }
+        }
+        setAlert({ severity: 'error', message: errorMessage });
+        setErrors({ nomeSeccao: 'Erro ao salvar. Tente novamente.' });
+      } finally {
+        setLoading(false);
       }
-      setAlert({ severity: 'error', message: errorMessage });
-      setErrors({ nomeSeccao: 'Erro ao salvar. Tente novamente.' });
-    } finally {
-      setLoading(false);
-    }
-  }, [canCreate, canUpdate, editSeccaoId, nomeSeccao, descricao, handleClose, fetchSections]);
+    },
+    [permissions.canCreate, permissions.canUpdate, editSeccaoId, handleClose, fetchSections],
+  );
 
   const handleEdit = useCallback(
     (id: string) => {
-      if (!canUpdate) {
+      if (!permissions.canUpdate) {
         setAlert({
           severity: 'error',
           message: 'Você não tem permissão para atualizar seções!',
@@ -320,11 +333,11 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         setAlert({ severity: 'error', message: 'Seção não encontrada para edição' });
       }
     },
-    [canUpdate, secoes, handleOpen],
+    [permissions.canUpdate, secoes, handleOpen],
   );
 
   const handleDelete = useCallback(async () => {
-    if (!canDelete) {
+    if (!permissions.canDelete) {
       setAlert({
         severity: 'error',
         message: 'Você não tem permissão para excluir seções!',
@@ -389,9 +402,9 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     } finally {
       setLoading(false);
     }
-  }, [canDelete, deleteSeccaoId, secoes, handleCloseConfirmDelete]);
+  }, [permissions.canDelete, deleteSeccaoId, secoes, handleCloseConfirmDelete]);
 
-  const handleSearch = useMemo(() => {
+  const handleSearch = useCallback(() => {
     const query = searchQuery.toLowerCase().trim();
     if (!query) {
       setFilteredSecoes(secoes);
@@ -407,8 +420,8 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   }, [searchQuery, secoes]);
 
   useEffect(() => {
-    handleSearch;
-  }, [searchQuery, secoes]);
+    handleSearch();
+  }, [handleSearch]);
 
   useEffect(() => {
     if (alert) {
@@ -453,8 +466,8 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 label="Pesquisar Seção"
                 variant="outlined"
                 size="small"
-                disabled={loading || !canRead}
-                title={!canRead ? 'Você não tem permissão para visualizar seções' : ''}
+                disabled={loading || !permissions.canRead}
+                title={!permissions.canRead ? 'Você não tem permissão para visualizar seções' : ''}
               />
               <Button
                 variant="contained"
@@ -462,8 +475,8 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 sx={(theme) => ({ p: theme.spacing(0.625, 1.5), borderRadius: 1.5 })}
                 startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
                 onClick={handleOpen}
-                disabled={loading || !canCreate}
-                title={!canCreate ? 'Você não tem permissão para criar seções' : ''}
+                disabled={loading || !permissions.canCreate}
+                title={!permissions.canCreate ? 'Você não tem permissão para criar seções' : ''}
               >
                 <Typography variant="body2">Adicionar</Typography>
               </Button>
@@ -519,13 +532,17 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             <Button
               variant="contained"
               color="secondary"
-              onClick={onAddSeccaoSubmit}
-              disabled={loading || (!canCreate && !editSeccaoId) || (!canUpdate && editSeccaoId)}
+              onClick={() => onAddSeccaoSubmit(nomeSeccao, descricao)}
+              disabled={
+                loading ||
+                (!permissions.canCreate && !editSeccaoId) ||
+                (!permissions.canUpdate && editSeccaoId)
+              }
               fullWidth
               title={
-                !canCreate && !editSeccaoId
+                !permissions.canCreate && !editSeccaoId
                   ? 'Você não tem permissão para criar seções'
-                  : !canUpdate && editSeccaoId
+                  : !permissions.canUpdate && editSeccaoId
                     ? 'Você não tem permissão para atualizar seções'
                     : ''
               }
@@ -570,16 +587,24 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                         <IconButton
                           color="primary"
                           onClick={() => handleEdit(seccao.id!)}
-                          disabled={loading || !canUpdate}
-                          title={!canUpdate ? 'Você não tem permissão para atualizar seções' : ''}
+                          disabled={loading || !permissions.canUpdate}
+                          title={
+                            !permissions.canUpdate
+                              ? 'Você não tem permissão para atualizar seções'
+                              : ''
+                          }
                         >
                           <Edit />
                         </IconButton>
                         <IconButton
                           color="error"
                           onClick={() => handleOpenConfirmDelete(seccao.id!)}
-                          disabled={loading || !canDelete}
-                          title={!canDelete ? 'Você não tem permissão para excluir seções' : ''}
+                          disabled={loading || !permissions.canDelete}
+                          title={
+                            !permissions.canDelete
+                              ? 'Você não tem permissão para excluir seções'
+                              : ''
+                          }
                         >
                           <Delete />
                         </IconButton>
@@ -605,7 +630,7 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
             onPageChange={handleChangePage}
             labelRowsPerPage="Itens por página"
             labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
-            disabled={loading || !canRead}
+            disabled={loading || !permissions.canRead}
           />
         </CardContent>
       </Card>
@@ -640,8 +665,8 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               variant="contained"
               color="error"
               onClick={handleDelete}
-              disabled={loading || !canDelete}
-              title={!canDelete ? 'Você não tem permissão para excluir seções' : ''}
+              disabled={loading || !permissions.canDelete}
+              title={!permissions.canDelete ? 'Você não tem permissão para excluir seções' : ''}
             >
               {loading ? 'Excluindo...' : 'Excluir'}
             </Button>
