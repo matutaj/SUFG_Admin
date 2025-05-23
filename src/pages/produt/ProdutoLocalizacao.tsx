@@ -223,7 +223,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       const [canRead, canCreateTransfer, canUpdate, canDelete, canCreateLocation] =
         await Promise.all([
           hasPermission('listar_produto_localizacao'),
-          hasPermission('criar_tranferencia'),
+          hasPermission('criar_transferencia'),
           hasPermission('atualizar_produto_localizacao'),
           hasPermission('eliminar_produto_localizacao'),
           hasPermission('criar_produto_localizacao'),
