@@ -1,3 +1,4 @@
+import { DrawerItem } from 'data/drawerItems';
 import { getAllFunctionPermissionsByFunction } from './methods';
 import { FuncaoPermissao } from 'types/models';
 
@@ -30,7 +31,6 @@ const log = (message: string, ...args: any[]): void => {
   console.log(`[authUtils] ${message}`, ...args);
 };
 
-// Mapeamento de id_funcao para role (ajuste com os valores reais do backend)
 const roleMap: { [key: string]: string } = {
   '1': 'Admin',
   '2': 'Gerente',
@@ -84,12 +84,11 @@ const fetchUserPermissionsById = async (id_funcao: string): Promise<string[]> =>
     return permissions;
   } catch (error) {
     log('Erro ao buscar permissões para id_funcao:', error);
+    permissionCache.delete(id_funcao); // Limpar cache em caso de erro
     return [];
   }
 };
-// ... (outras importações e interfaces permanecem iguais)
 
-// Removendo o fallback para 'Admin' e ajustando a lógica
 export const getUserData = async (): Promise<UserData | null> => {
   const token = localStorage.getItem('token');
   const user = localStorage.getItem('user');
@@ -131,13 +130,11 @@ export const getUserData = async (): Promise<UserData | null> => {
     const userFunctionId = decodedPayload.id_funcao || parsedUser?.id_funcao || '';
     let userRole = decodedPayload.role || parsedUser?.role || '';
 
-    // Mapeia id_funcao para role se role não estiver presente
     if (!userRole && userFunctionId) {
       userRole = roleMap[userFunctionId] || '';
       log('Role mapeado de id_funcao:', { id_funcao: userFunctionId, userRole });
     }
 
-    // Se não houver role, retornar null (sem fallback para 'Admin')
     if (!userRole) {
       log('Erro: Nenhum role encontrado para o usuário', { userId, decodedPayload, parsedUser });
       return null;
@@ -170,66 +167,35 @@ export const getUserData = async (): Promise<UserData | null> => {
     return null;
   }
 };
-interface Item {
-  id: number;
-  title: string;
-  path?: string;
-  active?: boolean;
-  requiredRoles?: string[];
-}
-
-export interface SubItem {
-  id: number;
-  title: string;
-  path?: string;
-  active?: boolean;
-  requiredRoles?: string[];
-}
-
-export interface DrawerItem extends Item {
-  collapsible: boolean;
-  subList?: SubItem[];
-}
-
-// Função revisada para filtrar itens do menu
-// authUtils.ts
 
 export const filterDrawerItems = async (items: DrawerItem[]): Promise<DrawerItem[]> => {
-  // 1. Obtenha os dados do usuário DIRETAMENTE do localStorage
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const token = localStorage.getItem('token');
+  const userData = await getUserData();
 
-  // 2. Extraia a role de forma definitiva
-  let userRole = user?.role;
-
-  if (!userRole && token) {
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      userRole = payload.role || payload.id_funcao;
-    } catch (e) {
-      console.error('Erro ao decodificar token:', e);
-    }
+  if (!userData) {
+    console.log('Usuário não autenticado - mostrando apenas itens públicos');
+    return items.filter((item) => !item.requiredRoles);
   }
 
-  // 3. Fallback seguro
-  userRole = userRole || 'guest';
+  const userRole = roleMap[userData.id_funcao || ''] || userData.role;
+  console.log('Role final do usuário:', userRole);
 
-  console.log('🛡️ Role ativa:', userRole); // DEBUG ESSENCIAL
+  return items
+    .filter((item) => {
+      const hasAccess =
+        !item.requiredRoles || item.requiredRoles.some((r) => r.trim() === userRole?.trim());
 
-  // 4. Filtro à prova de erros
-  return items.filter((item) => {
-    // Itens sem requiredRoles são públicos
-    if (!item.requiredRoles) return true;
-
-    // Verificação robusta
-    const hasAccess = item.requiredRoles.includes(userRole);
-
-    if (!hasAccess) {
-      console.log(`⛔ Acesso negado a ${item.title}. Requer:`, item.requiredRoles);
-    }
-
-    return hasAccess;
-  });
+      console.log(
+        `Acesso: ${item.title} - ${hasAccess} (Requer: ${item.requiredRoles}, Usuário: ${userRole})`,
+      );
+      return hasAccess;
+    })
+    .map((item) => ({
+      ...item,
+      subList: item.subList?.filter(
+        (sub) => !sub.requiredRoles || sub.requiredRoles.some((r) => r.trim() === userRole?.trim()),
+      ),
+    }))
+    .filter((item) => !item.collapsible || (item.subList && item.subList.length > 0));
 };
 export const hasPermission = async (requiredPermission: string): Promise<boolean> => {
   const user = await getUserData();

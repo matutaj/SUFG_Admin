@@ -8,16 +8,6 @@ import SignOut from 'components/icons/drawer/SignOut';
 import Car from 'components/icons/drawer/Car';
 import paths, { rootPaths } from 'routes/paths';
 import { SvgIconProps } from '@mui/material';
-import { getUserData, hasRole } from '../api/authUtils';
-
-interface Item {
-  id: number;
-  icon: (props: SvgIconProps) => JSX.Element;
-  title: string;
-  path?: string;
-  active?: boolean;
-  requiredRoles?: string[];
-}
 
 export interface SubItem {
   id: number;
@@ -27,41 +17,15 @@ export interface SubItem {
   requiredRoles?: string[];
 }
 
-export interface DrawerItem extends Item {
-  collapsible: boolean;
-  subList?: SubItem[];
-}
-
-export interface LanguageItem {
-  id: number;
-  value: string;
-  label: string;
-  icon: string;
-}
-
-export interface MenuItem {
-  id: number;
-  label: string;
-  icon: string;
-}
-
-export interface IFactor {
+export interface DrawerItem {
   id: number;
   icon: (props: SvgIconProps) => JSX.Element;
   title: string;
-  color: string;
-  value: number;
-  max?: number;
-}
-
-export interface ICar {
-  id: number;
-  recommendation: number;
-  imageUrl: string;
-  modelName: string;
-  mileage: number;
-  costPerHour: number;
-  backgroundColor: string;
+  path?: string;
+  active?: boolean;
+  requiredRoles?: string[];
+  collapsible: boolean;
+  subList?: SubItem[];
 }
 
 export const drawerItems: DrawerItem[] = [
@@ -72,7 +36,7 @@ export const drawerItems: DrawerItem[] = [
     path: paths.dashboard,
     collapsible: false,
     active: true,
-    requiredRoles: ['Gerente', 'Estoquista', 'Repositor', 'Operador de Caixa'],
+    requiredRoles: ['Admin', 'Gerente', 'Estoquista', 'Repositor'],
   },
   {
     id: 3,
@@ -80,21 +44,21 @@ export const drawerItems: DrawerItem[] = [
     title: 'Gestão de Produtos',
     collapsible: true,
     active: true,
-    requiredRoles: ['Admin', 'Gerente', 'Estoquista'],
+    requiredRoles: ['Admin', 'Gerente', 'Estoquista', 'Repositor'],
     subList: [
       {
         id: 31,
         title: 'Produtos',
         path: `/${rootPaths.pagesRoot}/produt/loja`,
         active: true,
-        requiredRoles: ['Admin', 'Gerente', 'Estoquista'],
+        requiredRoles: ['Admin', 'Gerente', 'Estoquista', 'Repositor'],
       },
       {
         id: 33,
         title: 'Estoque',
         path: `/${rootPaths.pagesRoot}/stock`,
         active: true,
-        requiredRoles: ['Admin', 'Gerente', 'Estoquista'],
+        requiredRoles: ['Admin', 'Gerente', 'Estoquista', 'Repositor'],
       },
       {
         id: 39,
@@ -222,22 +186,5 @@ export const drawerItems: DrawerItem[] = [
     collapsible: false,
     active: true,
     requiredRoles: ['Admin', 'Gerente', 'Estoquista', 'Repositor'],
-  },
-  {
-    id: 10,
-    icon: Settings,
-    title: 'Configurações',
-    path: `/${rootPaths.pagesRoot}/configuracoes`,
-    active: true,
-    collapsible: false,
-    requiredRoles: ['Admin'],
-  },
-  {
-    id: 11,
-    icon: SignOut,
-    title: 'Sair',
-    path: `/${rootPaths.pagesRoot}/logout`,
-    active: true,
-    collapsible: false,
   },
 ];
