@@ -5,85 +5,148 @@ import Settings from 'components/icons/drawer/Settings';
 import ShoppingBag from 'components/icons/drawer/ShoppingBag';
 import ShoppingCart from 'components/icons/drawer/ShoppingCart';
 import SignOut from 'components/icons/drawer/SignOut';
-import paths, { rootPaths } from 'routes/paths';
-import { DrawerItem } from 'types/types';
 import Car from 'components/icons/drawer/Car';
+import paths, { rootPaths } from 'routes/paths';
+import { SvgIconProps } from '@mui/material';
+import { getUserData, hasRole } from '../api/authUtils';
+
+interface Item {
+  id: number;
+  icon: (props: SvgIconProps) => JSX.Element;
+  title: string;
+  path?: string;
+  active?: boolean;
+  requiredRoles?: string[];
+}
+
+export interface SubItem {
+  id: number;
+  title: string;
+  path?: string;
+  active?: boolean;
+  requiredRoles?: string[];
+}
+
+export interface DrawerItem extends Item {
+  collapsible: boolean;
+  subList?: SubItem[];
+}
+
+export interface LanguageItem {
+  id: number;
+  value: string;
+  label: string;
+  icon: string;
+}
+
+export interface MenuItem {
+  id: number;
+  label: string;
+  icon: string;
+}
+
+export interface IFactor {
+  id: number;
+  icon: (props: SvgIconProps) => JSX.Element;
+  title: string;
+  color: string;
+  value: number;
+  max?: number;
+}
+
+export interface ICar {
+  id: number;
+  recommendation: number;
+  imageUrl: string;
+  modelName: string;
+  mileage: number;
+  costPerHour: number;
+  backgroundColor: string;
+}
 
 export const drawerItems: DrawerItem[] = [
   {
     id: 1,
     icon: Grid,
     title: 'Dashboard',
-    path: paths.dashboard, // '/'
+    path: paths.dashboard,
     collapsible: false,
     active: true,
+    requiredRoles: ['Gerente', 'Estoquista', 'Repositor', 'Operador de Caixa'],
   },
-
   {
     id: 3,
     icon: Doughnut,
-    title: ' Gestão de Produtos', // '/pages/produtos'
+    title: 'Gestão de Produtos',
     collapsible: true,
     active: true,
+    requiredRoles: ['Admin', 'Gerente', 'Estoquista'],
     subList: [
       {
         id: 31,
         title: 'Produtos',
         path: `/${rootPaths.pagesRoot}/produt/loja`,
         active: true,
+        requiredRoles: ['Admin', 'Gerente', 'Estoquista'],
       },
-
       {
         id: 33,
         title: 'Estoque',
-        path: `/${rootPaths.pagesRoot}/stock`, // '/pages/estoque'
+        path: `/${rootPaths.pagesRoot}/stock`,
         active: true,
+        requiredRoles: ['Admin', 'Gerente', 'Estoquista'],
       },
       {
         id: 39,
         title: 'Local. Produto',
-        path: `/${rootPaths.pagesRoot}/produt/produtoLocalizacao`, // '/pages/estoque'
+        path: `/${rootPaths.pagesRoot}/produt/produtoLocalizacao`,
         active: true,
+        requiredRoles: ['Admin', 'Gerente', 'Estoquista', 'Repositor'],
       },
       {
         id: 4,
         title: 'Categoria',
-        path: `/${rootPaths.pagesRoot}/categorias`, // '/pages/categorias'
+        path: `/${rootPaths.pagesRoot}/categorias`,
         active: true,
+        requiredRoles: ['Admin', 'Gerente'],
       },
     ],
   },
-
   {
     id: 5,
     icon: ShoppingBag,
     title: 'Zona SCPL',
     collapsible: true,
     active: true,
+    requiredRoles: ['Admin', 'Gerente', 'Estoquista', 'Repositor'],
     subList: [
       {
         id: 31,
         title: 'Secção',
         path: `/${rootPaths.pagesRoot}/seccao`,
         active: true,
+        requiredRoles: ['Admin', 'Gerente', 'Estoquista', 'Repositor'],
       },
       {
         id: 32,
         title: 'Corredor',
         path: `/${rootPaths.pagesRoot}/corredor`,
         active: true,
+        requiredRoles: ['Admin', 'Gerente', 'Estoquista', 'Repositor'],
       },
       {
         id: 32,
         title: 'Prateleira',
         path: `/${rootPaths.pagesRoot}/prateleira`,
         active: true,
+        requiredRoles: ['Admin', 'Gerente', 'Estoquista', 'Repositor'],
       },
       {
         id: 34,
         title: 'Localização',
         path: `/${rootPaths.pagesRoot}/produt/localizacao`,
         active: true,
+        requiredRoles: ['Admin', 'Gerente', 'Estoquista', 'Repositor'],
       },
     ],
   },
@@ -93,19 +156,21 @@ export const drawerItems: DrawerItem[] = [
     title: 'Faturação',
     collapsible: true,
     active: true,
+    requiredRoles: ['Admin', 'Gerente', 'Operador de Caixa'],
     subList: [
       {
         id: 7,
         title: 'Venda',
         path: `/${rootPaths.pagesRoot}/faturacao`,
         active: true,
+        requiredRoles: ['Admin', 'Gerente', 'Operador de Caixa'],
       },
-
       {
         id: 4,
         title: 'Caixa',
-        path: `/${rootPaths.pagesRoot}/caixa`, // '/pages/categorias'
+        path: `/${rootPaths.pagesRoot}/caixa`,
         active: true,
+        requiredRoles: ['Admin', 'Gerente', 'Operador de Caixa'],
       },
     ],
   },
@@ -113,36 +178,39 @@ export const drawerItems: DrawerItem[] = [
     id: 6,
     icon: ShoppingCart,
     title: 'Relatório',
-    path: `/${rootPaths.pagesRoot}/relatorio`, // '/pages/estoque'
+    path: `/${rootPaths.pagesRoot}/relatorio`,
     collapsible: false,
     active: true,
+    requiredRoles: ['Admin', 'Gerente'],
   },
-
   {
     id: 5,
     icon: Car,
     title: 'Usuários',
     collapsible: true,
     active: true,
+    requiredRoles: ['Admin'],
     subList: [
       {
         id: 7,
-
         title: 'Funcionários',
         path: `/${rootPaths.pagesRoot}/funcionario`,
         active: true,
+        requiredRoles: ['Admin'],
       },
       {
         id: 6,
         title: 'Fornecedor',
-        path: `/${rootPaths.pagesRoot}/venda`,
+        path: `/${rootPaths.pagesRoot}/fornecedor`,
         active: true,
+        requiredRoles: ['Admin'],
       },
       {
         id: 7,
         title: 'Cliente',
         path: `/${rootPaths.pagesRoot}/cliente`,
         active: true,
+        requiredRoles: ['Admin'],
       },
     ],
   },
@@ -153,20 +221,22 @@ export const drawerItems: DrawerItem[] = [
     path: `/${rootPaths.pagesRoot}/tarefa`,
     collapsible: false,
     active: true,
+    requiredRoles: ['Admin', 'Gerente', 'Estoquista', 'Repositor'],
   },
   {
     id: 10,
     icon: Settings,
-    title: 'Settings',
+    title: 'Configurações',
     path: `/${rootPaths.pagesRoot}/configuracoes`,
     active: true,
     collapsible: false,
+    requiredRoles: ['Admin'],
   },
   {
     id: 11,
     icon: SignOut,
-    title: 'Log out',
-    path: `/${rootPaths.pagesRoot}/logout`, // '/pages/logout'
+    title: 'Sair',
+    path: `/${rootPaths.pagesRoot}/logout`,
     active: true,
     collapsible: false,
   },
