@@ -1095,9 +1095,6 @@ const Faturacao: React.FC = () => {
         }
       });
       
-      // Aguardar todas as atualizações de localização
-      await Promise.all(updates);
-      
       // Recarregar productLocations do banco de dados para garantir dados atualizados
       const updatedProductLocations = await getAllProductLocations();
       setProductLocations(updatedProductLocations);
