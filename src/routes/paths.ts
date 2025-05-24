@@ -15,7 +15,7 @@ export default {
   localizacao: `/${rootPaths.pagesRoot}/produt/localizacao`,
   categorias: `/${rootPaths.pagesRoot}/categorias`,
   estoque: `/${rootPaths.pagesRoot}/stock`,
-  vendas: `/${rootPaths.pagesRoot}/venda`,
+  vendas: `/${rootPaths.pagesRoot}/fornecedor`,
   perfil: `/${rootPaths.pagesRoot}/perfil`,
   relatorio: `/${rootPaths.pagesRoot}/relatorio`,
   corredor: `/${rootPaths.pagesRoot}/corredor`,
