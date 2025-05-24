@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useReducer } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
+import axios from 'axios';
 import {
   Paper,
   Button,
@@ -29,6 +30,7 @@ import {
   TablePagination,
   Alert,
   SelectChangeEvent,
+  CircularProgress,
 } from '@mui/material';
 import IconifyIcon from 'components/base/IconifyIcon';
 import Delete from 'components/icons/factor/Delete';
@@ -1396,14 +1398,97 @@ const Faturacao: React.FC = () => {
     }
   };
 
-  const handleOpenCaixaModal = () => {
+  const handleOpenCaixaModal = async () => {
     if (!loggedInFuncionarioId) {
       setAlert({ severity: 'error', message: 'Usuário não autenticado. Faça login novamente.' });
       navigate('/login');
       return;
     }
-    dispatchCaixa({ type: 'UPDATE_FIELD', field: 'funcionarioId', value: loggedInFuncionarioId });
-    setOpenCaixaModal(true);
+  
+    setLoading(true);
+    try {
+      // Obter o endereço MAC da máquina
+      const macResponse = await axios.get('http://localhost:3001/mac');
+      const machineMacAddress = macResponse.data.mac;
+  
+      // Obter o token de autenticação
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Token de autenticação não encontrado. Faça login novamente.');
+      }
+  
+      // Buscar o caixa associado ao MAC
+      const caixaResponse = await axios.get(`http://localhost:3333/caixa/mac/${machineMacAddress}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const caixa = caixaResponse.data;
+  
+      if (!caixa || !caixa.id) {
+        throw new Error('Nenhum caixa encontrado para o endereço MAC desta máquina.');
+      }
+  
+      // Atualizar o estado com o caixa encontrado
+      dispatchCaixa({
+        type: 'UPDATE_FIELD',
+        field: 'caixaId',
+        value: caixa.id,
+      });
+  
+      // Buscar o último valor total do caixa
+      const ultimoCaixa = funcionariosCaixa
+        .filter((fc) => fc.id_caixa === caixa.id)
+        .sort((a, b) => {
+          const dateA = a.horarioFechamento || a.horarioAbertura || new Date(0);
+          const dateB = b.horarioFechamento || b.horarioAbertura || new Date(0);
+          return new Date(dateB).getTime() - new Date(dateA).getTime();
+        })[0];
+  
+      if (ultimoCaixa) {
+        const ultimoValorTotal =
+          (Number(ultimoCaixa.valorInicial) || 0) + (Number(ultimoCaixa.quantidadaFaturada) || 0);
+        dispatchCaixa({
+          type: 'UPDATE_FIELD',
+          field: 'valorInicial',
+          value: ultimoValorTotal.toFixed(2),
+        });
+      } else {
+        dispatchCaixa({
+          type: 'UPDATE_FIELD',
+          field: 'valorInicial',
+          value: '0.00',
+        });
+      }
+  
+      dispatchCaixa({
+        type: 'UPDATE_FIELD',
+        field: 'funcionarioId',
+        value: loggedInFuncionarioId,
+      });
+  
+      setAlert({
+        severity: 'info',
+        message: `Caixa "${caixa.nomeCaixa}" selecionado automaticamente com base no endereço MAC.`,
+      });
+      setOpenCaixaModal(true);
+    } catch (error: any) {
+      setAlert({
+        severity: 'error',
+        message:
+          error.response?.status === 401
+            ? 'Autenticação falhou. Faça login novamente.'
+            : error.message || 'Erro ao buscar o caixa pelo endereço MAC. Selecione manualmente.',
+      });
+      dispatchCaixa({
+        type: 'UPDATE_FIELD',
+        field: 'funcionarioId',
+        value: loggedInFuncionarioId,
+      });
+      setOpenCaixaModal(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCloseCaixaModal = () => {
@@ -1472,7 +1557,6 @@ const Faturacao: React.FC = () => {
         horarioAbertura: new Date(),
         horarioFechamento: null,
       };
-
       const createdCaixa = await createEmployeeCashRegister(newFuncionarioCaixa);
       console.log('Caixa criado:', createdCaixa);
       if (!createdCaixa.id) {
@@ -1853,93 +1937,115 @@ const Faturacao: React.FC = () => {
       </Modal>
 
       <Modal open={openCaixaModal} onClose={handleCloseCaixaModal}>
-        <Box sx={modalStyle}>
-          <Typography variant="h5" fontWeight="bold" color="primary" sx={{ mb: 3 }}>
-            Abrir Novo Caixa
-          </Typography>
-          <Stack spacing={3}>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  variant="outlined"
-                  label="Funcionário"
-                  value={
-                    funcionarios.find((f) => f.id === loggedInFuncionarioId)?.nomeFuncionario ||
-                    'N/A'
-                  }
-                  disabled
-                  sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
-                  error={Boolean(caixaState.errors.funcionarioId)}
-                  helperText={caixaState.errors.funcionarioId}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <FormControl
-                  fullWidth
-                  variant="outlined"
-                  error={Boolean(caixaState.errors.caixaId)}
-                >
-                  <InputLabel>Caixa</InputLabel>
-                  <Select
-                    name="caixaId"
-                    value={caixaState.caixaId}
-                    onChange={handleCaixaSelectChange}
-                    sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
-                  >
-                    <MenuItem value="">
-                      <em>Selecione um caixa</em>
-                    </MenuItem>
-                    {caixas.map((caixa) => (
-                      <MenuItem key={caixa.id} value={caixa.id}>
-                        {caixa.nomeCaixa}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  {caixaState.errors.caixaId && (
-                    <FormHelperText>{caixaState.errors.caixaId}</FormHelperText>
-                  )}
-                </FormControl>
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  variant="outlined"
-                  label="Valor Inicial (Kz)"
-                  name="valorInicial"
-                  type="number"
-                  value={caixaState.valorInicial}
-                  onChange={(e) =>
-                    dispatchCaixa({
-                      type: 'UPDATE_FIELD',
-                      field: 'valorInicial',
-                      value: e.target.value,
-                    })
-                  }
-                  inputProps={{ min: 0, step: '0.01' }}
-                  sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
-                  error={Boolean(caixaState.errors.valorInicial)}
-                  helperText={
-                    caixaState.errors.valorInicial ||
-                    (caixaState.caixaId
-                      ? 'Último valor total do caixa selecionado. Você pode alterá-lo.'
-                      : '')
-                  }
-                />
-              </Grid>
-            </Grid>
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={onAddCaixaSubmit}
-              sx={{ alignSelf: 'flex-end', borderRadius: 1 }}
-              disabled={!loggedInFuncionarioId || loading}
+  <Box sx={modalStyle}>
+    <Typography variant="h5" fontWeight="bold" color="primary" sx={{ mb: 3 }}>
+      Abrir Novo Caixa
+    </Typography>
+    {alert && (
+      <Alert severity={alert.severity} sx={{ mb: 2 }}>
+        {alert.message}
+      </Alert>
+    )}
+    {loading && (
+      <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+        <CircularProgress size={24} />
+      </Box>
+    )}
+    <Stack spacing={3}>
+      <Grid container spacing={2}>
+        <Grid item xs={12} sm={6}>
+          <TextField
+            fullWidth
+            variant="outlined"
+            label="Funcionário"
+            value={
+              funcionarios.find((f) => f.id === loggedInFuncionarioId)?.nomeFuncionario || 'N/A'
+            }
+            disabled
+            sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
+            error={Boolean(caixaState.errors.funcionarioId)}
+            helperText={caixaState.errors.funcionarioId}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6}>
+          <FormControl
+            fullWidth
+            variant="outlined"
+            error={Boolean(caixaState.errors.caixaId)}
+            disabled={loading}
+          >
+            <InputLabel>Caixa</InputLabel>
+            <Select
+              name="caixaId"
+              value={caixaState.caixaId}
+              onChange={handleCaixaSelectChange}
+              sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
+              disabled={true} // Desativa a seleção do caixa
             >
-              {loading ? 'Abrindo...' : 'Abrir Caixa'}
-            </Button>
-          </Stack>
-        </Box>
-      </Modal>
+              <MenuItem value="">
+                <em>Selecione um caixa</em>
+              </MenuItem>
+              {caixas.map((caixa) => (
+                <MenuItem key={caixa.id} value={caixa.id}>
+                  {caixa.nomeCaixa}
+                </MenuItem>
+              ))}
+            </Select>
+            {caixaState.errors.caixaId && (
+              <FormHelperText>{caixaState.errors.caixaId}</FormHelperText>
+            )}
+          </FormControl>
+        </Grid>
+        <Grid item xs={12}>
+          <TextField
+            fullWidth
+            variant="outlined"
+            label="Valor Inicial (Kz)"
+            name="valorInicial"
+            type="number"
+            value={caixaState.valorInicial}
+            onChange={(e) =>
+              dispatchCaixa({
+                type: 'UPDATE_FIELD',
+                field: 'valorInicial',
+                value: e.target.value,
+              })
+            }
+            inputProps={{ min: 0, step: '0.01' }}
+            sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
+            error={Boolean(caixaState.errors.valorInicial)}
+            helperText={
+              caixaState.errors.valorInicial ||
+              (caixaState.caixaId
+                ? 'Último valor total do caixa selecionado. Você pode alterá-lo.'
+                : '')
+            }
+            disabled={loading}
+          />
+        </Grid>
+      </Grid>
+      <Divider sx={{ borderColor: 'primary.main' }} />
+      <Stack direction="row" spacing={2} justifyContent="flex-end">
+        <Button
+          variant="outlined"
+          color="secondary"
+          onClick={handleCloseCaixaModal}
+          disabled={loading}
+        >
+          Cancelar
+        </Button>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={onAddCaixaSubmit}
+          disabled={loading || !loggedInFuncionarioId}
+        >
+          {loading ? 'Abrindo...' : 'Abrir Caixa'}
+        </Button>
+      </Stack>
+    </Stack>
+  </Box>
+</Modal>
       <Modal open={openCaixaListModal} onClose={handleCloseCaixaListModal}>
         <Box sx={modalStyle}>
           <Typography variant="h5" fontWeight="bold" color="primary" sx={{ mb: 3 }}>
