@@ -33,9 +33,9 @@ const DrawerListItem = ({ item }: { item: DrawerItem }) => {
         href={path}
       >
         <ListItemIcon sx={{ mr: 1 }}>
-          <Icon fontSize="small" sx={{ color: 'grey.600' }} />
+          <Icon fontSize="small" sx={{ color: '#7E57C2' }} />
         </ListItemIcon>
-        <ListItemText primary={title} />
+        <ListItemText primary={title}  />
         {collapsible && <IconifyIcon icon={open ? 'ep:arrow-up' : 'ep:arrow-down'} />}
       </ListItemButton>
 

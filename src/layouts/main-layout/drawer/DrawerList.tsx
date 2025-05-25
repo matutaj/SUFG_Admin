@@ -58,16 +58,12 @@ const DrawerList = () => {
         ) : (
           <>
             <List sx={{ pt: 0 }}>
-              {filteredItems.slice(0, -2).map((drawerItem) => (
+              {filteredItems.slice(0).map((drawerItem) => (
                 <DrawerListItem key={drawerItem.id} item={drawerItem} />
               ))}
             </List>
 
-            <List>
-              {filteredItems.slice(-2).map((drawerItem) => (
-                <DrawerListItem key={drawerItem.id} item={drawerItem} />
-              ))}
-            </List>
+      
           </>
         )}
       </Stack>
