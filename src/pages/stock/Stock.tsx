@@ -1003,19 +1003,61 @@ const Stock: React.FC = () => {
   };
 
   const groupProductsWithoutLocation = (stock: DadosEstoque[]) => {
-    const grouped: { [key: string]: { id_produto: string; totalQuantity: number } } = {};
-
+    const grouped: {
+      [key: string]: {
+        id_produto: string;
+        totalQuantity: number;
+        storeQuantity: number;
+        warehouseQuantity: number;
+        withoutLocationQuantity: number;
+      };
+    } = {};
+  
     stock.forEach((item) => {
       if (!grouped[item.id_produto]) {
         grouped[item.id_produto] = {
           id_produto: item.id_produto,
           totalQuantity: 0,
+          storeQuantity: 0,
+          warehouseQuantity: 0,
+          withoutLocationQuantity: 0,
         };
       }
       grouped[item.id_produto].totalQuantity += item.quantidadeAtual;
+  
+      // Calcular quantidade em localizações do tipo "Loja"
+      const storeLocations = locations.filter((loc) => loc.tipo === 'Loja');
+      const productLocationsForStore = productLocations.filter(
+        (loc) =>
+          loc.id_produto === item.id_produto &&
+          storeLocations.some((store) => store.id === loc.id_localizacao),
+      );
+      const storeQuantity = productLocationsForStore.reduce(
+        (sum, loc) => sum + (loc.quantidadeProduto || 0),
+        0,
+      );
+  
+      // Calcular quantidade em localizações do tipo "Armazém"
+      const warehouseLocations = locations.filter((loc) =>
+        loc.nomeLocalizacao.toLowerCase().includes('armazém'),
+      );
+      const productLocationsForWarehouse = productLocations.filter(
+        (loc) =>
+          loc.id_produto === item.id_produto &&
+          warehouseLocations.some((warehouse) => warehouse.id === loc.id_localizacao),
+      );
+      const warehouseQuantity = productLocationsForWarehouse.reduce(
+        (sum, loc) => sum + (loc.quantidadeProduto || 0),
+        0,
+      );
+  
+      grouped[item.id_produto].storeQuantity = storeQuantity;
+      grouped[item.id_produto].warehouseQuantity = warehouseQuantity;
+      grouped[item.id_produto].withoutLocationQuantity =
+        grouped[item.id_produto].totalQuantity - storeQuantity - warehouseQuantity;
     });
-
-    return Object.values(grouped);
+  
+    return Object.values(grouped).filter((group) => group.withoutLocationQuantity > 0);
   };
 
   const toggleExpandProduct = (id_produto: string) => {
@@ -2036,62 +2078,74 @@ const Stock: React.FC = () => {
             Produtos Sem Localização ({groupedProductsWithoutLocation.length})
           </Typography>
           <TableContainer component={Paper}>
-            <Table aria-label="Tabela de produtos sem localização">
-              <TableHead>
-                <TableRow>
-                  <TableCell>
-                    <strong>Produto</strong>
-                  </TableCell>
-                  <TableCell>
-                    <strong>Quantidade Total</strong>
-                  </TableCell>
-                  <TableCell>
-                    <strong>Ações</strong>
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={3} align="center">
-                      Carregando...
-                    </TableCell>
-                  </TableRow>
-                ) : groupedProductsWithoutLocation.length > 0 ? (
-                  groupedProductsWithoutLocation.map((group) => {
-                    const product = products.find((p) => p.id === group.id_produto);
-                    const stockItems = filteredStock.filter(
-                      (stock) => stock.id_produto === group.id_produto,
-                    );
-                    return (
-                      <TableRow key={group.id_produto}>
-                        <TableCell>{product?.nomeProduto || group.id_produto}</TableCell>
-                        <TableCell>{group.totalQuantity}</TableCell>
-                        <TableCell align="right">
-                          <IconButton
-                            color="secondary"
-                            onClick={() => handleOpenLocationModal(stockItems, [])}
-                            disabled={loading || group.totalQuantity === 0}
-                            aria-label={`Adicionar produto ${group.id_produto} ao armazém`}
-                          >
-                            <IconifyIcon icon="material-symbols:warehouse" />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={3} align="center">
-                      {productsWithoutLocation.length === 0 && currentStock.length > 0
-                        ? 'Todos os produtos estão localizados.'
-                        : 'Nenhum produto sem localização encontrado. Verifique os dados do estoque.'}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+  <Table aria-label="Tabela de produtos sem localização">
+    <TableHead>
+      <TableRow>
+        <TableCell>
+          <strong>Produto</strong>
+        </TableCell>
+        <TableCell>
+          <strong>Estoque Geral</strong>
+        </TableCell>
+        <TableCell>
+          <strong>Loja</strong>
+        </TableCell>
+        <TableCell>
+          <strong>Armazém</strong>
+        </TableCell>
+        <TableCell>
+          <strong>Sem Localização</strong>
+        </TableCell>
+        <TableCell>
+          <strong>Ações</strong>
+        </TableCell>
+      </TableRow>
+    </TableHead>
+    <TableBody>
+      {loading ? (
+        <TableRow>
+          <TableCell colSpan={6} align="center">
+            Carregando...
+          </TableCell>
+        </TableRow>
+      ) : groupedProductsWithoutLocation.length > 0 ? (
+        groupedProductsWithoutLocation.map((group) => {
+          const product = products.find((p) => p.id === group.id_produto);
+          const stockItems = filteredStock.filter(
+            (stock) => stock.id_produto === group.id_produto,
+          );
+          return (
+            <TableRow key={group.id_produto}>
+              <TableCell>{product?.nomeProduto || group.id_produto}</TableCell>
+              <TableCell>{group.totalQuantity}</TableCell>
+              <TableCell>{group.storeQuantity}</TableCell>
+              <TableCell>{group.warehouseQuantity}</TableCell>
+              <TableCell>{group.withoutLocationQuantity}</TableCell>
+              <TableCell align="right">
+                <IconButton
+                  color="secondary"
+                  onClick={() => handleOpenLocationModal(stockItems, [])}
+                  disabled={loading || group.withoutLocationQuantity === 0}
+                  aria-label={`Adicionar produto ${group.id_produto} ao armazém`}
+                >
+                  <IconifyIcon icon="material-symbols:warehouse" />
+                </IconButton>
+              </TableCell>
+            </TableRow>
+          );
+        })
+      ) : (
+        <TableRow>
+          <TableCell colSpan={6} align="center">
+            {productsWithoutLocation.length === 0 && currentStock.length > 0
+              ? 'Todos os produtos estão localizados.'
+              : 'Nenhum produto sem localização encontrado. Verifique os dados do estoque.'}
+          </TableCell>
+        </TableRow>
+      )}
+    </TableBody>
+  </Table>
+</TableContainer>
         </CardContent>
       </Card>
     </>

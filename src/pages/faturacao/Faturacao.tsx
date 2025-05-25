@@ -1162,8 +1162,8 @@ const Faturacao: React.FC = () => {
         }
       });
       
-      await Promise.all(stockUpdates);
       await Promise.all(updates);
+      await Promise.all(stockUpdates);
 
       const novosProdutosFatura = faturaState.produtosSelecionados.map((p) => {
         const produto = productsInStore.find((prod) => prod.id === p.id);
