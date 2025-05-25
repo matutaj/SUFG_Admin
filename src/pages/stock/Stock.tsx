@@ -60,6 +60,7 @@ import {
   Seccao,
   Prateleira,
   Corredor,
+  tipo,
 } from 'types/models';
 
 const modalStyle = {
@@ -370,19 +371,27 @@ const Stock: React.FC = () => {
       setLastEntries(entries);
       setSelectedStock(stocks[0]);
       setLocationIndex(0);
+  
+      // Verifica se já existe um registro para o produto em uma localização do tipo "Armazém"
+      const existingLocation = productLocations.find(
+        (loc) =>
+          loc.id_produto === stocks[0].id_produto &&
+          locations.find((l) => l.id === loc.id_localizacao)?.tipo === tipo.Armazem,
+      );
+  
       setLocationForm({
         id_produto: stocks[0].id_produto,
-        id_localizacao: '',
+        id_localizacao: existingLocation?.id_localizacao || '',
         quantidadeProduto: entries[0]?.quantidadeRecebida || stocks[0].quantidadeAtual,
-        id_seccao: '',
-        id_prateleira: '',
-        id_corredor: '',
+        id_seccao: existingLocation?.id_seccao || '',
+        id_prateleira: existingLocation?.id_prateleira || '',
+        id_corredor: existingLocation?.id_corredor || '',
         quantidadeMinimaProduto: 0,
       });
       setErrors({});
       setOpenLocationModal(true);
     },
-    [],
+    [productLocations, locations],
   );
 
   const handleCloseLocationModal = useCallback(() => {
@@ -1529,20 +1538,22 @@ const Stock: React.FC = () => {
               <FormControl fullWidth error={!!errors.id_localizacao} disabled={loading}>
                 <InputLabel>Localização</InputLabel>
                 <Select
-                  name="id_localizacao"
-                  value={locationForm.id_localizacao || ''}
-                  onChange={handleLocationSelectChange}
-                  aria-label="Selecionar localização para o produto"
-                >
-                  <MenuItem value="" disabled>
-                    Selecione uma localização
-                  </MenuItem>
-                  {locations.map((location) => (
-                    <MenuItem key={location.id} value={location.id}>
-                      {location.nomeLocalizacao}
-                    </MenuItem>
-                  ))}
-                </Select>
+  name="id_localizacao"
+  value={locationForm.id_localizacao || ''}
+  onChange={handleLocationSelectChange}
+  aria-label="Selecionar localização para o produto"
+>
+  <MenuItem value="" disabled>
+    Selecione uma localização
+  </MenuItem>
+  {locations
+    .filter((location) => location.tipo === tipo.Armazem)
+    .map((location) => (
+      <MenuItem key={location.id} value={location.id}>
+        {location.nomeLocalizacao}
+      </MenuItem>
+    ))}
+</Select>
                 {errors.id_localizacao && (
                   <FormHelperText error>{errors.id_localizacao}</FormHelperText>
                 )}
