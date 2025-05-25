@@ -38,10 +38,19 @@ import {
 } from '../types/models';
 // import { hasPermission, hasAnyRole } from './authUtils';
 
-class ApiError extends Error {
+export class ApiError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'ApiError';
+  }
+}
+export class AppError {
+  public readonly message: string;
+  public readonly statusCode: number;
+
+  constructor(message: string, statusCode = 400) {
+    this.message = message;
+    this.statusCode = statusCode;
   }
 }
 

@@ -874,61 +874,52 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const handleTransferProducts = useCallback(async () => {
     if (!permissions.canCreateTransfer) {
       setAlert({ severity: 'error', message: 'Você não tem permissão para criar transferências!' });
-      log('Permissão de criação de transferência negada');
+      console.log('Permissão de criação de transferência negada');
       return;
     }
-    if (!validateTransferForm()) return;
-
+    if (!validateTransferForm()) {
+      console.log('Validação do formulário de transferência falhou');
+      setAlert({ severity: 'error', message: 'Erro na validação dos itens de transferência' });
+      return;
+    }
+  
     try {
       setLoading(true);
       setAlert(null);
-
-      // Salvar os estados originais para possível rollback
-      const originals = transferItems.map((item) => {
-        const loc = productLocations.find(
-          (loc) =>
-            loc.id_produto === item.id_produto && loc.id_localizacao === item.id_localizacao_origem,
-        );
-        if (!loc)
-          throw new Error(`Localização de origem não encontrada para o produto ${item.id_produto}`);
-        return { ...loc };
-      });
-      setOriginalLocations(originals);
-
-      // Atualizar as localizações de origem
-      const updatedProductLocations = [...productLocations];
+  
+      // Log inicial dos itens a transferir
+      console.log('Iniciando transferência com itens:', JSON.stringify(transferItems, null, 2));
+  
+      // Validar quantidades disponíveis
       for (const item of transferItems) {
-        const fromLocationIndex = updatedProductLocations.findIndex(
+        const fromLocation = productLocations.find(
           (loc) =>
             loc.id_produto === item.id_produto && loc.id_localizacao === item.id_localizacao_origem,
         );
-        if (fromLocationIndex === -1) throw new Error(`Origem inválida para ${item.id_produto}`);
-
-        const fromLocation = updatedProductLocations[fromLocationIndex];
-        const newQuantity = (fromLocation.quantidadeProduto ?? 0) - item.quantidadeTransferida;
-        if (newQuantity < 0) throw new Error(`Quantidade insuficiente para ${item.id_produto}`);
-
-        const updatedFromLocation = { ...fromLocation, quantidadeProduto: newQuantity };
-        await updateProductLocation(fromLocation.id!, updatedFromLocation);
-        updatedProductLocations[fromLocationIndex] = updatedFromLocation;
+        if (!fromLocation) {
+          throw new Error(`Origem não encontrada para o produto ${item.id_produto}`);
+        }
+        console.log(
+          `Produto ${item.id_produto} na origem ${item.id_localizacao_origem}: Disponível=${
+            fromLocation.quantidadeProduto ?? 0
+          }, Solicitado=${item.quantidadeTransferida}`,
+        );
+        if (item.quantidadeTransferida > (fromLocation.quantidadeProduto ?? 0)) {
+          throw new Error(
+            `Quantidade insuficiente para ${item.id_produto}. Disponível: ${
+              fromLocation.quantidadeProduto ?? 0
+            }, Solicitado: ${item.quantidadeTransferida}`,
+          );
+        }
       }
-
-      setProductLocations(updatedProductLocations);
-      setAlert({ severity: 'success', message: 'Transferências iniciadas' });
-      log('Transferências iniciadas:', transferItems);
+  
+      // Não atualizar localizações; apenas abrir o modal de destino
+      setAlert({ severity: 'success', message: 'Validação concluída, selecione o destino' });
       handleCloseTransferModal();
       handleOpenDestinationModal(transferItems);
     } catch (error: any) {
-      console.error('Erro na transferência:', error);
-      setAlert({ severity: 'error', message: error.message || 'Erro na transferência' });
-
-      // Reverter as alterações em caso de erro
-      for (const original of originalLocations) {
-        if (original.id) await updateProductLocation(original.id, original);
-      }
-      setOriginalLocations([]);
-      setProductLocations([...productLocations]);
-      await fetchData();
+      console.error('Erro na validação de transferência:', error);
+      setAlert({ severity: 'error', message: error.message || 'Erro na validação de transferência' });
     } finally {
       setLoading(false);
     }
@@ -938,82 +929,45 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     validateTransferForm,
     handleCloseTransferModal,
     handleOpenDestinationModal,
-    originalLocations,
-    fetchData,
     permissions.canCreateTransfer,
   ]);
 
   const handleSaveDestination = useCallback(async () => {
     if (!permissions.canCreateTransfer) {
       setAlert({ severity: 'error', message: 'Você não tem permissão para criar transferências!' });
-      log('Permissão de criação de transferência negada');
+      console.log('Permissão de criação de transferência negada');
       return;
     }
     if (!permissions.canCreateLocation) {
       setAlert({ severity: 'error', message: 'Você não tem permissão para criar localizações!' });
-      log('Permissão de criação de localização negada');
+      console.log('Permissão de criação de localização negada');
       return;
     }
-    if (!validateDestinationForm()) return;
-
+    if (!validateDestinationForm()) {
+      console.log('Validação do formulário de destino falhou');
+      return;
+    }
+  
     try {
       setLoading(true);
       setAlert(null);
-
+  
       if (currentDestinationIndex >= transferItems.length || currentDestinationIndex < 0) {
         throw new Error('Índice inválido');
       }
-
+  
       const transferItem = transferItems[currentDestinationIndex];
       if (!transferItem?.id_localizacao_origem || !transferItem.id_produto) {
         throw new Error('Item inválido');
       }
-
-      const stock = await getStockByProduct(destinationForm.id_produto);
-      if (!stock) throw new Error('Estoque não encontrado');
-
-      const totalStock = Number(stock.quantidadeAtual) || 0;
-      const currentTotal = productLocations
-        .filter((loc) => loc.id_produto === destinationForm.id_produto)
-        .reduce((sum, loc) => sum + (loc.quantidadeProduto ?? 0), 0);
-
-      if (destinationForm.quantidadeProduto > totalStock - currentTotal) {
-        throw new Error(`Excede disponível (${totalStock - currentTotal})`);
-      }
-
-      let updatedProductLocations = [...productLocations];
-      let destinationLocation: ProdutoLocalizacao;
-
-      const existingDestination = productLocations.find(
-        (loc) =>
-          loc.id_produto === destinationForm.id_produto &&
-          loc.id_localizacao === destinationForm.id_localizacao &&
-          loc.id_seccao === destinationForm.id_seccao &&
-          loc.id_prateleira === destinationForm.id_prateleira &&
-          loc.id_corredor === destinationForm.id_corredor,
+  
+      console.log(
+        `Salvando destino para produto ${destinationForm.id_produto}, quantidade: ${
+          destinationForm.quantidadeProduto
+        }`,
       );
-
-      if (existingDestination) {
-        const newQuantity =
-          (existingDestination.quantidadeProduto ?? 0) + destinationForm.quantidadeProduto;
-        destinationLocation = { ...existingDestination, quantidadeProduto: newQuantity };
-        await updateProductLocation(existingDestination.id!, destinationLocation);
-        const index = updatedProductLocations.findIndex((loc) => loc.id === existingDestination.id);
-        updatedProductLocations[index] = destinationLocation;
-      } else {
-        const newLocation: ProdutoLocalizacao = {
-          id_produto: destinationForm.id_produto,
-          id_localizacao: destinationForm.id_localizacao,
-          id_seccao: destinationForm.id_seccao,
-          id_prateleira: destinationForm.id_prateleira,
-          id_corredor: destinationForm.id_corredor,
-          quantidadeProduto: destinationForm.quantidadeProduto,
-          quantidadeMinimaProduto: 0,
-        };
-        destinationLocation = await createProductLocation(newLocation);
-        updatedProductLocations.push(destinationLocation);
-      }
-
+  
+      // Enviar transferência diretamente
       const transferData = {
         id_funcionario: loggedInFuncionarioId,
         id_produto: destinationForm.id_produto,
@@ -1024,22 +978,23 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         id_corredor_destino: destinationForm.id_corredor,
         quantidadeTransferida: destinationForm.quantidadeProduto,
         dataTransferencia: new Date(),
+        id_produtoLocalizacao: '', // Será determinado no backend
       };
-
+  
+      console.log('Criando transferência:', JSON.stringify(transferData, null, 2));
       await createTransfer(transferData);
-      setProductLocations(updatedProductLocations);
-      log('Destino salvo:', { destinationLocation, transferData });
-
-      if (currentDestinationIndex < destinationLocations.length - 1) {
+  
+      // Atualizar estado após sucesso
+      if (currentDestinationIndex < transferItems.length - 1) {
         const nextIndex = currentDestinationIndex + 1;
         setCurrentDestinationIndex(nextIndex);
         setDestinationForm({
-          id_produto: destinationLocations[nextIndex].id_produto,
+          id_produto: transferItems[nextIndex].id_produto,
           id_localizacao: '',
           id_seccao: '',
           id_prateleira: '',
           id_corredor: '',
-          quantidadeProduto: destinationLocations[nextIndex].quantidadeProduto,
+          quantidadeProduto: transferItems[nextIndex].quantidadeTransferida,
         });
         setErrors({ transferItems: [], destinationForm: {} });
       } else {
@@ -1054,29 +1009,19 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     } catch (error: any) {
       console.error('Erro ao salvar:', error);
       setAlert({ severity: 'error', message: error.message || 'Erro ao salvar' });
-      for (const original of originalLocations) {
-        if (original.id) await updateProductLocation(original.id, original);
-      }
-      setOriginalLocations([]);
-      setTransferItems([]);
-      setProductLocations([...productLocations]);
-      await fetchData();
       handleCloseDestinationModal(true);
     } finally {
       setLoading(false);
     }
   }, [
     destinationForm,
-    destinationLocations,
     currentDestinationIndex,
     transferItems,
     loggedInFuncionarioId,
     validateDestinationForm,
     handleCloseDestinationModal,
-    originalLocations,
     fetchData,
     updateStockData,
-    productLocations,
     permissions.canCreateTransfer,
     permissions.canCreateLocation,
   ]);

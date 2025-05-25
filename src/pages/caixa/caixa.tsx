@@ -74,6 +74,7 @@ const Caixas: React.FC<CollapsedItemProps> = ({ open }) => {
     id: '',
     nomeCaixa: '',
     descricao: '',
+    mac: '',
   });
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [editId, setEditId] = useState<string | null>(null);
@@ -128,6 +129,7 @@ const Caixas: React.FC<CollapsedItemProps> = ({ open }) => {
       id: '',
       nomeCaixa: '',
       descricao: '',
+      mac: '',
     });
     setErrors({});
     setEditId(null);
@@ -141,34 +143,40 @@ const Caixas: React.FC<CollapsedItemProps> = ({ open }) => {
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {};
     if (!form.nomeCaixa.trim()) newErrors.nomeCaixa = 'Nome do caixa é obrigatório';
-
-    // Check for duplicate nomeCaixa (case-insensitive)
+    if (!form.mac.trim()) newErrors.mac = 'Endereço MAC é obrigatório';
+  
+    // Validar formato do MAC
+    const macRegex = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/;
+    if (form.mac.trim() && !macRegex.test(form.mac)) {
+      newErrors.mac = 'Formato de endereço MAC inválido. Exemplo: 00:1A:2B:3C:4D:5E';
+    }
+  
+    // Verificar duplicatas de nomeCaixa e mac
     const normalizedNomeCaixa = form.nomeCaixa.trim().toLowerCase();
+    const normalizedMac = form.mac.trim().toLowerCase();
     const exists = caixas.some(
       (caixa) =>
-        caixa.nomeCaixa?.toLowerCase() === normalizedNomeCaixa && (!editId || caixa.id !== editId),
+        (caixa.nomeCaixa?.toLowerCase() === normalizedNomeCaixa ||
+          caixa.mac?.toLowerCase() === normalizedMac) &&
+        (!editId || caixa.id !== editId),
     );
     if (exists) {
-      newErrors.nomeCaixa = 'Já existe um caixa com este nome.';
+      newErrors.nomeCaixa = newErrors.nomeCaixa || 'Já existe um caixa com este nome.';
+      newErrors.mac = newErrors.mac || 'Já existe um caixa com este endereço MAC.';
     }
-
+  
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
-
   const onAddCaixaSubmit = async () => {
     if (!validateForm()) return;
-
+  
     const caixaData: Caixa = {
-      id: editId || undefined,
       nomeCaixa: form.nomeCaixa,
       descricao: form.descricao || null,
-      funcionariosCaixa: [],
-      alertas: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      mac: form.mac, // Adicionado
     };
-
+  
     setLoading(true);
     try {
       if (editId) {
@@ -220,6 +228,7 @@ const Caixas: React.FC<CollapsedItemProps> = ({ open }) => {
         id: caixa.id || '',
         nomeCaixa: caixa.nomeCaixa,
         descricao: caixa.descricao || '',
+        mac: caixa.mac || '', // Adicionado
       });
       setEditId(caixaId);
       setOpenModal(true);
@@ -315,6 +324,19 @@ const Caixas: React.FC<CollapsedItemProps> = ({ open }) => {
                   disabled={loading}
                 />
               </Grid>
+              <Grid item xs={12}>
+  <TextField
+    fullWidth
+    variant="filled"
+    name="mac"
+    label="Endereço MAC"
+    value={form.mac}
+    onChange={handleChange}
+    error={Boolean(errors.mac)}
+    helperText={errors.mac}
+    disabled={loading}
+  />
+</Grid>
             </Grid>
 
             {errors.submit && (

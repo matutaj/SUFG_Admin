@@ -91,6 +91,7 @@ export interface Caixa {
   id?: string;
   nomeCaixa: string;
   descricao?: string | null;
+  mac: string;
   funcionariosCaixa?: FuncionarioCaixa[];
   alertas?: Alerta[];
   createdAt?: string;
