@@ -4,7 +4,7 @@ import { FuncaoPermissao } from 'types/models';
 
 const permissionCache = new Map<string, string[]>();
 
-interface UserData {
+export interface UserData {
   id: string;
   nome: string;
   email: string;
@@ -89,28 +89,34 @@ const fetchUserPermissionsById = async (id_funcao: string): Promise<string[]> =>
   }
 };
 
+// ... (código anterior do authUtils.tsx mantido)
 export const getUserData = async (): Promise<UserData | null> => {
   const token = localStorage.getItem('token');
   const user = localStorage.getItem('user');
-  log('Recuperando dados:', {
+  const notifications = localStorage.getItem('notifications');
+  console.log('[authUtils] Recuperando dados:', {
     token: token ? 'presente' : 'ausente',
     user: user ? 'presente' : 'ausente',
+    notifications: notifications ? notifications : 'ausente',
   });
 
   if (!token) {
-    console.error('Token não encontrado no localStorage');
+    console.error('[authUtils] Token não encontrado no localStorage');
     return null;
   }
 
   try {
     const payloadBase64 = token.split('.')[1];
     const decodedPayload: DecodedToken = JSON.parse(atob(payloadBase64));
-    log('Payload decodificado:', decodedPayload);
+    console.log('[authUtils] Payload decodificado:', decodedPayload);
 
     if (isTokenExpired(decodedPayload)) {
-      log('Token expirado, limpando localStorage');
+      console.log('[authUtils] Token expirado, limpando token e user (mantendo notifications)');
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      console.log('[authUtils] Após limpeza:', {
+        notifications: localStorage.getItem('notifications'),
+      });
       return null;
     }
 
@@ -118,9 +124,9 @@ export const getUserData = async (): Promise<UserData | null> => {
     if (user) {
       try {
         parsedUser = JSON.parse(user);
-        log('User parseado do localStorage:', parsedUser);
+        console.log('[authUtils] User parseado do localStorage:', parsedUser);
       } catch (error) {
-        log('Erro ao parsear user do localStorage:', error);
+        console.log('[authUtils] Erro ao parsear user do localStorage:', error);
         parsedUser = null;
       }
     }
@@ -132,16 +138,23 @@ export const getUserData = async (): Promise<UserData | null> => {
 
     if (!userRole && userFunctionId) {
       userRole = roleMap[userFunctionId] || '';
-      log('Role mapeado de id_funcao:', { id_funcao: userFunctionId, userRole });
+      console.log('[authUtils] Role mapeado de id_funcao:', {
+        id_funcao: userFunctionId,
+        userRole,
+      });
     }
 
     if (!userRole) {
-      log('Erro: Nenhum role encontrado para o usuário', { userId, decodedPayload, parsedUser });
+      console.log('[authUtils] Erro: Nenhum role encontrado para o usuário', {
+        userId,
+        decodedPayload,
+        parsedUser,
+      });
       return null;
     }
 
     if (!userId || !userName) {
-      log('ID ou nome do usuário não encontrado', { userId, userName });
+      console.log('[authUtils] ID ou nome do usuário não encontrado', { userId, userName });
       return null;
     }
 
@@ -160,12 +173,25 @@ export const getUserData = async (): Promise<UserData | null> => {
       permissoes: permissions,
     };
 
-    log('UserData retornado:', userData);
+    console.log('[authUtils] UserData retornado:', userData);
     return userData;
   } catch (error) {
-    console.error('Erro ao processar dados do usuário:', error);
+    console.error('[authUtils] Erro ao processar dados do usuário:', error);
     return null;
   }
+};
+
+export const logout = (): void => {
+  console.log('[authUtils] Executando logout, mantendo notifications');
+  console.log('[authUtils] Antes do logout:', {
+    notifications: localStorage.getItem('notifications'),
+  });
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  permissionCache.clear();
+  console.log('[authUtils] Após logout:', {
+    notifications: localStorage.getItem('notifications'),
+  });
 };
 
 export const filterDrawerItems = async (items: DrawerItem[]): Promise<DrawerItem[]> => {
@@ -235,9 +261,4 @@ export const hasAnyRole = async (requiredRoles: string[]): Promise<boolean> => {
   return hasRole;
 };
 
-export const logout = (): void => {
-  log('Executando logout');
-  localStorage.removeItem('token');
-  localStorage.removeItem('user');
-  permissionCache.clear();
-};
+
