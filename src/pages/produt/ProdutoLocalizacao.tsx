@@ -212,6 +212,85 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       console.log(message, ...args);
     }
   };
+  // Adicionei este useEffect para verificar estoque baixo periodicamente
+  useEffect(() => {
+    const checkLowStock = async () => {
+      try {
+        const userData = await getUserData();
+        const userRole = userData?.role;
+
+        // Verifica se o usuário tem permissão para receber alertas
+        if (!userRole || !['Admin', 'Gerente', 'Estoquista', 'Repositor'].includes(userRole)) {
+          return;
+        }
+
+        productLocations.forEach((loc) => {
+          const currentQty = loc.quantidadeProduto ?? 0;
+          const minQty = loc.quantidadeMinimaProduto ?? 0;
+
+          if (currentQty <= minQty) {
+            const product = products.find((p) => p.id === loc.id_produto);
+            const location = locations.find((l) => l.id === loc.id_localizacao);
+
+            if (product && location) {
+              const notificationKey = `${loc.id_produto}-${loc.id_localizacao}`;
+
+              // Verifica se já notificou para evitar duplicatas
+              if (!notifiedProducts.has(notificationKey)) {
+                const locationType = isStoreLocation(location.id!) ? 'Loja' : 'Armazém';
+                const message = `Estoque baixo: ${product.nomeProduto} (${locationType}) - Quantidade: ${currentQty} (Mínimo: ${minQty})`;
+
+                addNotification({
+                  message,
+                  type: 'low_stock',
+                  productId: product.id,
+                  locationId: location.id,
+                });
+
+                // Adiciona ao conjunto de notificações enviadas
+                setNotifiedProducts((prev) => new Set(prev).add(notificationKey));
+              }
+            }
+          }
+        });
+      } catch (error) {
+        console.error('Erro ao verificar estoque baixo:', error);
+      }
+    };
+
+    // Verificar imediatamente ao carregar
+    checkLowStock();
+
+    // Verificar a cada 5 minutos
+    const interval = setInterval(checkLowStock, 300000);
+
+    return () => clearInterval(interval);
+  }, [productLocations, products, locations, notifiedProducts, addNotification]);
+
+  // Limpar notificações de produtos que já não estão com estoque baixo
+  useEffect(() => {
+    const newNotifiedProducts = new Set<string>();
+
+    productLocations.forEach((loc) => {
+      const currentQty = loc.quantidadeProduto ?? 0;
+      const minQty = loc.quantidadeMinimaProduto ?? 0;
+
+      if (currentQty <= minQty) {
+        newNotifiedProducts.add(`${loc.id_produto}-${loc.id_localizacao}`);
+      }
+    });
+
+    // Remove notificações de produtos que já não estão com estoque baixo
+    setNotifiedProducts((prev) => {
+      const updated = new Set<string>();
+      prev.forEach((key) => {
+        if (newNotifiedProducts.has(key)) {
+          updated.add(key);
+        }
+      });
+      return updated;
+    });
+  }, [productLocations]);
 
   // Monitorar alterações no localStorage
   useEffect(() => {
@@ -255,7 +334,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       log(`[LowStockAlert] Disparando alerta: ${message}`);
       addNotification({
         message,
-        type: 'caixa',
+        type: 'cashier',
       });
 
       setNotifiedProducts((prev) => new Set(prev).add(notificationKey));

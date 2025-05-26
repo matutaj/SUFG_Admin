@@ -1,122 +1,165 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { getUserData, UserData } from '../src/api/authUtils';
+// Definição de tipos
 interface Notification {
   id: string;
   message: string;
-  type: string;
+  type: 'stock' | 'cashier' | 'info' | 'low_stock';
   read?: boolean;
-  timestamp?: Date;
+  timestamp: Date;
+  productId?: string;
+  locationId?: string;
 }
 
 interface NotificationContextType {
   notifications: Notification[];
-  addNotification: (notification: Omit<Notification, 'id'>) => void;
+  filteredNotifications: Notification[];
+  addNotification: (notification: Omit<Notification, 'id' | 'timestamp'>) => void;
   removeNotification: (id: string) => void;
   markAsRead: (id: string) => void;
   clearNotifications: () => void;
+  isLoadingUser: boolean; // Adicionado para expor o estado de carregamento
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
+const NOTIFICATION_STORAGE_KEY = 'app_notifications';
+const MAX_NOTIFICATIONS = 100; // Limite para evitar crescimento excessivo no localStorage
+
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [user, setUser] = useState<UserData | null>(null);
+  const [isLoadingUser, setIsLoadingUser] = useState(true);
 
-  // Carregar notificações do localStorage ao montar
+  // Carregar usuário
   useEffect(() => {
-    const savedNotifications = localStorage.getItem('notifications');
-    console.log(
-      '[NotificationContext] Carregando notificações do localStorage:',
-      savedNotifications,
-    );
-    if (savedNotifications) {
+    const loadUser = async () => {
       try {
-        const parsedNotifications = JSON.parse(savedNotifications);
-        if (Array.isArray(parsedNotifications)) {
-          setNotifications(parsedNotifications);
-          console.log(
-            '[NotificationContext] Notificações carregadas com sucesso:',
-            parsedNotifications,
-          );
-        } else {
-          console.warn(
-            '[NotificationContext] Dados inválidos no localStorage, mantendo estado vazio',
-          );
-          setNotifications([]);
-        }
+        const userData = await getUserData();
+        setUser(userData);
       } catch (error) {
-        console.error('[NotificationContext] Erro ao parsear notificações:', error);
-        setNotifications([]);
-      }
-    } else {
-      console.log('[NotificationContext] Nenhuma notificação encontrada no localStorage');
-    }
-  }, []);
-
-  // Salvar notificações no localStorage sempre que mudarem
-  useEffect(() => {
-    console.log('[NotificationContext] Salvando notificações no localStorage:', notifications);
-    localStorage.setItem('notifications', JSON.stringify(notifications));
-  }, [notifications]);
-
-  // Monitorar alterações no localStorage
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'notifications') {
-        console.log('[NotificationContext] Chave notifications alterada:', {
-          oldValue: e.oldValue,
-          newValue: e.newValue,
-        });
-      } else if (e.key === null) {
-        console.warn('[NotificationContext] localStorage limpo completamente');
+        console.error('Failed to load user data:', error);
+        setUser(null);
+      } finally {
+        setIsLoadingUser(false);
       }
     };
+
+    loadUser();
+  }, []);
+
+  // Carregar notificações do localStorage
+  useEffect(() => {
+    const loadNotifications = () => {
+      try {
+        const saved = localStorage.getItem(NOTIFICATION_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved) as any[];
+          const loadedNotifications = parsed.map((n) => ({
+            ...n,
+            timestamp: new Date(n.timestamp),
+            read: n.read ?? false,
+          }));
+          setNotifications(loadedNotifications.slice(0, MAX_NOTIFICATIONS));
+        }
+      } catch (error) {
+        console.error('Failed to load notifications:', error);
+        localStorage.removeItem(NOTIFICATION_STORAGE_KEY);
+      } finally {
+        setIsLoaded(true);
+      }
+    };
+
+    loadNotifications();
+  }, []);
+
+  // Salvar notificações no localStorage
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    try {
+      const notificationsToSave = notifications.map((n) => ({
+        ...n,
+        timestamp: n.timestamp.toISOString(),
+      }));
+      localStorage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(notificationsToSave));
+    } catch (error) {
+      console.error('Failed to save notifications:', error);
+    }
+  }, [notifications, isLoaded]);
+
+  // Sincronizar entre abas
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === NOTIFICATION_STORAGE_KEY && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue) as any[];
+          setNotifications(
+            parsed.map((n) => ({
+              ...n,
+              timestamp: new Date(n.timestamp),
+              read: n.read ?? false,
+            })),
+          );
+        } catch (error) {
+          console.error('Failed to sync notifications:', error);
+        }
+      }
+    };
+
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  const addNotification = (notification: Omit<Notification, 'id'>) => {
+  // Filtragem de notificações baseada no usuário
+  const filteredNotifications = useMemo(() => {
+    if (!user || !user.id_funcao) return notifications; // Retorna todas se não há usuário ou id_funcao
+
+    return notifications.filter((notification) => {
+      if (notification.type === 'cashier') {
+        return ['3', '4'].includes(user.id_funcao!); // Estoquista e Repositor
+      }
+      if (notification.type === 'low_stock') {
+        return ['1', '2', '3', '4'].includes(user.id_funcao!); // Admin, Gerente, Estoquista, Repositor
+      }
+      return true; // Outras notificações são visíveis para todos
+    });
+  }, [notifications, user]);
+
+  const addNotification = useCallback((notification: Omit<Notification, 'id' | 'timestamp'>) => {
     const newNotification: Notification = {
       ...notification,
       id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       timestamp: new Date(),
       read: false,
     };
-    setNotifications((prev) => {
-      const updated = [...prev, newNotification];
-      console.log('[NotificationContext] Nova notificação adicionada:', newNotification);
-      return updated;
-    });
-  };
 
-  const removeNotification = (id: string) => {
-    setNotifications((prev) => {
-      const updated = prev.filter((n) => n.id !== id);
-      console.log('[NotificationContext] Notificação removida:', id);
-      return updated;
-    });
-  };
+    setNotifications((prev) => [...prev, newNotification].slice(-MAX_NOTIFICATIONS));
+  }, []);
 
-  const markAsRead = (id: string) => {
-    setNotifications((prev) => {
-      const updated = prev.map((n) => (n.id === id ? { ...n, read: true } : n));
-      console.log('[NotificationContext] Notificação marcada como lida:', id);
-      return updated;
-    });
-  };
+  const removeNotification = useCallback((id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  }, []);
 
-  const clearNotifications = () => {
+  const markAsRead = useCallback((id: string) => {
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+  }, []);
+
+  const clearNotifications = useCallback(() => {
     setNotifications([]);
-    console.log('[NotificationContext] Todas as notificações limpas');
-  };
+  }, []);
 
   return (
     <NotificationContext.Provider
       value={{
         notifications,
+        filteredNotifications,
         addNotification,
         removeNotification,
         markAsRead,
         clearNotifications,
+        isLoadingUser,
       }}
     >
       {children}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useReducer } from 'react';
+import React, { useState, useEffect, useReducer, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import axios from 'axios';
@@ -74,6 +74,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { DadosWrapper } from '../../types/models';
 import { useNotifications } from '../../../src/NotificationContext';
+import { getUserData } from 'api/authUtils';
 
 interface DecodedToken {
   userId?: string;
@@ -351,6 +352,94 @@ const Faturacao: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [openModal, setOpenModal] = useState(false);
   const [loggedInFuncionarioCargo, setLoggedInFuncionarioCargo] = useState<string>('');
+  const [notifiedLowStock, setNotifiedLowStock] = useState<Set<string>>(new Set());
+
+  // Função para verificar estoque baixo
+  const checkLowStock = useCallback(async () => {
+    try {
+      const userData = await getUserData();
+      const userRole = userData?.role;
+
+      // Verifica se o usuário é Estoquista ou Repositor
+      if (!userRole || !['Estoquista', 'Repositor'].includes(userRole)) {
+        return;
+      }
+
+      productLocations.forEach((loc) => {
+        const currentQty = loc.quantidadeProduto ?? 0;
+        const minQty = loc.quantidadeMinimaProduto ?? 0;
+
+        if (currentQty <= minQty) {
+          const product = produtos.find((p) => p.id === loc.id_produto);
+          const location = locations.find((l) => l.id === loc.id_localizacao);
+
+          if (product && location) {
+            const notificationKey = `${loc.id_produto}-${loc.id_localizacao}`;
+
+            // Verifica se já notificou para evitar duplicatas
+            if (!notifiedLowStock.has(notificationKey)) {
+              const locationType = location.tipo === 'Loja' ? 'Loja' : 'Armazém';
+              const message = `Estoque baixo: ${product.nomeProduto} (${locationType}) - Quantidade: ${currentQty} (Mínimo: ${minQty})`;
+
+              addNotification({
+                message,
+                type: 'stock',
+                metadata: {
+                  productId: product.id,
+                  locationId: location.id,
+                  currentQuantity: currentQty,
+                  minimumQuantity: minQty,
+                  locationType: location.tipo as 'Loja' | 'Armazém',
+                },
+              });
+
+              // Adiciona ao conjunto de notificações enviadas
+              setNotifiedLowStock((prev) => new Set(prev).add(notificationKey));
+            }
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Erro ao verificar estoque baixo:', error);
+    }
+  }, [productLocations, produtos, locations, notifiedLowStock, addNotification]);
+
+  // Verificar estoque baixo periodicamente
+  useEffect(() => {
+    const interval = setInterval(() => {
+      checkLowStock();
+    }, 300000); // Verifica a cada 5 minutos
+
+    // Verificar imediatamente ao carregar
+    checkLowStock();
+
+    return () => clearInterval(interval);
+  }, [checkLowStock]);
+
+  // Limpar notificações de produtos que já não estão com estoque baixo
+  useEffect(() => {
+    const newNotifiedLowStock = new Set<string>();
+
+    productLocations.forEach((loc) => {
+      const currentQty = loc.quantidadeProduto ?? 0;
+      const minQty = loc.quantidadeMinimaProduto ?? 0;
+
+      if (currentQty <= minQty) {
+        newNotifiedLowStock.add(`${loc.id_produto}-${loc.id_localizacao}`);
+      }
+    });
+
+    // Remove notificações de produtos que já não estão com estoque baixo
+    setNotifiedLowStock((prev) => {
+      const updated = new Set<string>();
+      prev.forEach((key) => {
+        if (newNotifiedLowStock.has(key)) {
+          updated.add(key);
+        }
+      });
+      return updated;
+    });
+  }, [productLocations]);
 
   const loadUserData = (): string => {
     try {
@@ -1677,7 +1766,7 @@ const Faturacao: React.FC = () => {
       </Box>
     );
   }
-const handleCloseModal = () => {
+  const handleCloseModal = () => {
     setOpenModal(false);
   };
   return (
