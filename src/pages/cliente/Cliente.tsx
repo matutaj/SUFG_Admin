@@ -20,7 +20,6 @@ import {
   Alert,
   CircularProgress,
   TablePagination,
-  TablePagination,
 } from '@mui/material';
 import IconifyIcon from 'components/base/IconifyIcon';
 import Delete from 'components/icons/factor/Delete';
@@ -38,23 +37,18 @@ interface CollapsedItemProps {
 type ClienteForm = Partial<Cliente>;
 
 const modalStyle = {
-const modalStyle = {
   position: 'absolute' as const,
   top: '50%',
   left: '50%',
   transform: 'translate(-50%, -50%)',
   width: { xs: '90%', sm: '80%', md: 700 },
-  width: { xs: '90%', sm: '80%', md: 700 },
   maxWidth: '100%',
-  height: { xs: '100%', sm: '60%', md: 500 },
-  maxHeight: '90%',
   height: { xs: '100%', sm: '60%', md: 500 },
   maxHeight: '90%',
   bgcolor: 'background.paper',
   boxShadow: 24,
   p: 4,
   overflowY: 'auto',
-  borderRadius: 2,
   borderRadius: 2,
 };
 
@@ -87,8 +81,6 @@ const ClienteComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [filteredClientes, setFilteredClientes] = useState<Cliente[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filteredClientes, setFilteredClientes] = useState<Cliente[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [alert, setAlert] = useState<{
     severity: 'success' | 'error' | 'info' | 'warning';
@@ -97,9 +89,6 @@ const ClienteComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const [loadingFetch, setLoadingFetch] = useState(false);
   const [loadingSave, setLoadingSave] = useState(false);
   const [loadingDelete, setLoadingDelete] = useState(false);
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(5);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(5);
@@ -117,28 +106,13 @@ const ClienteComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   };
 
   const loadUserData = useCallback(async () => {
-  const loadUserData = useCallback(async () => {
     try {
-      const userData = await getUserData();
       const userData = await getUserData();
       log('Dados do usuário:', userData);
       if (!userData || !userData.id) {
         log('Usuário não autenticado ou sem ID');
         return null;
-        log('Usuário não autenticado ou sem ID');
-        return null;
       }
-      const [read, create, update, del] = await Promise.all([
-        hasPermission('listar_cliente'),
-        hasPermission('criar_cliente'),
-        hasPermission('atualizar_cliente'),
-        hasPermission('eliminar_cliente'),
-      ]);
-      setCanRead(read);
-      setCanCreate(create);
-      setCanUpdate(update);
-      setCanDelete(del);
-      log('Permissões atribuídas:', { read, create, update, del });
       const [read, create, update, del] = await Promise.all([
         hasPermission('listar_cliente'),
         hasPermission('criar_cliente'),
@@ -155,11 +129,7 @@ const ClienteComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       log('Erro em loadUserData:', error);
       setAlert({ severity: 'error', message: 'Erro ao carregar dados do usuário' });
       return null;
-      log('Erro em loadUserData:', error);
-      setAlert({ severity: 'error', message: 'Erro ao carregar dados do usuário' });
-      return null;
     }
-  }, []);
   }, []);
 
   const fetchClientes = useCallback(async () => {
@@ -174,22 +144,15 @@ const ClienteComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     try {
       setLoadingFetch(true);
       const data = await getAllClients();
-      const data = await getAllClients();
       if (!Array.isArray(data)) {
         throw new Error('A resposta de getAllClients não é um array');
       }
       setClientes(data ?? []);
       setFilteredClientes(data ?? []);
-      setFilteredClientes(data ?? []);
       log('Clientes carregados:', data);
     } catch (error: any) {
       log('Erro ao buscar clientes:', error);
-      log('Erro ao buscar clientes:', error);
       let errorMessage = 'Erro ao carregar clientes';
-      if (error.response?.status === 403) {
-        errorMessage = 'Permissão negada para listar clientes';
-      } else if (error.response?.status === 500) {
-        errorMessage = 'Erro interno no servidor';
       if (error.response?.status === 403) {
         errorMessage = 'Permissão negada para listar clientes';
       } else if (error.response?.status === 500) {
@@ -206,10 +169,7 @@ const ClienteComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       try {
         setIsAuthLoading(true);
         const id = await loadUserData();
-        setIsAuthLoading(true);
-        const id = await loadUserData();
         if (!id) {
-          log('Redirecionando para login devido a falha na autenticação');
           log('Redirecionando para login devido a falha na autenticação');
           navigate('/login');
           return;
@@ -217,24 +177,13 @@ const ClienteComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         await fetchClientes();
       } catch (error) {
         log('Erro no initialize:', error);
-        log('Erro no initialize:', error);
         setAlert({ severity: 'error', message: 'Erro ao inicializar a página' });
-      } finally {
-        setIsAuthLoading(false);
       } finally {
         setIsAuthLoading(false);
       }
     };
     initialize();
   }, [fetchClientes, loadUserData, navigate]);
-
-  useEffect(() => {
-    const filtered = clientes.filter((cliente) =>
-      cliente.nomeCliente?.toLowerCase().includes(searchTerm.toLowerCase()),
-    );
-    setFilteredClientes(filtered);
-    setPage(0);
-  }, [searchTerm, clientes]);
 
   useEffect(() => {
     const filtered = clientes.filter((cliente) =>
@@ -340,22 +289,8 @@ const ClienteComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         newErrors.numeroContribuinte = 'Já existe um cliente com este NIF/BI';
       }
     }
-    if (form.emailCliente && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.emailCliente)) {
-      newErrors.emailCliente = 'Email inválido';
-    }
-    if (form.numeroContribuinte?.trim()) {
-      const exists = clientes.some(
-        (cliente) =>
-          cliente.numeroContribuinte?.toLowerCase() === form.numeroContribuinte?.toLowerCase() &&
-          (!editId || cliente.id !== editId),
-      );
-      if (exists) {
-        newErrors.numeroContribuinte = 'Já existe um cliente com este NIF/BI';
-      }
-    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [form, clientes, editId]);
   }, [form, clientes, editId]);
 
   const onAddClienteSubmit = useCallback(async () => {
@@ -381,11 +316,8 @@ const ClienteComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       setAlert(null);
       const clientData: Cliente = {
         numeroContribuinte: form.numeroContribuinte || null,
-        numeroContribuinte: form.numeroContribuinte || null,
         nomeCliente: form.nomeCliente || '',
         telefoneCliente: form.telefoneCliente || '',
-        emailCliente: form.emailCliente || null,
-        moradaCliente: form.moradaCliente || null,
         emailCliente: form.emailCliente || null,
         moradaCliente: form.moradaCliente || null,
       };
@@ -399,21 +331,13 @@ const ClienteComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         const newCliente = await createClient(clientData);
         setClientes((prev) => [...prev, newCliente]);
         setFilteredClientes((prev) => [...prev, newCliente]);
-        setFilteredClientes((prev) => [...prev, newCliente]);
         setAlert({ severity: 'success', message: 'Cliente cadastrado com sucesso!' });
         log('Cliente criado:', newCliente);
       }
       handleClose();
     } catch (error: any) {
       log('Erro ao salvar cliente:', error);
-      log('Erro ao salvar cliente:', error);
       let errorMessage = 'Erro ao salvar cliente';
-      if (error.response?.status === 409) {
-        errorMessage = 'Já existe um cliente com esse NIF/BI';
-      } else if (error.response?.status === 403) {
-        errorMessage = `Permissão negada para ${isEditing ? 'atualizar' : 'criar'} clientes`;
-      } else if (error.response?.status === 400) {
-        errorMessage = error.response.data?.message || 'Dados inválidos';
       if (error.response?.status === 409) {
         errorMessage = 'Já existe um cliente com esse NIF/BI';
       } else if (error.response?.status === 403) {
@@ -423,11 +347,9 @@ const ClienteComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       }
       setAlert({ severity: 'error', message: errorMessage });
       setErrors({ submit: 'Erro ao salvar. Tente novamente.' });
-      setErrors({ submit: 'Erro ao salvar. Tente novamente.' });
     } finally {
       setLoadingSave(false);
     }
-  }, [canCreate, canUpdate, isEditing, editId, form, handleClose, validateForm]);
   }, [canCreate, canUpdate, isEditing, editId, form, handleClose, validateForm]);
 
   const handleDelete = useCallback(async () => {
@@ -447,9 +369,7 @@ const ClienteComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       setLoadingDelete(true);
       setAlert(null);
       await deleteClient(deleteClienteId);
-      await deleteClient(deleteClienteId);
       setClientes((prev) => prev.filter((item) => item.id !== deleteClienteId));
-      setFilteredClientes((prev) => prev.filter((item) => item.id !== deleteClienteId));
       setFilteredClientes((prev) => prev.filter((item) => item.id !== deleteClienteId));
       setAlert({ severity: 'success', message: 'Cliente excluído com sucesso!' });
       log('Cliente excluído:', deleteClienteId);
@@ -457,23 +377,9 @@ const ClienteComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       if (page >= totalPages && page > 0) {
         setPage(page - 1);
       }
-      const totalPages = Math.ceil(filteredClientes.length / rowsPerPage);
-      if (page >= totalPages && page > 0) {
-        setPage(page - 1);
-      }
     } catch (error: any) {
       log('Erro ao excluir cliente:', error);
-      log('Erro ao excluir cliente:', error);
       let errorMessage = 'Erro ao excluir cliente';
-      if (error.response?.status === 404) {
-        errorMessage = 'Cliente não encontrado no servidor';
-      } else if (error.response?.status === 400) {
-        errorMessage =
-          error.response.data?.message || 'Cliente não pode ser excluído (possivelmente em uso)';
-      } else if (error.response?.status === 403) {
-        errorMessage = 'Permissão negada para excluir clientes';
-      } else if (error.response?.status === 500) {
-        errorMessage = 'Erro interno no servidor';
       if (error.response?.status === 404) {
         errorMessage = 'Cliente não encontrado no servidor';
       } else if (error.response?.status === 400) {
@@ -488,9 +394,7 @@ const ClienteComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     } finally {
       setLoadingDelete(false);
       handleCloseConfirmDelete();
-      handleCloseConfirmDelete();
     }
-  }, [canDelete, deleteClienteId, filteredClientes, page, rowsPerPage, handleCloseConfirmDelete]);
   }, [canDelete, deleteClienteId, filteredClientes, page, rowsPerPage, handleCloseConfirmDelete]);
 
   const handleEdit = useCallback(
@@ -535,18 +439,6 @@ const ClienteComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     setPage(0);
   };
 
-  const handleChangePage = (event: unknown, newPage: number) => {
-    log('Mudando página:', newPage);
-    setPage(newPage);
-  };
-
-  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const newRowsPerPage = parseInt(event.target.value, 10);
-    log('Mudando linhas por página:', newRowsPerPage);
-    setRowsPerPage(newRowsPerPage);
-    setPage(0);
-  };
-
   useEffect(() => {
     if (alert) {
       const timer = setTimeout(() => setAlert(null), 5000);
@@ -575,31 +467,7 @@ const ClienteComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         </Box>
       )}
       <Paper sx={{ p: 2, width: '100%', borderRadius: 2 }}>
-      <Paper sx={{ p: 2, width: '100%', borderRadius: 2 }}>
         <Collapse in={open}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-            <Typography variant="h5" fontWeight="bold">
-              Clientes
-            </Typography>
-            <Stack direction="row" spacing={2} alignItems="center">
-              <TextField
-                label="Pesquisar Cliente"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                variant="outlined"
-                sx={{ width: { xs: '100%', sm: 300 } }}
-              />
-              <Button
-                variant="contained"
-                color="secondary"
-                onClick={handleOpen}
-                startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
-                disabled={loadingFetch || loadingSave || !canCreate}
-                title={!canCreate ? 'Você não tem permissão para criar clientes' : ''}
-              >
-                Adicionar Cliente
-              </Button>
-            </Stack>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
             <Typography variant="h5" fontWeight="bold">
               Clientes
@@ -629,15 +497,12 @@ const ClienteComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
       <Modal open={openCliente} onClose={handleClose}>
         <Box sx={modalStyle}>
-        <Box sx={modalStyle}>
           <Stack
             direction="row"
             justifyContent="space-between"
             alignItems="center"
             sx={{ mb: 4, width: '100%' }}
-            sx={{ mb: 4, width: '100%' }}
           >
-            <Typography variant="h5" fontWeight="bold">
             <Typography variant="h5" fontWeight="bold">
               {isEditing ? 'Editar Cliente' : 'Cadastrar Cliente'}
             </Typography>
@@ -768,132 +633,9 @@ const ClienteComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               {loadingDelete ? 'Excluindo...' : 'Excluir'}
             </Button>
           </Stack>
-          <Stack spacing={3} sx={{ width: '100%' }}>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  variant="filled"
-                  name="numeroContribuinte"
-                  label="NIF/BI"
-                  value={form.numeroContribuinte}
-                  onChange={handleChange}
-                  error={!!errors.numeroContribuinte}
-                  helperText={errors.numeroContribuinte}
-                  disabled={loadingSave}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  variant="filled"
-                  name="nomeCliente"
-                  label="Nome"
-                  value={form.nomeCliente}
-                  onChange={handleChange}
-                  error={!!errors.nomeCliente}
-                  helperText={errors.nomeCliente}
-                  disabled={loadingSave}
-                  required
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  variant="filled"
-                  name="telefoneCliente"
-                  label="Telefone"
-                  type="tel"
-                  value={form.telefoneCliente}
-                  onChange={handleChange}
-                  error={!!errors.telefoneCliente}
-                  helperText={errors.telefoneCliente}
-                  disabled={loadingSave}
-                  required
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  variant="filled"
-                  name="emailCliente"
-                  label="Email"
-                  value={form.emailCliente}
-                  onChange={handleChange}
-                  error={!!errors.emailCliente}
-                  helperText={errors.emailCliente}
-                  disabled={loadingSave}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  variant="filled"
-                  name="moradaCliente"
-                  label="Endereço"
-                  value={form.moradaCliente}
-                  onChange={handleChange}
-                  disabled={loadingSave}
-                />
-              </Grid>
-            </Grid>
-
-            {errors.submit && (
-              <Typography color="error" variant="body2">
-                {errors.submit}
-              </Typography>
-            )}
-
-            <Button
-              variant="contained"
-              color="secondary"
-              onClick={onAddClienteSubmit}
-              disabled={loadingSave || (!canCreate && !isEditing) || (!canUpdate && isEditing)}
-              title={
-                !canCreate && !isEditing
-                  ? 'Você não tem permissão para criar clientes'
-                  : !canUpdate && isEditing
-                    ? 'Você não tem permissão para atualizar clientes'
-                    : ''
-              }
-            >
-              {loadingSave ? 'Salvando...' : isEditing ? 'Atualizar Cliente' : 'Cadastrar Cliente'}
-            </Button>
-          </Stack>
         </Box>
       </Modal>
 
-      <Modal open={openConfirmDelete} onClose={handleCloseConfirmDelete}>
-        <Box sx={confirmModalStyle}>
-          <Typography variant="h6" gutterBottom>
-            Confirmar Exclusão
-          </Typography>
-          <Typography variant="body1" mb={3}>
-            Tem certeza que deseja excluir este cliente? Esta ação não pode ser desfeita.
-          </Typography>
-          <Stack direction="row" spacing={2} justifyContent="flex-end">
-            <Button
-              variant="outlined"
-              color="secondary"
-              onClick={handleCloseConfirmDelete}
-              disabled={loadingDelete}
-            >
-              Cancelar
-            </Button>
-            <Button
-              variant="contained"
-              color="error"
-              onClick={handleDelete}
-              disabled={loadingDelete || !canDelete}
-              title={!canDelete ? 'Você não tem permissão para excluir clientes' : ''}
-            >
-              {loadingDelete ? 'Excluindo...' : 'Excluir'}
-            </Button>
-          </Stack>
-        </Box>
-      </Modal>
-
-      <Card sx={{ mt: 4, borderRadius: 2 }}>
       <Card sx={{ mt: 4, borderRadius: 2 }}>
         <CardContent>
           <TableContainer component={Paper}>
@@ -901,8 +643,6 @@ const ClienteComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               <TableHead>
                 <TableRow>
                   {['NIF/BI', 'Nome', 'Telefone', 'Email', 'Endereço', 'Ações'].map((header) => (
-                    <TableCell key={header} sx={{ fontWeight: 'bold' }}>
-                      {header}
                     <TableCell key={header} sx={{ fontWeight: 'bold' }}>
                       {header}
                     </TableCell>
@@ -916,14 +656,6 @@ const ClienteComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                       <CircularProgress size={24} />
                     </TableCell>
                   </TableRow>
-                ) : paginatedClientes.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} align="center">
-                      Nenhum cliente encontrado
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  paginatedClientes.map((item) => (
                 ) : paginatedClientes.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} align="center">
@@ -962,19 +694,6 @@ const ClienteComponent: React.FC<CollapsedItemProps> = ({ open }) => {
               </TableBody>
             </Table>
           </TableContainer>
-          <TablePagination
-            rowsPerPageOptions={[5, 10, 25]}
-            component="div"
-            count={filteredClientes.length}
-            rowsPerPage={rowsPerPage}
-            page={page}
-            onPageChange={handleChangePage}
-            onRowsPerPageChange={handleChangeRowsPerPage}
-            labelRowsPerPage="Linhas por página:"
-            labelDisplayedRows={({ from, to, count }) =>
-              `${from}–${to} de ${count !== -1 ? count : `mais de ${to}`}`
-            }
-          />
           <TablePagination
             rowsPerPageOptions={[5, 10, 25]}
             component="div"
