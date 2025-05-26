@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useReducer } from 'react';
+import React, { useState, useEffect, useReducer, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import axios from 'axios';
@@ -31,6 +31,11 @@ import {
   Alert,
   SelectChangeEvent,
   CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from '@mui/material';
 import IconifyIcon from 'components/base/IconifyIcon';
 import Delete from 'components/icons/factor/Delete';
@@ -68,6 +73,8 @@ import {
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { DadosWrapper } from '../../types/models';
+import { useNotifications } from '../../../src/NotificationContext';
+import { getUserData } from 'api/authUtils';
 
 interface DecodedToken {
   userId?: string;
@@ -91,6 +98,7 @@ interface FaturaState {
   cliente: string;
   nif: string;
   telefone: string;
+
   localizacao: string;
   email: string;
   metodoPagamento: string;
@@ -339,6 +347,8 @@ const Faturacao: React.FC = () => {
   } | null>(null);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(5);
+
+  const { addNotification } = useNotifications();
   const [faturaState, dispatchFatura] = useReducer(faturaReducer, initialFaturaState);
   const [caixaState, dispatchCaixa] = useReducer(caixaReducer, initialCaixaState);
   const [funcionariosCaixa, setFuncionariosCaixa] = useState<FuncionarioCaixa[]>([]);
@@ -346,7 +356,96 @@ const Faturacao: React.FC = () => {
   const [caixas, setCaixas] = useState<Caixa[]>([]);
   const [loggedInFuncionarioId, setLoggedInFuncionarioId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
+  const [openModal, setOpenModal] = useState(false);
   const [loggedInFuncionarioCargo, setLoggedInFuncionarioCargo] = useState<string>('');
+  const [notifiedLowStock, setNotifiedLowStock] = useState<Set<string>>(new Set());
+
+  // Função para verificar estoque baixo
+  const checkLowStock = useCallback(async () => {
+    try {
+      const userData = await getUserData();
+      const userRole = userData?.role;
+
+      // Verifica se o usuário é Estoquista ou Repositor
+      if (!userRole || !['Estoquista', 'Repositor'].includes(userRole)) {
+        return;
+      }
+
+      productLocations.forEach((loc) => {
+        const currentQty = loc.quantidadeProduto ?? 0;
+        const minQty = loc.quantidadeMinimaProduto ?? 0;
+
+        if (currentQty <= minQty) {
+          const product = produtos.find((p) => p.id === loc.id_produto);
+          const location = locations.find((l) => l.id === loc.id_localizacao);
+
+          if (product && location) {
+            const notificationKey = `${loc.id_produto}-${loc.id_localizacao}`;
+
+            // Verifica se já notificou para evitar duplicatas
+            if (!notifiedLowStock.has(notificationKey)) {
+              const locationType = location.tipo === 'Loja' ? 'Loja' : 'Armazém';
+              const message = `Estoque baixo: ${product.nomeProduto} (${locationType}) - Quantidade: ${currentQty} (Mínimo: ${minQty})`;
+
+              addNotification({
+                message,
+                type: 'stock',
+                metadata: {
+                  productId: product.id,
+                  locationId: location.id,
+                  currentQuantity: currentQty,
+                  minimumQuantity: minQty,
+                  locationType: location.tipo as 'Loja' | 'Armazém',
+                },
+              });
+
+              // Adiciona ao conjunto de notificações enviadas
+              setNotifiedLowStock((prev) => new Set(prev).add(notificationKey));
+            }
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Erro ao verificar estoque baixo:', error);
+    }
+  }, [productLocations, produtos, locations, notifiedLowStock, addNotification]);
+
+  // Verificar estoque baixo periodicamente
+  useEffect(() => {
+    const interval = setInterval(() => {
+      checkLowStock();
+    }, 300000); // Verifica a cada 5 minutos
+
+    // Verificar imediatamente ao carregar
+    checkLowStock();
+
+    return () => clearInterval(interval);
+  }, [checkLowStock]);
+
+  // Limpar notificações de produtos que já não estão com estoque baixo
+  useEffect(() => {
+    const newNotifiedLowStock = new Set<string>();
+
+    productLocations.forEach((loc) => {
+      const currentQty = loc.quantidadeProduto ?? 0;
+      const minQty = loc.quantidadeMinimaProduto ?? 0;
+
+      if (currentQty <= minQty) {
+        newNotifiedLowStock.add(`${loc.id_produto}-${loc.id_localizacao}`);
+      }
+    });
+
+    // Remove notificações de produtos que já não estão com estoque baixo
+    setNotifiedLowStock((prev) => {
+      const updated = new Set<string>();
+      prev.forEach((key) => {
+        if (newNotifiedLowStock.has(key)) {
+          updated.add(key);
+        }
+      });
+      return updated;
+    });
+  }, [productLocations]);
 
   const loadUserData = (): string => {
     try {
@@ -889,6 +988,10 @@ const Faturacao: React.FC = () => {
       dispatchFatura({ type: 'SET_ERRORS', errors: newErrors });
     }
   };
+  const getLoggedInUserName = (): string => {
+    const funcionario = funcionarios.find((f) => f.id === loggedInFuncionarioId);
+    return funcionario?.nomeFuncionario || 'Usuário Desconhecido';
+  };
   const getCaixasExibidas = () => {
     const funcionarioLogado = funcionarios.find((f) => f.id === loggedInFuncionarioId);
 
@@ -1059,20 +1162,20 @@ const Faturacao: React.FC = () => {
             loc.id_produto === produtoSelecionado.id &&
             lojaLocations.some((loja) => loja.id === loc.id_localizacao),
         );
-      
+
         if (produtoLocations.length === 0) {
           throw new Error(`Produto ${produtoSelecionado.id} não encontrado em nenhuma loja.`);
         }
-      
+
         let quantidadeRestante = produtoSelecionado.quantidade;
-      
+
         // Atualizar quantidades nas localizações
         for (const produtoLocation of produtoLocations) {
           if (quantidadeRestante <= 0) break;
-      
+
           const quantidadeAtual = produtoLocation.quantidadeProduto ?? 0;
           const quantidadeADescontar = Math.min(quantidadeAtual, quantidadeRestante);
-      
+
           if (quantidadeADescontar > 0) {
             const newQuantity = quantidadeAtual - quantidadeADescontar;
             try {
@@ -1094,18 +1197,18 @@ const Faturacao: React.FC = () => {
             }
           }
         }
-      
+
         if (quantidadeRestante > 0) {
           throw new Error(
             `Quantidade insuficiente para o produto ${produtoSelecionado.id} após tentar todas as lojas.`,
           );
         }
       });
-      
+
       // Recarregar productLocations do banco de dados para garantir dados atualizados
       const updatedProductLocations = await getAllProductLocations();
       setProductLocations(updatedProductLocations);
-      
+
       // Atualizar estoque geral e produto para cada produto selecionado
       const stockUpdates = faturaState.produtosSelecionados.map(async (produtoSelecionado) => {
         // Calcular lojaQuantity com base nos dados atualizados
@@ -1116,7 +1219,7 @@ const Faturacao: React.FC = () => {
               lojaLocations.some((loja) => loja.id === loc.id_localizacao),
           )
           .reduce((total, loc) => total + (loc.quantidadeProduto ?? 0), 0);
-      
+
         const armazemLocation = locations.find((loc) =>
           loc.nomeLocalizacao.toLowerCase().includes('armazém'),
         );
@@ -1129,7 +1232,7 @@ const Faturacao: React.FC = () => {
           : null;
         const armazemQuantity = Number(armazemProdutoLocation?.quantidadeProduto) || 0;
         const estoqueGeral = lojaQuantity + armazemQuantity;
-      
+
         // Atualizar estoque geral
         try {
           const existingStock = await getStockByProduct(produtoSelecionado.id);
@@ -1148,13 +1251,13 @@ const Faturacao: React.FC = () => {
             `Falha ao atualizar estoque do produto ${produtoSelecionado.id}: ${error.message || 'Tente novamente.'}`,
           );
         }
-      
+
         // Atualizar produto
         const produto = productsInStore.find((p) => p.id === produtoSelecionado.id);
         if (!produto || !produto.id) {
           throw new Error(`Produto ${produtoSelecionado.id} não encontrado.`);
         }
-      
+
         try {
           const updatedProduto: Produto = {
             ...produto,
@@ -1168,7 +1271,7 @@ const Faturacao: React.FC = () => {
           );
         }
       });
-      
+
       await Promise.all(updates);
       await Promise.all(stockUpdates);
 
@@ -1408,38 +1511,41 @@ const Faturacao: React.FC = () => {
       navigate('/login');
       return;
     }
-  
+
     setLoading(true);
     try {
       // Obter o endereço MAC da máquina
       const macResponse = await axios.get('http://localhost:3001/mac');
       const machineMacAddress = macResponse.data.mac;
-  
+
       // Obter o token de autenticação
       const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('Token de autenticação não encontrado. Faça login novamente.');
       }
-  
+
       // Buscar o caixa associado ao MAC
-      const caixaResponse = await axios.get(`http://localhost:3333/caixa/mac/${machineMacAddress}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
+      const caixaResponse = await axios.get(
+        `http://localhost:3333/caixa/mac/${machineMacAddress}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         },
-      });
+      );
       const caixa = caixaResponse.data;
-  
+
       if (!caixa || !caixa.id) {
         throw new Error('Nenhum caixa encontrado para o endereço MAC desta máquina.');
       }
-  
+
       // Atualizar o estado com o caixa encontrado
       dispatchCaixa({
         type: 'UPDATE_FIELD',
         field: 'caixaId',
         value: caixa.id,
       });
-  
+
       // Buscar o último valor total do caixa
       const ultimoCaixa = funcionariosCaixa
         .filter((fc) => fc.id_caixa === caixa.id)
@@ -1448,7 +1554,7 @@ const Faturacao: React.FC = () => {
           const dateB = b.horarioFechamento || b.horarioAbertura || new Date(0);
           return new Date(dateB).getTime() - new Date(dateA).getTime();
         })[0];
-  
+
       if (ultimoCaixa) {
         const ultimoValorTotal =
           (Number(ultimoCaixa.valorInicial) || 0) + (Number(ultimoCaixa.quantidadaFaturada) || 0);
@@ -1464,13 +1570,13 @@ const Faturacao: React.FC = () => {
           value: '0.00',
         });
       }
-  
+
       dispatchCaixa({
         type: 'UPDATE_FIELD',
         field: 'funcionarioId',
         value: loggedInFuncionarioId,
       });
-  
+
       setAlert({
         severity: 'info',
         message: `Caixa "${caixa.nomeCaixa}" selecionado automaticamente com base no endereço MAC.`,
@@ -1577,7 +1683,9 @@ const Faturacao: React.FC = () => {
           Funcionarios: funcionarios.find((f) => f.id === loggedInFuncionarioId), // Adiciona informações do funcionário
         },
       ]);
-
+      const handleCloseModal = () => {
+        setOpenModal(false);
+      };
       // Atualizar a lista com dados da API
       const updatedFuncionariosCaixa = await getAllEmployeeCashRegisters();
       console.log('Lista de caixas atualizada:', updatedFuncionariosCaixa);
@@ -1591,6 +1699,23 @@ const Faturacao: React.FC = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+  const handleCaixaAlert = (message: string) => {
+    console.log('[Faturacao] Adicionando notificação:', { message, type: 'caixa' });
+    addNotification({
+      message,
+      type: 'caixa',
+    });
+  };
+
+  // Função que dispara o alerta
+  const handleEnviarAlerta = () => {
+    try {
+      handleCaixaAlert(`Alerta: Há produtos no caixa de ${getLoggedInUserName()}`);
+      setOpenModal(true);
+    } catch (error) {
+      console.error('[Faturacao] Erro ao enviar alerta:', error);
     }
   };
 
@@ -1648,7 +1773,9 @@ const Faturacao: React.FC = () => {
       </Box>
     );
   }
-
+  const handleCloseModal = () => {
+    setOpenModal(false);
+  };
   return (
     <>
       {alert && (
@@ -1699,8 +1826,37 @@ const Faturacao: React.FC = () => {
             >
               Ver Caixas
             </Button>
+            <Button
+              variant="contained"
+              color="warning"
+              onClick={handleEnviarAlerta}
+              startIcon={<IconifyIcon icon="mdi:alert" />}
+              size="small"
+              fullWidth
+              disabled={!loggedInFuncionarioId || loading}
+            >
+              Enviar Alerta
+            </Button>
           </Stack>
         </Stack>
+        <Dialog
+          open={openModal}
+          onClose={handleCloseModal}
+          aria-labelledby="alert-dialog-title"
+          aria-describedby="alert-dialog-description"
+        >
+          <DialogTitle id="alert-dialog-title">Sucesso</DialogTitle>
+          <DialogContent>
+            <DialogContentText id="alert-dialog-description">
+              Alerta enviado com sucesso!
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseModal} variant="contained" autoFocus>
+              OK
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Paper>
 
       <Modal open={openFaturaModal} onClose={handleCloseFaturaModal}>
@@ -1973,115 +2129,116 @@ const Faturacao: React.FC = () => {
       </Modal>
 
       <Modal open={openCaixaModal} onClose={handleCloseCaixaModal}>
-  <Box sx={modalStyle}>
-    <Typography variant="h5" fontWeight="bold" color="primary" sx={{ mb: 3 }}>
-      Abrir Novo Caixa
-    </Typography>
-    {alert && (
-      <Alert severity={alert.severity} sx={{ mb: 2 }}>
-        {alert.message}
-      </Alert>
-    )}
-    {loading && (
-      <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
-        <CircularProgress size={24} />
-      </Box>
-    )}
-    <Stack spacing={3}>
-      <Grid container spacing={2}>
-        <Grid item xs={12} sm={6}>
-          <TextField
-            fullWidth
-            variant="outlined"
-            label="Funcionário"
-            value={
-              funcionarios.find((f) => f.id === loggedInFuncionarioId)?.nomeFuncionario || 'N/A'
-            }
-            disabled
-            sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
-            error={Boolean(caixaState.errors.funcionarioId)}
-            helperText={caixaState.errors.funcionarioId}
-          />
-        </Grid>
-        <Grid item xs={12} sm={6}>
-          <FormControl
-            fullWidth
-            variant="outlined"
-            error={Boolean(caixaState.errors.caixaId)}
-            disabled={loading}
-          >
-            <InputLabel>Caixa</InputLabel>
-            <Select
-              name="caixaId"
-              value={caixaState.caixaId}
-              onChange={handleCaixaSelectChange}
-              sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
-              disabled={true} // Desativa a seleção do caixa
-            >
-              <MenuItem value="">
-                <em>Selecione um caixa</em>
-              </MenuItem>
-              {caixas.map((caixa) => (
-                <MenuItem key={caixa.id} value={caixa.id}>
-                  {caixa.nomeCaixa}
-                </MenuItem>
-              ))}
-            </Select>
-            {caixaState.errors.caixaId && (
-              <FormHelperText>{caixaState.errors.caixaId}</FormHelperText>
-            )}
-          </FormControl>
-        </Grid>
-        <Grid item xs={12}>
-          <TextField
-            fullWidth
-            variant="outlined"
-            label="Valor Inicial (Kz)"
-            name="valorInicial"
-            type="number"
-            value={caixaState.valorInicial}
-            onChange={(e) =>
-              dispatchCaixa({
-                type: 'UPDATE_FIELD',
-                field: 'valorInicial',
-                value: e.target.value,
-              })
-            }
-            inputProps={{ min: 0, step: '0.01' }}
-            sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
-            error={Boolean(caixaState.errors.valorInicial)}
-            helperText={
-              caixaState.errors.valorInicial ||
-              (caixaState.caixaId
-                ? 'Último valor total do caixa selecionado. Você pode alterá-lo.'
-                : '')
-            }
-            disabled={loading}
-          />
-        </Grid>
-      </Grid>
-      <Divider sx={{ borderColor: 'primary.main' }} />
-      <Stack direction="row" spacing={2} justifyContent="flex-end">
-        <Button
-          variant="outlined"
-          color="secondary"
-          onClick={handleCloseCaixaModal}
-          disabled={loading}
-        >
-          Cancelar
-        </Button>
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={onAddCaixaSubmit}
-          disabled={loading || !loggedInFuncionarioId}
-        >
-          {loading ? 'Abrindo...' : 'Abrir Caixa'}
-        </Button>
-      </Stack>
-    </Stack>
-  </Box>
-</Modal>
+        <Box sx={modalStyle}>
+          <Typography variant="h5" fontWeight="bold" color="primary" sx={{ mb: 3 }}>
+            Abrir Novo Caixa
+          </Typography>
+          {alert && (
+            <Alert severity={alert.severity} sx={{ mb: 2 }}>
+              {alert.message}
+            </Alert>
+          )}
+          {loading && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+              <CircularProgress size={24} />
+            </Box>
+          )}
+          <Stack spacing={3}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  variant="outlined"
+                  label="Funcionário"
+                  value={
+                    funcionarios.find((f) => f.id === loggedInFuncionarioId)?.nomeFuncionario ||
+                    'N/A'
+                  }
+                  disabled
+                  sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
+                  error={Boolean(caixaState.errors.funcionarioId)}
+                  helperText={caixaState.errors.funcionarioId}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl
+                  fullWidth
+                  variant="outlined"
+                  error={Boolean(caixaState.errors.caixaId)}
+                  disabled={loading}
+                >
+                  <InputLabel>Caixa</InputLabel>
+                  <Select
+                    name="caixaId"
+                    value={caixaState.caixaId}
+                    onChange={handleCaixaSelectChange}
+                    sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
+                    disabled={true} // Desativa a seleção do caixa
+                  >
+                    <MenuItem value="">
+                      <em>Selecione um caixa</em>
+                    </MenuItem>
+                    {caixas.map((caixa) => (
+                      <MenuItem key={caixa.id} value={caixa.id}>
+                        {caixa.nomeCaixa}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                  {caixaState.errors.caixaId && (
+                    <FormHelperText>{caixaState.errors.caixaId}</FormHelperText>
+                  )}
+                </FormControl>
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  variant="outlined"
+                  label="Valor Inicial (Kz)"
+                  name="valorInicial"
+                  type="number"
+                  value={caixaState.valorInicial}
+                  onChange={(e) =>
+                    dispatchCaixa({
+                      type: 'UPDATE_FIELD',
+                      field: 'valorInicial',
+                      value: e.target.value,
+                    })
+                  }
+                  inputProps={{ min: 0, step: '0.01' }}
+                  sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
+                  error={Boolean(caixaState.errors.valorInicial)}
+                  helperText={
+                    caixaState.errors.valorInicial ||
+                    (caixaState.caixaId
+                      ? 'Último valor total do caixa selecionado. Você pode alterá-lo.'
+                      : '')
+                  }
+                  disabled={loading}
+                />
+              </Grid>
+            </Grid>
+            <Divider sx={{ borderColor: 'primary.main' }} />
+            <Stack direction="row" spacing={2} justifyContent="flex-end">
+              <Button
+                variant="outlined"
+                color="secondary"
+                onClick={handleCloseCaixaModal}
+                disabled={loading}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={onAddCaixaSubmit}
+                disabled={loading || !loggedInFuncionarioId}
+              >
+                {loading ? 'Abrindo...' : 'Abrir Caixa'}
+              </Button>
+            </Stack>
+          </Stack>
+        </Box>
+      </Modal>
       <Modal open={openCaixaListModal} onClose={handleCloseCaixaListModal}>
         <Box sx={modalStyle}>
           <Typography variant="h5" fontWeight="bold" color="primary" sx={{ mb: 3 }}>

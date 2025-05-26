@@ -1,10 +1,8 @@
 import Doughnut from 'components/icons/drawer/Doughnut';
 import Fencing from 'components/icons/drawer/Fencing';
 import Grid from 'components/icons/drawer/Grid';
-import Settings from 'components/icons/drawer/Settings';
 import ShoppingBag from 'components/icons/drawer/ShoppingBag';
 import ShoppingCart from 'components/icons/drawer/ShoppingCart';
-import SignOut from 'components/icons/drawer/SignOut';
 import Car from 'components/icons/drawer/Car';
 import paths, { rootPaths } from 'routes/paths';
 import { SvgIconProps } from '@mui/material';
