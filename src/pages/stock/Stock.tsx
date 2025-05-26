@@ -618,7 +618,11 @@ const Stock: React.FC = () => {
       locationForm.quantidadeProduto! > lastEntries[locationIndex].quantidadeRecebida
     ) {
       newErrors.quantidadeProduto = `Quantidade não pode exceder a entrada (${lastEntries[locationIndex].quantidadeRecebida})`;
-    } else if (selectedStock && locationForm.quantidadeProduto! > selectedStock.quantidadeAtual) {
+    } else if (
+      lastEntries.length === 0 &&
+      selectedStock &&
+      locationForm.quantidadeProduto! > selectedStock.quantidadeAtual
+    ) {
       newErrors.quantidadeProduto = `Quantidade não pode exceder o estoque atual (${selectedStock.quantidadeAtual})`;
     }
     if (!locationForm.id_seccao) newErrors.id_seccao = 'Seção é obrigatória';
