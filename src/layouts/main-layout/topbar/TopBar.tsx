@@ -36,11 +36,7 @@ const TopBar = ({ drawerWidth, onHandleDrawerToggle }: TopBarProps) => {
 
   const handleOpenNotifications = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
-    notifications.forEach((notif) => {
-      if (!notif.read) {
-        markAsRead(notif.id);
-      }
-    });
+    // Removido o loop que marca as notificações como lidas
   };
 
   useEffect(() => {
@@ -132,74 +128,129 @@ const TopBar = ({ drawerWidth, onHandleDrawerToggle }: TopBarProps) => {
             horizontal: 'right',
           }}
         >
-          <Box sx={{ p: 2, minWidth: 300, maxHeight: 400, overflowY: 'auto' }}>
-            <Typography variant="h6" sx={{ mb: 2 }}>
-              Notificações ({filteredNotifications.length})
-            </Typography>
-            {filteredNotifications.length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                Nenhuma notificação
+          <Box sx={{ minWidth: 300, maxHeight: 400, display: 'flex', flexDirection: 'column' }}>
+            {/* Área fixa com título e botões */}
+            <Box
+              sx={{
+                p: 2,
+                position: 'sticky',
+                top: 0,
+                zIndex: 1,
+                bgcolor: 'background.default', // Fundo para a área fixa
+                borderBottom: '1px solid',
+                borderColor: 'grey.300', // Borda inferior para separar da lista
+              }}
+            >
+              <Typography variant="h6" sx={{ mb: 2 }}>
+                Notificações ({filteredNotifications.length})
               </Typography>
-            ) : (
-              <List>
-                {filteredNotifications.map((notification) => (
-                  <ListItem
-                    key={notification.id}
-                    secondaryAction={
-                      <IconButton
-                        edge="end"
-                        aria-label="delete"
-                        onClick={() => handleClearNotification(notification.id)}
-                      >
-                        <IconifyIcon icon="mdi:close" />
-                      </IconButton>
-                    }
+
+              {/* Botões destacados com fundo, sombra e bordas */}
+              {filteredNotifications.length > 0 && (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    mb: 2,
+                    p: 1, // Padding interno para os botões
+                    bgcolor: 'background.paper', // Fundo claro
+                    borderRadius: 1, // Bordas arredondadas
+                    boxShadow: 2, // Sombra suave para elevação
+                    border: '1px solid', // Borda sutil
+                    borderColor: 'grey.300', // Cor da borda
+                  }}
+                >
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      filteredNotifications.forEach((notif) => {
+                        if (!notif.read) {
+                          markAsRead(notif.id);
+                        }
+                      });
+                    }}
                     sx={{
-                      bgcolor: notification.read ? 'background.paper' : 'action.hover',
-                      borderLeft: notification.read ? 'none' : '4px solid',
-                      borderLeftColor: 'primary.main',
+                      bgcolor: 'primary.light', // Fundo do botão
+                      color: 'primary.contrastText', // Cor do texto contrastante
+                      '&:hover': {
+                        bgcolor: 'primary.main', // Cor mais escura ao passar o mouse
+                      },
                     }}
                   >
-                    <ListItemText
-                      primary={notification.message}
-                      secondary={notification.timestamp?.toLocaleString()}
-                      primaryTypographyProps={{
-                        variant: 'body2',
-                        fontWeight: notification.read ? 'normal' : 'bold',
-                      }}
-                    />
-                  </ListItem>
-                ))}
-              </List>
-            )}
-            {filteredNotifications.length > 0 && (
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
-                <Button
-                  size="small"
-                  onClick={() => {
-                    filteredNotifications.forEach((notif) => {
-                      if (!notif.read) {
-                        markAsRead(notif.id);
-                      }
-                    });
-                  }}
-                >
-                  Marcar todas como lidas
-                </Button>
-                <Button
-                  size="small"
-                  color="error"
-                  onClick={() => {
-                    filteredNotifications.forEach((notif) => {
-                      removeNotification(notif.id);
-                    });
-                  }}
-                  sx={{ ml: 1 }}
-                >
-                  Limpar todas
-                </Button>
-              </Box>
-            )}
+                    Marcar todas como lidas
+                  </Button>
+                  <Button
+                    size="small"
+                    color="error"
+                    onClick={() => {
+                      filteredNotifications.forEach((notif) => {
+                        removeNotification(notif.id);
+                      });
+                    }}
+                    sx={{
+                      ml: 1,
+                      bgcolor: 'error.light', // Fundo do botão
+                      color: 'error.contrastText', // Cor do texto contrastante
+                      '&:hover': {
+                        bgcolor: 'error.main', // Cor mais escura ao passar o mouse
+                      },
+                    }}
+                  >
+                    Limpar todas
+                  </Button>
+                </Box>
+              )}
+            </Box>
+
+            {/* Área rolável com a lista de notificações */}
+            <Box sx={{ flex: 1, overflowY: 'auto', px: 2, pb: 2 }}>
+              {filteredNotifications.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  Nenhuma notificação
+                </Typography>
+              ) : (
+                <List>
+                  {[...filteredNotifications]
+                    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                    .map((notification) => (
+                      <ListItem
+                        key={notification.id}
+                        secondaryAction={
+                          <IconButton
+                            edge="end"
+                            aria-label="delete"
+                            onClick={() => handleClearNotification(notification.id)}
+                          >
+                            <IconifyIcon icon="mdi:close" />
+                          </IconButton>
+                        }
+                        sx={{
+                          bgcolor: notification.read ? 'background.paper' : 'grey.200', // Fundo cinza claro para não lidas
+                          borderLeft: notification.read ? 'none' : '4px solid', // Borda para reforçar
+                          borderLeftColor: 'grey.600', // Borda cinza escura para não lidas
+                          transition: 'all 0.2s ease-in-out', // Transição suave
+                          '&:hover': {
+                            bgcolor: notification.read ? 'action.hover' : 'grey.300', // Hover cinza um pouco mais escuro para não lidas
+                          },
+                        }}
+                      >
+                        <ListItemText
+                          primary={notification.message}
+                          secondary={notification.timestamp?.toLocaleString()}
+                          primaryTypographyProps={{
+                            variant: 'body2',
+                            fontWeight: notification.read ? 'normal' : 'bold', // Negrito para não lidas
+                            color: notification.read ? '#B0BEC5' : '#424242', // Cinza claro para lidas, cinza escuro para não lidas
+                          }}
+                          secondaryTypographyProps={{
+                            color: 'text.secondary', // Timestamp com cor padrão
+                          }}
+                        />
+                      </ListItem>
+                    ))}
+                </List>
+              )}
+            </Box>
           </Box>
         </Popover>
       </AppBar>

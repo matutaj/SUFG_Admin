@@ -166,6 +166,11 @@ export interface Localizacao {
   updatedAt?: string;
 }
 
+export interface AlertState {
+  severity: 'success' | 'error' | 'info' | 'warning';
+  message: string;
+  unread?: boolean; // Propriedade para indicar se o alerta não foi lido
+}
 export interface ProdutoLocalizacao {
   id?: string;
   id_produto: string;

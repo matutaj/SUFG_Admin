@@ -1712,36 +1712,10 @@ const Faturacao: React.FC = () => {
   // Função que dispara o alerta
   const handleEnviarAlerta = () => {
     try {
-      console.log('[Faturacao] Iniciando handleEnviarAlerta');
-      if (!loggedInFuncionarioId) {
-        throw new Error('Usuário não autenticado. Faça login novamente.');
-      }
-      if (!funcionariosCaixa.length) {
-        throw new Error('Nenhum caixa disponível. Carregue os dados novamente.');
-      }
-  
-      const caixaAberto = funcionariosCaixa.find(
-        (fc) => fc.estadoCaixa && fc.id_funcionario === loggedInFuncionarioId,
-      );
-  
-      if (!caixaAberto || !caixaAberto.id) {
-        throw new Error('Nenhum caixa aberto encontrado para o funcionário logado.');
-      }
-  
-      const nomeCaixa = caixaAberto.caixas?.nomeCaixa || 'Caixa Desconhecido';
-      const nomeFuncionario = getLoggedInUserName();
-      const mensagem = `Alerta: Há produtos no ${nomeCaixa} de ${nomeFuncionario}`;
-  
-      console.log('[Faturacao] Mensagem do alerta:', mensagem);
-      handleCaixaAlert(mensagem);
-      console.log('[Faturacao] Definindo openModal como true');
+      handleCaixaAlert(`Alerta: Há produtos no caixa de ${getLoggedInUserName()}`);
       setOpenModal(true);
-    } catch (error: any) {
+    } catch (error) {
       console.error('[Faturacao] Erro ao enviar alerta:', error);
-      setAlert({
-        severity: 'error',
-        message: error.message || 'Erro ao enviar alerta. Tente novamente.',
-      });
     }
   };
 
