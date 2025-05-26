@@ -10,6 +10,7 @@ export interface DadosVenda {
   dataEmissao: Date;
   dataValidade: Date;
   id_funcionarioCaixa: string;
+  metodoPagamento: string;
   numeroDocumento: string;
   tipoDocumento: TipoDocumento;
   valorTotal: number;
@@ -104,6 +105,7 @@ export interface Venda {
   id_funcionarioCaixa: string;
   numeroDocumento: string;
   tipoDocumento: TipoDocumento;
+  metodoPagamento: string;
   dataEmissao: string;
   dataValidade: string;
   valorTotal: number;
@@ -171,6 +173,8 @@ export interface ProdutoLocalizacao {
   id_seccao: string;
   id_prateleira: string;
   id_corredor: string;
+  lote?: string;
+  dataValidadeLote?: Date;
   quantidadeProduto: number;
   quantidadeMinimaProduto: number;
   transferencias?: Transferencia[];

@@ -101,6 +101,7 @@ interface FaturaState {
 
   localizacao: string;
   email: string;
+  metodoPagamento: string;
   produtosSelecionados: { id: string; quantidade: number }[];
   funcionariosCaixaId: string;
   errors: { [key: string]: string };
@@ -133,6 +134,7 @@ const initialFaturaState: FaturaState = {
   telefone: '',
   localizacao: '',
   email: '',
+  metodoPagamento: '',
   produtosSelecionados: [{ id: '', quantidade: 1 }],
   funcionariosCaixaId: '',
   errors: {},
@@ -238,6 +240,10 @@ const validateFatura = (
   locations: Localizacao[],
 ): { [key: string]: string } => {
   const errors: { [key: string]: string } = {};
+
+  if (!state.metodoPagamento) {
+    errors.metodoPagamento = 'Método de pagamento é obrigatório';
+  }
 
   if (!state.cliente.trim()) {
     errors.cliente = 'Nome do cliente é obrigatório';
@@ -1093,6 +1099,7 @@ const Faturacao: React.FC = () => {
             id_funcionarioCaixa: faturaState.funcionariosCaixaId,
             numeroDocumento: `FAT-${Date.now()}`,
             tipoDocumento: TipoDocumento.FATURA,
+            metodoPagamento:faturaState.metodoPagamento,
             valorTotal: totalVenda,
             vendasProdutos: faturaState.produtosSelecionados.map((p) => ({
               id_produto: p.id,
@@ -1960,6 +1967,38 @@ const Faturacao: React.FC = () => {
                 />
               </Grid>
             </Grid>
+            <Grid item xs={12} sm={6} md={4}>
+  <FormControl
+    fullWidth
+    variant="outlined"
+    error={Boolean(faturaState.errors.metodoPagamento)}
+    sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
+  >
+    <InputLabel>Método de Pagamento</InputLabel>
+    <Select
+      name="metodoPagamento"
+      value={faturaState.metodoPagamento}
+      onChange={(e) =>
+        dispatchFatura({
+          type: 'UPDATE_FIELD',
+          field: 'metodoPagamento',
+          value: e.target.value,
+        })
+      }
+      label="Método de Pagamento"
+    >
+      <MenuItem value="">
+        <em>Selecione um método</em>
+      </MenuItem>
+      <MenuItem value="DINHEIRO">Dinheiro</MenuItem>
+      <MenuItem value="CARTAO">Cartão</MenuItem>
+      <MenuItem value="TRANSFERENCIA">Transferência Bancária</MenuItem>
+    </Select>
+    {faturaState.errors.metodoPagamento && (
+      <FormHelperText>{faturaState.errors.metodoPagamento}</FormHelperText>
+    )}
+  </FormControl>
+</Grid>
 
             <Divider sx={{ borderColor: 'primary.main' }} />
             <Typography variant="h6" color="text.secondary">
