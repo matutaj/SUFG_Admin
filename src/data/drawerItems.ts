@@ -132,7 +132,7 @@ export const drawerItems: DrawerItem[] = [
         title: 'Caixa',
         path: `/${rootPaths.pagesRoot}/caixa`,
         active: true,
-        requiredRoles: ['Admin', 'Gerente', 'Operador de caixa'],
+        requiredRoles: ['Admin', 'Gerente'],
       },
     ],
   },
