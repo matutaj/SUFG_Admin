@@ -260,5 +260,3 @@ export const hasAnyRole = async (requiredRoles: string[]): Promise<boolean> => {
   });
   return hasRole;
 };
-
-
