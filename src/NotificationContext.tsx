@@ -114,11 +114,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   // Filtragem de notificações baseada no usuário
   const filteredNotifications = useMemo(() => {
-    if (!user || !user.id_funcao) return notifications; // Retorna todas se não há usuário ou id_funcao
+    if (!user || !user.id_funcao) return notifications;
 
     return notifications.filter((notification) => {
       if (notification.type === 'cashier') {
-        return ['3', '4'].includes(user.id_funcao!); // Estoquista e Repositor
+        return ['3', '4'].includes(user.id_funcao!);
       }
       if (notification.type === 'low_stock') {
         return ['1', '2', '3', '4'].includes(user.id_funcao!); // Admin, Gerente, Estoquista, Repositor

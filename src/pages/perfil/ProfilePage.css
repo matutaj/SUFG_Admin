@@ -52,7 +52,8 @@ body {
 
 /* Estilos gerais */
 .profile-page {
-  min-height: 100vh;
+  /*   min-height: 100vh;
+ */
   background: var(--primary-bg);
   padding: 2rem 1rem;
   display: flex;
