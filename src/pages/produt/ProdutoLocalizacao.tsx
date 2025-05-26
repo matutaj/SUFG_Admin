@@ -652,24 +652,23 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         setAlert({ severity: 'error', message: 'Nenhum item válido' });
         return;
       }
-  
+
       const validTransfers = transfers.filter(
         (item) => item.id_produto && item.id_localizacao_origem && item.quantidadeTransferida > 0,
       );
-  
+
       if (validTransfers.length === 0) {
         setAlert({ severity: 'error', message: 'Nenhum item válido' });
         return;
       }
-  
+
       const destinations = validTransfers.map((item) => {
         // Verifica se já existe um registro para o produto no destino
         const existingLocation = productLocations.find(
           (loc) =>
-            loc.id_produto === item.id_produto &&
-            loc.id_localizacao !== item.id_localizacao_origem, // Evita a origem
+            loc.id_produto === item.id_produto && loc.id_localizacao !== item.id_localizacao_origem, // Evita a origem
         );
-  
+
         return {
           id_produto: item.id_produto,
           id_localizacao: existingLocation?.id_localizacao || '',
@@ -679,7 +678,7 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
           quantidadeProduto: item.quantidadeTransferida,
         };
       });
-  
+
       setDestinationLocations(destinations);
       setTransferItems(validTransfers);
       setCurrentDestinationIndex(0);
