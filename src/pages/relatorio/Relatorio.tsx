@@ -247,8 +247,14 @@ const Relatorio = () => {
       });
 
       const response = await getReportData(endpoint, queryParams.toString());
-      const data = response.data || [];
-      setReportData(Array.isArray(data) ? data : [data]);
+      const data = response.data || (reportType === 'FaturamentoPeriodo' ? { vendas: [] } : []);
+      setReportData(
+        reportType === 'FaturamentoPeriodo' && data.vendas
+          ? data.vendas
+          : Array.isArray(data)
+            ? data
+            : [data],
+      );
     } catch (error) {
       console.error('Erro ao buscar dados:', error);
       setReportError(
@@ -360,25 +366,35 @@ const Relatorio = () => {
           ]);
           break;
         case 'RelatorioTransferencias':
-          headers = ['Produto', 'Quantidade', 'Data Transferência', 'Localização', 'Funcionário'];
+          headers = [
+            'Produto',
+            'Quantidade',
+            'Data Transferência',
+            'Localização',
+            'Corredor',
+            'Prateleira',
+            'Seção',
+            'Funcionário',
+          ];
           data = reportData.map((item) => [
             item.nomeProduto || '-',
             item.quantidadeTransferida?.toString() || '0',
             item.dataTransferencia ? format(new Date(item.dataTransferencia), 'dd/MM/yyyy') : '-',
             item.nomeLocalizacao || '-',
+            item.corredor || '-',
+            item.prateleira || '-',
+            item.seccao || '-',
             item.funcionarioNome || '-',
           ]);
           break;
         case 'FaturamentoPeriodo':
-          headers = ['Total Faturado', 'Vendas'];
-          data = [
-            [
-              reportData[0]?.totalFaturado?.toFixed(2) || '0.00',
-              reportData[0]?.vendas
-                ?.map((v: any) => `Doc: ${v.numeroDocumento}, Total: ${v.valorTotal?.toFixed(2)}`)
-                .join('; ') || '-',
-            ],
-          ];
+          headers = ['Nome Produto', 'Total Faturado', 'Data Emissão', 'Funcionário'];
+          data = reportData.map((item) => [
+            item.nomeProduto || '-',
+            item.totalFaturado?.toFixed(2) || '0.00',
+            item.dataEmissao ? format(new Date(item.dataEmissao), 'dd/MM/yyyy') : '-',
+            item.funcionariosCaixa || '-',
+          ]);
           break;
         case 'Vendas':
           headers = [
@@ -630,7 +646,7 @@ const Relatorio = () => {
             </Button>
           </Stack>
 
-          {reportData.length > 0 ? (
+          {reportData.length > 0 && (
             <Box sx={{ mt: 3 }}>
               <Typography variant="h6" gutterBottom>
                 Dados do Relatório
@@ -639,28 +655,44 @@ const Relatorio = () => {
                 <Table>
                   <TableHead>
                     <TableRow>
-                      {Object.keys(reportData[0] || {})
-                        .filter((key) => !key.toLowerCase().includes('id'))
-                        .map((key) => (
-                          <TableCell key={key}>{key.replace(/([A-Z])/g, ' $1').trim()}</TableCell>
-                        ))}
+                      {reportType === 'FaturamentoPeriodo'
+                        ? ['Nome Produto', 'Total Faturado', 'Data Emissão', 'Funcionário'].map(
+                            (header) => <TableCell key={header}>{header}</TableCell>,
+                          )
+                        : Object.keys(reportData[0] || {})
+                            .filter((key) => !key.toLowerCase().includes('id'))
+                            .map((key) => (
+                              <TableCell key={key}>
+                                {key.replace(/([A-Z])/g, ' $1').trim()}
+                              </TableCell>
+                            ))}
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {reportData.map((row, index) => (
-                      <TableRow key={index}>
-                        {Object.entries(row)
-                          .filter(([key]) => !key.toLowerCase().includes('id'))
-                          .map(([key, value]) => (
-                            <TableCell key={key}>{formatTableCell(value)}</TableCell>
-                          ))}
-                      </TableRow>
-                    ))}
+                    {reportType === 'FaturamentoPeriodo'
+                      ? reportData.map((row, index) => (
+                          <TableRow key={index}>
+                            <TableCell>{formatTableCell(row.nomeProduto)}</TableCell>
+                            <TableCell>{formatTableCell(row.totalFaturado)}</TableCell>
+                            <TableCell>{formatTableCell(row.dataEmissao)}</TableCell>
+                            <TableCell>{formatTableCell(row.funcionariosCaixa)}</TableCell>
+                          </TableRow>
+                        ))
+                      : reportData.map((row, index) => (
+                          <TableRow key={index}>
+                            {Object.entries(row)
+                              .filter(([key]) => !key.toLowerCase().includes('id'))
+                              .map(([key, value]) => (
+                                <TableCell key={key}>{formatTableCell(value)}</TableCell>
+                              ))}
+                          </TableRow>
+                        ))}
                   </TableBody>
                 </Table>
               </TableContainer>
             </Box>
-          ) : (
+          )}
+          {reportData.length === 0 && (
             <Box sx={{ mt: 3 }}>
               <Typography variant="body1" color="textSecondary">
                 Nenhum dado disponível. Preencha os filtros e clique em "Buscar Dados".
