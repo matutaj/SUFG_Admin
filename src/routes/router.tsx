@@ -19,7 +19,7 @@ import Caixas from 'pages/caixa/caixa';
 import Perfil from 'pages/perfil/Perfil';
 import { StockProvider } from 'pages/stock/StockContext';
 import { Navigate } from 'react-router-dom';
-import { getUserData, hasAnyRole } from '../api/authUtils';
+import ProtectedRoute from './ProtecteRoute';
 
 const App = lazy(() => import('App'));
 const MainLayout = lazy(() => import('layouts/main-layout'));
@@ -30,27 +30,6 @@ const Armazem = lazy(() => import('pages/localizacao/Localizacao'));
 const Login = lazy(() => import('pages/authentication/Login'));
 const Signup = lazy(() => import('pages/authentication/Signup'));
 const ErrorPage = lazy(() => import('pages/errors/ErrorPage'));
-
-// Componente ProtectedRoute
-interface ProtectedRouteProps {
-  requiredRoles?: string[];
-  redirectTo?: string;
-}
-
-const ProtectedRoute = ({ requiredRoles, redirectTo = '/login' }: ProtectedRouteProps) => {
-  const user = getUserData();
-  const token = localStorage.getItem('token');
-
-  if (!token || !user) {
-    return <Navigate to={redirectTo} replace />;
-  }
-
-  if (requiredRoles && !hasAnyRole(requiredRoles)) {
-    return <Navigate to={paths.notFound} replace />;
-  }
-
-  return <Outlet />;
-};
 
 export const routes = [
   {
@@ -79,7 +58,7 @@ export const routes = [
         ],
       },
       {
-        element: <ProtectedRoute />,
+        element: <ProtectedRoute />, // Proteção geral para autenticação
         children: [
           {
             path: rootPaths.pagesRoot,
@@ -95,7 +74,11 @@ export const routes = [
             children: [
               {
                 path: paths.dashboard,
-                element: <Dashboard />,
+                element: (
+                  <ProtectedRoute requiredRoles={['Admin', 'Gerente']} redirectTo={paths.perfil}>
+                    <Dashboard />
+                  </ProtectedRoute>
+                ),
               },
               {
                 path: paths.tarefa,

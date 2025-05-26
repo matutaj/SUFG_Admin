@@ -1,19 +1,21 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, ReactNode } from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
-import { getUserData, hasAnyRole } from '../api/authUtils';
+import { getUserData, hasAnyRole, UserData } from '../api/authUtils';
 import paths from './paths';
 import LinearLoader from 'components/loading/LinearLoader';
 
 interface ProtectedRouteProps {
   requiredRoles?: string[];
   redirectTo?: string;
+  children?: ReactNode;
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requiredRoles,
-  redirectTo = "/login",
+  redirectTo = '/login',
+  children,
 }) => {
-  const [user, setUser] = useState<any | null>(null);
+  const [user, setUser] = useState<UserData | null>(null); // Melhoria: tipar como UserData
   const [hasRole, setHasRole] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const token = localStorage.getItem('token');
@@ -34,7 +36,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
           const roleCheck = await hasAnyRole(requiredRoles);
           setHasRole(roleCheck);
         } else {
-          setHasRole(true); // No role required, allow access
+          setHasRole(true);
         }
       } catch (error) {
         console.error('[ProtectedRoute] Erro ao verificar usuário ou papel:', error);
@@ -57,10 +59,10 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   if (requiredRoles && !hasRole) {
-    return <Navigate to={paths.notFound} replace />;
+    return <Navigate to={redirectTo} replace />;
   }
 
-  return <Outlet />;
+  return children ? <>{children}</> : <Outlet />;
 };
 
 export default ProtectedRoute;
