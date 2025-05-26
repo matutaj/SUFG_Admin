@@ -422,14 +422,6 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
   // Carregar dados
   const fetchData = useCallback(async () => {
-    if (!permissions.canRead) {
-      setAlert({
-        severity: 'error',
-        message: 'Você não tem permissão para visualizar localizações!',
-      });
-      log('Permissão de leitura negada');
-      return;
-    }
     try {
       setLoading(true);
       setAlert(null);

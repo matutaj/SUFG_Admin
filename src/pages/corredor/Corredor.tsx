@@ -185,14 +185,6 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   }, [navigate]);
 
   const fetchCorridors = useCallback(async () => {
-    if (!permissions.canRead) {
-      setAlert({
-        severity: 'error',
-        message: 'Você não tem permissão para visualizar corredores!',
-      });
-      log('Permissão de leitura negada');
-      return;
-    }
     try {
       setLoading(true);
       const timeoutPromise = (promise: Promise<any>, time: number) =>
@@ -482,9 +474,6 @@ const CorredorComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 variant="outlined"
                 size="small"
                 disabled={loading || !permissions.canRead}
-                title={
-                  !permissions.canRead ? 'Você não tem permissão para visualizar corredores' : ''
-                }
               />
               <Button
                 variant="contained"

@@ -198,11 +198,6 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   };
 
   const fetchProducts = async () => {
-    if (!permissions.canRead) {
-      setAlert({ severity: 'error', message: 'Você não tem permissão para visualizar produtos!' });
-      log('Permissão de leitura negada');
-      return;
-    }
     try {
       setLoading(true);
       const productsData = await getAllProducts();

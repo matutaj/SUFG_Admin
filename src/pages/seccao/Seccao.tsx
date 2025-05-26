@@ -185,14 +185,6 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   }, [navigate]);
 
   const fetchSections = useCallback(async () => {
-    if (!permissions.canRead) {
-      setAlert({
-        severity: 'error',
-        message: 'Você não tem permissão para visualizar seções!',
-      });
-      log('Permissão de leitura negada');
-      return;
-    }
     try {
       setLoading(true);
       const timeoutPromise = (promise: Promise<any>, time: number) =>
@@ -467,7 +459,6 @@ const SeccaoComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 variant="outlined"
                 size="small"
                 disabled={loading || !permissions.canRead}
-                title={!permissions.canRead ? 'Você não tem permissão para visualizar seções' : ''}
               />
               <Button
                 variant="contained"

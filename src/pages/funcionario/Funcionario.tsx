@@ -157,14 +157,6 @@ const FuncionarioComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   }, [navigate]);
 
   const fetchData = useCallback(async () => {
-    if (!permissions.canRead) {
-      setAlert({
-        severity: 'error',
-        message: 'Você não tem permissão para visualizar funcionários!',
-      });
-      log('Permissão de leitura negada');
-      return;
-    }
     try {
       setLoadingFetch(true);
       const timeoutPromise = (promise: Promise<any>, time: number) =>

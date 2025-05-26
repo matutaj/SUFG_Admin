@@ -141,14 +141,6 @@ const PrateleiraComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   }, [navigate]);
 
   const fetchShelves = useCallback(async () => {
-    if (!permissions.canRead) {
-      setAlert({
-        severity: 'error',
-        message: 'Você não tem permissão para visualizar prateleiras!',
-      });
-      log('Permissão de leitura negada');
-      return;
-    }
     try {
       setLoading(true);
       const timeoutPromise = (promise: Promise<any>, time: number) =>
@@ -477,9 +469,6 @@ const PrateleiraComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 variant="outlined"
                 size="small"
                 disabled={loading || !permissions.canRead}
-                title={
-                  !permissions.canRead ? 'Você não tem permissão para visualizar prateleiras' : ''
-                }
               />
               <Button
                 variant="contained"

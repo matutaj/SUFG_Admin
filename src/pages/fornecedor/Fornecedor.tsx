@@ -142,14 +142,6 @@ const Fornecedores: React.FC<CollapsedItemProps> = ({ open }) => {
   }, [navigate]);
 
   const fetchFornecedores = useCallback(async () => {
-    if (!permissions.canRead) {
-      setAlert({
-        severity: 'error',
-        message: 'Você não tem permissão para visualizar fornecedores!',
-      });
-      log('Permissão de leitura negada');
-      return;
-    }
     try {
       setLoadingFetch(true);
       const timeoutPromise = (promise: Promise<any>, time: number) =>

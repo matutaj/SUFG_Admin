@@ -147,14 +147,6 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   }, [navigate]);
 
   const fetchLocalizacoes = useCallback(async () => {
-    if (!permissions.canRead) {
-      setAlert({
-        severity: 'error',
-        message: 'Você não tem permissão para visualizar localizações!',
-      });
-      log('Permissão de leitura negada');
-      return;
-    }
     try {
       setLoading(true);
       const timeoutPromise = (promise: Promise<any>, time: number) =>
@@ -499,9 +491,6 @@ const WarehouseComponent: React.FC<CollapsedItemProps> = ({ open }) => {
                 variant="outlined"
                 size="small"
                 disabled={loading || !permissions.canRead}
-                title={
-                  !permissions.canRead ? 'Você não tem permissão para visualizar localizações' : ''
-                }
               />
               <Button
                 variant="contained"
