@@ -324,9 +324,7 @@ const ClienteComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       if (isEditing && editId !== null) {
         const updatedCliente = await updateClient(editId, clientData);
         setClientes((prev) => prev.map((item) => (item.id === editId ? updatedCliente : item)));
-        setFilteredClientes((prev) =>
-          prev.map((item) => (item.id === editId ? updatedCliente : item)),
-        );
+        setFilteredClientes((prev) => prev.map((item) => (item.id === editId ? updatedCliente : item)));
         setAlert({ severity: 'success', message: 'Cliente atualizado com sucesso!' });
         log('Cliente atualizado:', { id: editId, ...clientData });
       } else {
@@ -455,9 +453,7 @@ const ClienteComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
   if (isAuthLoading) {
     return (
-      <Box
-        sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}
-      >
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
         <CircularProgress />
       </Box>
     );
