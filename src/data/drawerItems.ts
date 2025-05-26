@@ -34,7 +34,7 @@ export const drawerItems: DrawerItem[] = [
     path: paths.dashboard,
     collapsible: false,
     active: true,
-    requiredRoles: ['Admin', 'Gerente', 'Estoquista'],
+    requiredRoles: ['Admin', 'Gerente'],
   },
   {
     id: 3,
