@@ -204,7 +204,15 @@ const Stock: React.FC = () => {
     const grouped: { [key: string]: DadosEntradaEstoque[] } = {};
   
     entries.forEach((entry) => {
-      const dataEntrada = new Date(entry.dataEntrada); // Garantir que é Date
+      if (!entry.id || !entry.dataEntrada || !entry.id_fornecedor || !entry.id_funcionario) {
+        console.warn('Entrada inválida ignorada:', entry);
+        return;
+      }
+      const dataEntrada = new Date(entry.dataEntrada);
+      if (isNaN(dataEntrada.getTime())) {
+        console.warn('Data de entrada inválida:', entry);
+        return;
+      }
       const key = `${dataEntrada.toISOString()}-${entry.id_fornecedor}-${entry.id_funcionario}`;
       if (!grouped[key]) {
         grouped[key] = [];
@@ -213,11 +221,11 @@ const Stock: React.FC = () => {
     });
   
     return Object.values(grouped).map((entries, index) => ({
-      id: `group-${index}`, // ID único para o grupo
-      dataEntrada: new Date(entries[0].dataEntrada), // Garantir que é Date
+      id: `group-${index}-${entries[0].id_fornecedor}-${entries[0].id_funcionario}`,
+      dataEntrada: new Date(entries[0].dataEntrada),
       id_fornecedor: entries[0].id_fornecedor,
       id_funcionario: entries[0].id_funcionario,
-      entries, // Lista de entradas no grupo
+      entries,
     }));
   };
   const groupedStockEntries = useMemo(() => groupStockEntries(filteredStockEntries), [filteredStockEntries]);
@@ -640,52 +648,67 @@ const Stock: React.FC = () => {
 
   const onSubmit = useCallback(async () => {
     if (!validateForm()) return;
-
+  
     try {
       setLoading(true);
       setFetchError(null);
-
+  
       const newEntries: DadosEntradaEstoque[] = [];
       const newStocks: DadosEstoque[] = [];
-
-      for (const product of form.products) {
-        const entryData: DadosEntradaEstoque = {
-          id_fornecedor: form.id_fornecedor!,
-          id_produto: product.id_produto,
-          id_funcionario: form.id_funcionario!,
-          quantidadeRecebida: product.quantidadeRecebida,
-          dataEntrada: form.dataEntrada!,
-          custoUnitario: product.custoUnitario,
-          lote: product.lote,
-          dataValidadeLote: product.dataValidadeLote,
-          adicionado: true,
-        };
-
-        if (isEditing && editEntryId) {
-          const updatedEntry = await updateStockEntry(editEntryId, entryData);
-          setStockEntries((prev) =>
-            prev.map((item) => (item.id === editEntryId ? updatedEntry : item)),
-          );
-          setFilteredStockEntries((prev) =>
-            prev.map((item) => (item.id === editEntryId ? updatedEntry : item)),
-          );
-          newEntries.push(updatedEntry);
-        } else {
-          const newEntry = await createStockEntry(entryData);
-          newEntries.push(newEntry);
-          setStockEntries((previous) => [...previous, newEntry]);
-          setFilteredStockEntries((previous) => [...previous, newEntry]);
-
+  
+      if (isEditing && editEntryId?.startsWith('group-')) {
+        // Encontrar o grupo correspondente
+        const group = groupedStockEntries.find((g) => g.id === editEntryId);
+        if (!group) {
+          throw new Error('Grupo não encontrado');
+        }
+  
+        // Iterar sobre os produtos do formulário
+        for (let i = 0; i < form.products.length; i++) {
+          const product = form.products[i];
+          const entryData: DadosEntradaEstoque = {
+            id_fornecedor: form.id_fornecedor!,
+            id_produto: product.id_produto,
+            id_funcionario: form.id_funcionario!,
+            quantidadeRecebida: product.quantidadeRecebida,
+            dataEntrada: form.dataEntrada!,
+            custoUnitario: product.custoUnitario,
+            lote: product.lote,
+            dataValidadeLote: product.dataValidadeLote,
+            adicionado: true,
+          };
+  
+          if (i < group.entries.length) {
+            // Atualizar entrada existente
+            const originalEntry = group.entries[i];
+            const updatedEntry = await updateStockEntry(originalEntry?.id!, entryData);
+            newEntries.push(updatedEntry);
+            setStockEntries((prev) =>
+              prev.map((item) => (item.id === originalEntry.id ? updatedEntry : item)),
+            );
+            setFilteredStockEntries((prev) =>
+              prev.map((item) => (item.id === originalEntry.id ? updatedEntry : item)),
+            );
+          } else {
+            // Criar nova entrada se houver mais produtos no formulário
+            const newEntry = await createStockEntry(entryData);
+            newEntries.push(newEntry);
+            setStockEntries((previous) => [...previous, newEntry]);
+            setFilteredStockEntries((previous) => [...previous, newEntry]);
+          }
+  
+          // Atualizar ou criar estoque
           const existingStock = currentStock.find(
             (item) =>
-              item.id_produto === newEntry.id_produto &&
-              item.lote === newEntry.lote &&
-              item.dataValidadeLote.toISOString() === newEntry.dataValidadeLote.toISOString(),
+              item.id_produto === product.id_produto &&
+              item.lote === product.lote &&
+              new Date(item.dataValidadeLote).toISOString() ===
+              new Date(product.dataValidadeLote).toISOString(),
           );
-
+  
           let newStock: DadosEstoque;
           if (existingStock) {
-            const updatedQuantity = existingStock.quantidadeAtual + newEntry.quantidadeRecebida;
+            const updatedQuantity = existingStock.quantidadeAtual + product.quantidadeRecebida;
             const stockData: DadosEstoque = {
               id: existingStock.id,
               id_produto: existingStock.id_produto,
@@ -702,10 +725,90 @@ const Stock: React.FC = () => {
             );
           } else {
             const stockData: DadosEstoque = {
-              id_produto: newEntry.id_produto,
-              quantidadeAtual: newEntry.quantidadeRecebida,
-              lote: newEntry.lote,
-              dataValidadeLote: newEntry.dataValidadeLote,
+              id_produto: product.id_produto,
+              quantidadeAtual: product.quantidadeRecebida,
+              lote: product.lote,
+              dataValidadeLote: product.dataValidadeLote,
+            };
+            newStock = await createStock(stockData);
+            setCurrentStock((previous) => [...previous, newStock]);
+            setFilteredStock((previous) => [...previous, newStock]);
+          }
+          newStocks.push(newStock);
+        }
+  
+        // Se o formulário tiver menos produtos, excluir entradas excedentes
+        for (let i = form.products.length; i < group.entries.length; i++) {
+          const entryToDelete = group.entries[i];
+          if (entryToDelete.id !== undefined) {
+            await deleteStockEntry(entryToDelete.id);
+            setStockEntries((prev) => prev.filter((item) => item.id !== entryToDelete.id));
+            setFilteredStockEntries((prev) => prev.filter((item) => item.id !== entryToDelete.id));
+          }
+        }
+      } else {
+        // Lógica para criar ou editar entrada individual
+        for (const product of form.products) {
+          const entryData: DadosEntradaEstoque = {
+            id_fornecedor: form.id_fornecedor!,
+            id_produto: product.id_produto,
+            id_funcionario: form.id_funcionario!,
+            quantidadeRecebida: product.quantidadeRecebida,
+            dataEntrada: form.dataEntrada!,
+            custoUnitario: product.custoUnitario,
+            lote: product.lote,
+            dataValidadeLote: product.dataValidadeLote,
+            adicionado: true,
+          };
+  
+          if (isEditing && editEntryId) {
+            const updatedEntry = await updateStockEntry(editEntryId, entryData);
+            setStockEntries((prev) =>
+              prev.map((item) => (item.id === editEntryId ? updatedEntry : item)),
+            );
+            setFilteredStockEntries((prev) =>
+              prev.map((item) => (item.id === editEntryId ? updatedEntry : item)),
+            );
+            newEntries.push(updatedEntry);
+          } else {
+            const newEntry = await createStockEntry(entryData);
+            newEntries.push(newEntry);
+            setStockEntries((previous) => [...previous, newEntry]);
+            setFilteredStockEntries((previous) => [...previous, newEntry]);
+          }
+  
+          // Atualizar ou criar estoque
+          const existingStock = currentStock.find(
+            (item) =>
+              item.id_produto === product.id_produto &&
+              item.lote === product.lote &&
+              new Date(item.dataValidadeLote).toISOString() ===
+              new Date(product.dataValidadeLote).toISOString(),
+          );
+  
+          let newStock: DadosEstoque;
+          if (existingStock) {
+            const updatedQuantity = existingStock.quantidadeAtual + product.quantidadeRecebida;
+            const stockData: DadosEstoque = {
+              id: existingStock.id,
+              id_produto: existingStock.id_produto,
+              quantidadeAtual: updatedQuantity,
+              lote: existingStock.lote,
+              dataValidadeLote: existingStock.dataValidadeLote,
+            };
+            newStock = await updateStock(existingStock.id!, stockData);
+            setCurrentStock((previous) =>
+              previous.map((item) => (item.id === newStock.id ? newStock : item)),
+            );
+            setFilteredStock((previous) =>
+              previous.map((item) => (item.id === newStock.id ? newStock : item)),
+            );
+          } else {
+            const stockData: DadosEstoque = {
+              id_produto: product.id_produto,
+              quantidadeAtual: product.quantidadeRecebida,
+              lote: product.lote,
+              dataValidadeLote: product.dataValidadeLote,
             };
             newStock = await createStock(stockData);
             setCurrentStock((previous) => [...previous, newStock]);
@@ -714,14 +817,14 @@ const Stock: React.FC = () => {
           newStocks.push(newStock);
         }
       }
-
+  
       setSuccessMessage('Entradas adicionadas ao estoque. Agora selecione a localização.');
       handleClose();
       handleOpenLocationModal(newStocks, newEntries);
       await fetchData();
     } catch (error) {
       console.error('Erro ao salvar entrada de estoque:', error);
-      setFetchError('Erro ao salvar entrada de estoque.');
+      setFetchError(`Erro ao salvar entrada de estoque: ${error}`);
     } finally {
       setLoading(false);
     }
@@ -734,6 +837,7 @@ const Stock: React.FC = () => {
     currentStock,
     handleOpenLocationModal,
     fetchData,
+    groupedStockEntries,
   ]);
 
   const onStockSubmit = useCallback(async () => {
@@ -880,17 +984,120 @@ const Stock: React.FC = () => {
     setErrors({});
     setOpenModal(true);
   }, []);
-  const handleDeleteGroup = useCallback((group: {
-    id: string;
-    dataEntrada: Date;
-    id_fornecedor: string;
-    id_funcionario: string;
-    entries: DadosEntradaEstoque[];
-  }) => {
-    // Armazena o grupo a ser excluído no estado selectedEntry para uso no modal de confirmação
-    setSelectedEntry(group);
-    setOpenConfirmDelete(true);
-  }, []);
+  const handleDeleteGroup = useCallback(
+    async (group: {
+      id: string;
+      dataEntrada: Date;
+      id_fornecedor: string;
+      id_funcionario: string;
+      entries: DadosEntradaEstoque[];
+    }) => {
+      console.log('Grupo selecionado para exclusão:', {
+        id: group.id,
+        entries: group.entries.map((entry) => ({
+          id: entry.id,
+          id_produto: entry.id_produto,
+          lote: entry.lote,
+        })),
+      });
+      setSelectedEntry(group);
+      setOpenConfirmDeleteEntry(true);
+    },
+    [],
+  );
+  const handleDeleteGroupEntries = useCallback(async () => {
+    if (!selectedEntry) {
+      setFetchError('Nenhum grupo de entradas selecionado.');
+      return;
+    }
+  
+    try {
+      setLoading(true);
+      setFetchError(null);
+  
+      const errors: string[] = [];
+      let allDeleted = true;
+  
+      for (const entry of selectedEntry.entries) {
+        if (!entry.id) {
+          errors.push(`Entrada sem ID válido: ${JSON.stringify(entry)}`);
+          allDeleted = false;
+          continue;
+        }
+  
+        const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(entry.id);
+        if (!isValidUUID) {
+          errors.push(`ID inválido para entrada ${entry.id}`);
+          allDeleted = false;
+          continue;
+        }
+  
+        const entryExists = stockEntries.find((e) => e.id === entry.id);
+        if (!entryExists) {
+          errors.push(`Entrada ${entry.id} não encontrada no estado local.`);
+          allDeleted = false;
+          continue;
+        }
+  
+        try {
+          const deleted = await deleteStockEntry(entry.id);
+          if (deleted) {
+            const stockToUpdate = currentStock.find(
+              (stock) =>
+                stock.id_produto === entry.id_produto &&
+                stock.lote === entry.lote &&
+                new Date(stock.dataValidadeLote).toISOString() === new Date(entry.dataValidadeLote).toISOString(),
+            );
+  
+            if (stockToUpdate) {
+              const newQuantity = stockToUpdate.quantidadeAtual - entry.quantidadeRecebida;
+              if (newQuantity > 0) {
+                const updatedStock: DadosEstoque = {
+                  ...stockToUpdate,
+                  quantidadeAtual: newQuantity,
+                };
+                await updateStock(stockToUpdate.id!, updatedStock);
+                setCurrentStock((prev) =>
+                  prev.map((item) => (item.id === stockToUpdate.id ? updatedStock : item)),
+                );
+                setFilteredStock((prev) =>
+                  prev.map((item) => (item.id === stockToUpdate.id ? updatedStock : item)),
+                );
+              } else {
+                await deleteStock(stockToUpdate.id!);
+                setCurrentStock((prev) => prev.filter((item) => item.id !== stockToUpdate.id));
+                setFilteredStock((prev) => prev.filter((item) => item.id !== stockToUpdate.id));
+              }
+            }
+  
+            setStockEntries((prev) => prev.filter((item) => item.id !== entry.id));
+            setFilteredStockEntries((prev) => prev.filter((item) => item.id !== entry.id));
+          } else {
+            errors.push(`Entrada ${entry.id} não encontrada no servidor.`);
+            allDeleted = false;
+          }
+        } catch (error: any) {
+          errors.push(`Erro ao excluir entrada ${entry.id}: ${error.message}`);
+          allDeleted = false;
+        }
+      }
+  
+      if (errors.length > 0) {
+        setFetchError(`Algumas entradas não puderam ser excluídas: ${errors.join('; ')}`);
+      }
+      if (allDeleted) {
+        setSuccessMessage('Grupo de entradas excluído com sucesso!');
+      }
+  
+      handleCloseConfirmDeleteEntry();
+      await fetchData();
+    } catch (error: any) {
+      console.error('Erro inesperado ao excluir grupo de entradas:', error);
+      setFetchError(`Erro inesperado ao excluir grupo de entradas: ${error.message || error}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedEntry, currentStock, stockEntries, handleCloseConfirmDeleteEntry, fetchData]);
 
   const handleDeleteStock = useCallback(async () => {
     if (deleteStockId) {
@@ -919,24 +1126,69 @@ const Stock: React.FC = () => {
   }, [deleteStockId, handleCloseConfirmDelete, fetchData]);
 
   const handleDeleteStockEntry = useCallback(async () => {
-    if (deleteEntryId) {
-      try {
-        setLoading(true);
-        setFetchError(null);
-        await deleteStockEntry(deleteEntryId);
-        setStockEntries((previous) => previous.filter((item) => item.id !== deleteEntryId));
-        setFilteredStockEntries((previous) => previous.filter((item) => item.id !== deleteEntryId));
-        setSuccessMessage('Entrada de estoque excluída com sucesso!');
-        handleCloseConfirmDeleteEntry();
-        await fetchData();
-      } catch (error) {
-        console.error('Erro ao excluir entrada de estoque:', error);
-        setFetchError('Erro ao excluir entrada de estoque.');
-      } finally {
-        setLoading(false);
-      }
+    if (!deleteEntryId) {
+      setFetchError('ID da entrada não especificado.');
+      return;
     }
-  }, [deleteEntryId, handleCloseConfirmDeleteEntry, fetchData]);
+  
+    try {
+      setLoading(true);
+      setFetchError(null);
+  
+      // Encontrar a entrada a ser excluída
+      const entryToDelete = stockEntries.find((entry) => entry.id === deleteEntryId);
+      if (!entryToDelete) {
+        throw new Error('Entrada não encontrada.');
+      }
+  
+      // Excluir a entrada
+      await deleteStockEntry(deleteEntryId);
+  
+      // Atualizar o estoque correspondente
+      const stockToUpdate = currentStock.find(
+        (stock) =>
+          stock.id_produto === entryToDelete.id_produto &&
+          stock.lote === entryToDelete.lote &&
+          new Date(stock.dataValidadeLote).toISOString() ===
+            new Date(entryToDelete.dataValidadeLote).toISOString(),
+      );
+  
+      if (stockToUpdate) {
+        const newQuantity = stockToUpdate.quantidadeAtual - entryToDelete.quantidadeRecebida;
+        if (newQuantity > 0) {
+          // Atualizar o estoque
+          const updatedStock: DadosEstoque = {
+            ...stockToUpdate,
+            quantidadeAtual: newQuantity,
+          };
+          await updateStock(stockToUpdate.id!, updatedStock);
+          setCurrentStock((prev) =>
+            prev.map((item) => (item.id === stockToUpdate.id ? updatedStock : item)),
+          );
+          setFilteredStock((prev) =>
+            prev.map((item) => (item.id === stockToUpdate.id ? updatedStock : item)),
+          );
+        } else {
+          // Excluir o estoque se a quantidade for zero
+          await deleteStock(stockToUpdate.id!);
+          setCurrentStock((prev) => prev.filter((item) => item.id !== stockToUpdate.id));
+          setFilteredStock((prev) => prev.filter((item) => item.id !== stockToUpdate.id));
+        }
+      }
+  
+      // Atualizar as entradas
+      setStockEntries((previous) => previous.filter((item) => item.id !== deleteEntryId));
+      setFilteredStockEntries((previous) => previous.filter((item) => item.id !== deleteEntryId));
+      setSuccessMessage('Entrada de estoque excluída com sucesso!');
+      handleCloseConfirmDeleteEntry();
+      await fetchData();
+    } catch (error: any) {
+      console.error('Erro ao excluir entrada de estoque:', error);
+      setFetchError(`Erro ao excluir entrada de estoque: ${error.message || error}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [deleteEntryId, stockEntries, currentStock, handleCloseConfirmDeleteEntry, fetchData]);
 
   const handleSearch = useCallback(() => {
     const query = searchQuery.toLowerCase().trim();
@@ -1730,46 +1982,42 @@ const Stock: React.FC = () => {
       </Modal>
 
       <Modal
-        open={openConfirmDeleteEntry}
-        onClose={handleCloseConfirmDeleteEntry}
-        aria-labelledby="confirm-delete-entry-modal-title"
-        aria-describedby="confirm-delete-entry-modal-description"
+  open={openConfirmDeleteEntry}
+  onClose={handleCloseConfirmDeleteEntry}
+  aria-labelledby="confirm-delete-entry-modal-title"
+  aria-describedby="confirm-delete-entry-modal-description"
+>
+  <Box sx={confirmModalStyle}>
+    <Typography id="confirm-delete-entry-modal-title" variant="h6" component="h2" gutterBottom>
+      Confirmar Exclusão
+    </Typography>
+    <Typography id="confirm-delete-entry-modal-description" sx={{ mb: 3 }}>
+      {selectedEntry && selectedEntry.entries.length > 1
+        ? 'Tem certeza que deseja excluir este grupo de entradas de estoque? Isso pode afetar o estoque atual.'
+        : 'Tem certeza que deseja excluir esta entrada de estoque? Isso pode afetar o estoque atual.'}
+    </Typography>
+    <Stack direction="row" spacing={2} justifyContent="flex-end">
+      <Button
+        variant="outlined"
+        color="primary"
+        onClick={handleCloseConfirmDeleteEntry}
+        disabled={loading}
+        aria-label="Cancelar exclusão da entrada de estoque"
       >
-        <Box sx={confirmModalStyle}>
-          <Typography
-            id="confirm-delete-entry-modal-title"
-            variant="h6"
-            component="h2"
-            gutterBottom
-          >
-            Confirmar Exclusão
-          </Typography>
-          <Typography id="confirm-delete-entry-modal-description" sx={{ mb: 3 }}>
-            Tem certeza que deseja excluir esta entrada de estoque? Isso pode afetar o estoque
-            atual.
-          </Typography>
-          <Stack direction="row" spacing={2} justifyContent="flex-end">
-            <Button
-              variant="outlined"
-              color="primary"
-              onClick={handleCloseConfirmDeleteEntry}
-              disabled={loading}
-              aria-label="Cancelar exclusão da entrada de estoque"
-            >
-              Cancelar
-            </Button>
-            <Button
-              variant="contained"
-              color="error"
-              onClick={handleDeleteStockEntry}
-              disabled={loading}
-              aria-label="Confirmar exclusão da entrada de estoque"
-            >
-              {loading ? 'Excluindo...' : 'Excluir'}
-            </Button>
-          </Stack>
-        </Box>
-      </Modal>
+        Cancelar
+      </Button>
+      <Button
+        variant="contained"
+        color="error"
+        onClick={selectedEntry && selectedEntry.entries.length > 1 ? handleDeleteGroupEntries : handleDeleteStockEntry}
+        disabled={loading}
+        aria-label="Confirmar exclusão da entrada de estoque"
+      >
+        {loading ? 'Excluindo...' : 'Excluir'}
+      </Button>
+    </Stack>
+  </Box>
+</Modal>
 
       <Modal
   open={openDetailsModal}
