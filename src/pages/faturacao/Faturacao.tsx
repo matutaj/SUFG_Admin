@@ -1705,7 +1705,7 @@ const Faturacao: React.FC = () => {
     console.log('[Faturacao] Adicionando notificação:', { message, type: 'caixa' });
     addNotification({
       message,
-      type: 'caixa',
+      type: 'cashier',
     });
   };
 
