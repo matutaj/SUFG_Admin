@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
+import * as XLSX from 'xlsx';
 import {
   Paper,
   Typography,
@@ -211,7 +212,7 @@ const Relatorio = () => {
       if (!token) {
         throw new Error('Token não encontrado.');
       }
-
+  
       if (
         reportType !== 'AtividadesDoDia' &&
         reportType !== 'RelatorioCaixas' &&
@@ -220,40 +221,63 @@ const Relatorio = () => {
         setReportError('Datas de início e fim são obrigatórias.');
         return;
       }
-
+  
       if (reportType === 'AtividadesDoDia' && !startDate) {
         setReportError('Data é obrigatória.');
         return;
       }
-
+  
       if (reportType === 'VendasPorCliente' && !clientId) {
         setReportError('Cliente é obrigatório.');
         return;
       }
-
+  
       const endpoint = reportTypeToEndpoint[reportType];
       if (!endpoint) {
         throw new Error('Tipo de relatório não suportado.');
       }
-
+  
+      // Ajustar dataFim para incluir o final do dia
+      let adjustedEndDate = endDate;
+      if (endDate && reportType !== 'AtividadesDoDia') {
+        const endDateObj = new Date(endDate);
+        const today = new Date();
+        // Verificar se dataFim é hoje
+        if (
+          endDateObj.getDate() === today.getDate() &&
+          endDateObj.getMonth() === today.getMonth() &&
+          endDateObj.getFullYear() === today.getFullYear()
+        ) {
+          // Ajustar para o final do dia (23:59:59.999)
+          adjustedEndDate = `${endDate}T23:59:59.999`;
+        } else {
+          // Para outras datas, manter YYYY-MM-DD
+          adjustedEndDate = endDate;
+        }
+      }
+  
       const queryParams = new URLSearchParams({
         ...(startDate && { dataInicio: startDate }),
-        ...(endDate && { dataFim: endDate }),
+        ...(adjustedEndDate && { dataFim: adjustedEndDate }),
         ...(reportType === 'AtividadesDoDia' && startDate && { data: startDate }),
         ...(productId && { idProduto: productId }),
         ...(clientId && { idCliente: clientId }),
         ...(cashRegisterId && { idCaixa: cashRegisterId }),
         ...(limit && { limite: limit }),
       });
-
+  
+      console.log('Query Params:', queryParams.toString()); // Log para depuração
+  
       const response = await getReportData(endpoint, queryParams.toString());
+      console.log('Resposta da API:', response); // Log para depuração
+  
       const data = response.data || (reportType === 'FaturamentoPeriodo' ? { vendas: [] } : []);
       setReportData(
         reportType === 'FaturamentoPeriodo' && data.vendas
           ? data.vendas
           : Array.isArray(data)
-            ? data
-            : [data],
+          ? data
+          : [data],
       );
     } catch (error) {
       console.error('Erro ao buscar dados:', error);
@@ -262,6 +286,250 @@ const Relatorio = () => {
       );
     }
   };
+  const generateExcel = () => {
+    try {
+      if (reportData.length === 0) {
+        setReportError('Nenhum dado disponível para gerar o Excel.');
+        return;
+      }
+  
+      let headers: string[] = [];
+      let data: any[][] = [];
+  
+      switch (reportType) {
+        case 'AtividadesCaixa':
+          headers = [
+            'Caixa',
+            'Quantidade Faturada',
+            'Funcionário',
+            'Documento',
+            'Data Emissão',
+            'Valor Total',
+            'Produtos Vendidos',
+          ];
+          data = reportData.flatMap((item) =>
+            item.vendas.length > 0
+              ? item.vendas.map((venda: any) => [
+                  item.nomeCaixa || '-',
+                  item.quantidadeFaturada?.toFixed(2) || '0.00',
+                  item.funcionarioNome || '-',
+                  venda.numeroDocumento || '-',
+                  venda.dataEmissao ? format(new Date(venda.dataEmissao), 'dd/MM/yyyy') : '-',
+                  venda.valorTotal?.toFixed(2) || '0.00',
+                  venda.vendasProdutos
+                    ?.map((vp: any) => `${vp.produtos.nomeProduto} (Qtd: ${vp.quantidadeVendida})`)
+                    .join('; ') || '-',
+                ])
+              : [[
+                  item.nomeCaixa || '-',
+                  item.quantidadeFaturada?.toFixed(2) || '0.00',
+                  item.funcionarioNome || '-',
+                  '-',
+                  '-',
+                  '0.00',
+                  '-',
+                ]]
+          );
+          break;
+        case 'AtividadesDoDia':
+          headers = ['Tarefa', 'Descrição', 'Funcionário', 'Status', 'Data Criação'];
+          data = reportData.map((item) => [
+            item.nomeTarefa || '-',
+            item.descricao || '-',
+            item.funcionarioNome || '-',
+            item.status || '-',
+            item.dataCriacao ? format(new Date(item.dataCriacao), 'dd/MM/yyyy') : '-',
+          ]);
+          break;
+        case 'EntradasEstoque':
+          headers = ['Produto', 'Quantidade', 'Data Entrada', 'Fornecedor', 'Funcionário'];
+          data = reportData.map((item) => [
+            item.produtoNome || '-',
+            item.quantidadeRecebida?.toString() || '0',
+            item.dataEntrada ? format(new Date(item.dataEntrada), 'dd/MM/yyyy') : '-',
+            item.fornecedorNome || '-',
+            item.funcionarioNome || '-',
+          ]);
+          break;
+        case 'RelatorioEstoque':
+          headers = [
+            'Produto',
+            'Quantidade Atual',
+            'Localização',
+            'Seção',
+            'Corredor',
+            'Prateleira',
+          ];
+          data = reportData.flatMap((item) =>
+            item.localizacoes.length > 0
+              ? item.localizacoes.map((loc: any) => [
+                  item.nomeProduto || '-',
+                  item.quantidadeAtual?.toString() || '0',
+                  loc.nome || '-',
+                  loc.seccao || '-',
+                  loc.corredor || '-',
+                  loc.prateleira || '-',
+                ])
+              : [[
+                  item.nomeProduto || '-',
+                  item.quantidadeAtual?.toString() || '0',
+                  '-', '-', '-', '-',
+                ]]
+          );
+          break;
+        case 'RelatorioLocalizacaoProdutos':
+          headers = [
+            'Produto',
+            'Localização',
+            'Seção',
+            'Corredor',
+            'Prateleira',
+            'Quantidade',
+            'Quantidade Mínima',
+          ];
+          data = reportData.map((item) => [
+            item.nomeProduto || '-',
+            item.localizacao?.nome || '-',
+            item.localizacao?.seccao || '-',
+            item.localizacao?.corredor || '-',
+            item.localizacao?.prateleira || '-',
+            item.localizacao?.quantidade?.toString() || '0',
+            item.localizacao?.quantidadeMinima?.toString() || '0',
+          ]);
+          break;
+        case 'ProdutosMaisVendidos':
+          headers = ['Produto', 'Quantidade Vendida', 'Valor Total'];
+          data = reportData.map((item) => [
+            item.nomeProduto || '-',
+            item.quantidadeVendida?.toString() || '0',
+            item.valorTotal?.toFixed(2) || '0.00',
+          ]);
+          break;
+        case 'RelatorioTransferencias':
+          headers = [
+            'Produto',
+            'Quantidade',
+            'Data Transferência',
+            'Localização',
+            'Corredor',
+            'Prateleira',
+            'Seção',
+            'Funcionário',
+          ];
+          data = reportData.map((item) => [
+            item.nomeProduto || '-',
+            item.quantidadeTransferida?.toString() || '0',
+            item.dataTransferencia ? format(new Date(item.dataTransferencia), 'dd/MM/yyyy') : '-',
+            item.nomeLocalizacao || '-',
+            item.corredor || '-',
+            item.prateleira || '-',
+            item.seccao || '-',
+            item.funcionarioNome || '-',
+          ]);
+          break;
+        case 'FaturamentoPeriodo':
+          headers = ['Nome Produto', 'Total Faturado', 'Data Emissão', 'Funcionário'];
+          data = reportData.map((item) => [
+            item.nomeProduto || '-',
+            item.totalFaturado?.toFixed(2) || '0.00',
+            item.dataEmissao ? format(new Date(item.dataEmissao), 'dd/MM/yyyy') : '-',
+            item.funcionariosCaixa || '-',
+          ]);
+          break;
+        case 'Vendas':
+          headers = [
+            'Documento',
+            'Data Emissão',
+            'Valor Total',
+            'Cliente',
+            'Caixa',
+            'Funcionário',
+            'Produtos',
+          ];
+          data = reportData.map((item) => [
+            item.numeroDocumento || '-',
+            item.dataEmissao ? format(new Date(item.dataEmissao), 'dd/MM/yyyy') : '-',
+            item.valorTotal?.toFixed(2) || '0.00',
+            item.cliente?.nomeCliente || '-',
+            item.funcionarioCaixa?.nomeCaixa || '-',
+            item.funcionarioCaixa?.funcionario?.nomeFuncionario || '-',
+            item.produtos
+              ?.map((p: any) => `${p.nomeProduto} (Qtd: ${p.quantidadeVendida}, kzs${p.precoVenda?.toFixed(2)})`)
+              .join('; ') || '-',
+          ]);
+          break;
+        case 'VendasPorCliente':
+          headers = ['Documento', 'Data Emissão', 'Valor Total', 'Funcionário', 'Produtos'];
+          data = reportData.map((item) => [
+            item.numeroDocumento || '-',
+            item.dataEmissao ? format(new Date(item.dataEmissao), 'dd/MM/yyyy') : '-',
+            item.valorTotal?.toFixed(2) || '0.00',
+            item.funcionarioNome || '-',
+            item.vendasProdutos
+              ?.map((p: any) => `${p.produtos.nomeProduto} (Qtd: ${p.quantidadeVendida})`)
+              .join('; ') || '-',
+          ]);
+          break;
+        default:
+          break;
+      }
+  
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
+  
+      // Cabeçalho informativo
+      const reportTitle = reportType.replace(/([A-Z])/g, ' $1').trim();
+      const titleInfo = [[`Relatório: ${reportTitle}`], []];
+  
+      if (startDate && endDate && reportType !== 'AtividadesDoDia') {
+        titleInfo.push([
+          `Período: ${format(new Date(startDate), 'dd/MM/yyyy')} a ${format(new Date(endDate), 'dd/MM/yyyy')}`,
+        ]);
+      } else if (startDate && reportType === 'AtividadesDoDia') {
+        titleInfo.push([`Data: ${format(new Date(startDate), 'dd/MM/yyyy')}`]);
+      }
+  
+      titleInfo.push([`Data de Emissão: ${format(new Date(), 'dd/MM/yyyy')}`]);
+      titleInfo.push([]);
+  
+      // Inserir título acima dos dados
+      XLSX.utils.sheet_add_aoa(ws, titleInfo, { origin: 'A1' });
+  
+      const dataStartRow = titleInfo.length; // cabeçalho começa nesta linha
+  
+      // Estilo do cabeçalho (funciona em alguns leitores de Excel)
+      headers.forEach((_, colIndex) => {
+        const cellAddress = XLSX.utils.encode_cell({ r: dataStartRow, c: colIndex });
+        if (ws[cellAddress]) {
+          ws[cellAddress].s = {
+            font: { bold: true },
+            alignment: { horizontal: 'center', vertical: 'center' },
+          };
+        }
+      });
+  
+      // Autoajuste de largura de colunas
+      const maxColWidths = headers.map((_, colIndex) => {
+        const allRows = [headers, ...data];
+        const maxWidth = allRows.reduce((max, row) => {
+          const value = row[colIndex] ? row[colIndex].toString() : '';
+          return Math.max(max, value.length);
+        }, 10);
+        return { wch: maxWidth + 2 };
+      });
+  
+      ws['!cols'] = maxColWidths;
+  
+      XLSX.utils.book_append_sheet(wb, ws, 'Relatório');
+      XLSX.writeFile(wb, `relatorio_${reportTypeToEndpoint[reportType]}.xlsx`);
+    } catch (error) {
+      setReportError(
+        error instanceof Error ? error.message : 'Erro ao gerar o Excel. Tente novamente.',
+      );
+    }
+  };
+  
+  
 
   const generatePDF = () => {
     try {
@@ -675,32 +943,47 @@ const Relatorio = () => {
           </Box>
 
           <Stack direction="row" spacing={2} mt={3} justifyContent="flex-end">
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={fetchReportData}
-              disabled={
-                (reportType !== 'AtividadesDoDia' && (!startDate || !endDate || !!dateError)) ||
-                (reportType === 'AtividadesDoDia' && !startDate) ||
-                (reportType === 'VendasPorCliente' && !clientId)
-              }
-            >
-              Buscar Dados
-            </Button>
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={generatePDF}
-              disabled={
-                (reportType !== 'AtividadesDoDia' && (!startDate || !endDate || !!dateError)) ||
-                (reportType === 'AtividadesDoDia' && !startDate) ||
-                (reportType === 'VendasPorCliente' && !clientId) ||
-                reportData.length === 0
-              }
-            >
-              Gerar PDF
-            </Button>
-          </Stack>
+  <Button
+    variant="contained"
+    color="primary"
+    onClick={fetchReportData}
+    disabled={
+      (reportType !== 'AtividadesDoDia' && (!startDate || !endDate || !!dateError)) ||
+      (reportType === 'AtividadesDoDia' && !startDate) ||
+      (reportType === 'VendasPorCliente' && !clientId)
+    }
+  >
+    Buscar Dados
+  </Button>
+  <Button
+    variant="contained"
+    color="success"
+    onClick={generateExcel}
+    disabled={
+      (reportType !== 'AtividadesDoDia' && (!startDate || !endDate || !!dateError)) ||
+      (reportType === 'AtividadesDoDia' && !startDate) ||
+      (reportType === 'VendasPorCliente' && !clientId) ||
+      reportData.length === 0
+    }
+    sx={{ ml: 1 }}
+  >
+    Exportar Excel
+  </Button>
+  <Button
+    variant="contained"
+    color="primary"
+    onClick={generatePDF}
+    disabled={
+      (reportType !== 'AtividadesDoDia' && (!startDate || !endDate || !!dateError)) ||
+      (reportType === 'AtividadesDoDia' && !startDate) ||
+      (reportType === 'VendasPorCliente' && !clientId) ||
+      reportData.length === 0
+    }
+    sx={{ ml: 1 }}
+  >
+    Gerar PDF
+  </Button>
+</Stack>
 
           {reportData.length > 0 && (
             <Box sx={{ mt: 3 }}>

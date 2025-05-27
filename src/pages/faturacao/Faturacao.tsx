@@ -1794,49 +1794,53 @@ const Faturacao: React.FC = () => {
             Faturação (Vendas)
           </Typography>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-            <Button
-              variant="contained"
-              color="secondary"
-              onClick={() => handleOpenFaturaModal()}
-              startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
-              size="small"
-              fullWidth
-            >
-              Nova Venda
-            </Button>
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={handleOpenCaixaModal}
-              startIcon={<IconifyIcon icon="mdi:cash-register" />}
-              size="small"
-              fullWidth
-              disabled={!loggedInFuncionarioId}
-            >
-              Abrir Caixa
-            </Button>
-            <Button
-              variant="contained"
-              color="info"
-              onClick={handleOpenCaixaListModal}
-              startIcon={<IconifyIcon icon="mdi:cash-register" />}
-              size="small"
-              fullWidth
-            >
-              Ver Caixas
-            </Button>
-            <Button
-              variant="contained"
-              color="warning"
-              onClick={handleEnviarAlerta}
-              startIcon={<IconifyIcon icon="mdi:alert" />}
-              size="small"
-              fullWidth
-              disabled={!loggedInFuncionarioId || loading}
-            >
-              Enviar Alerta
-            </Button>
-          </Stack>
+  <Button
+    variant="contained"
+    color="secondary"
+    onClick={() => handleOpenFaturaModal()}
+    startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
+    size="small"
+    fullWidth
+  >
+    Nova Venda
+  </Button>
+  {funcionariosCaixa.some(
+    (fc) => fc.id_funcionario === loggedInFuncionarioId && fc.estadoCaixa,
+  ) ? null : (
+    <Button
+      variant="contained"
+      color="primary"
+      onClick={handleOpenCaixaModal}
+      startIcon={<IconifyIcon icon="mdi:cash-register" />}
+      size="small"
+      fullWidth
+      disabled={!loggedInFuncionarioId}
+    >
+      Abrir Caixa
+    </Button>
+  )}
+  <Button
+    variant="contained"
+    color="info"
+    onClick={handleOpenCaixaListModal}
+    startIcon={<IconifyIcon icon="mdi:cash-register" />}
+    size="small"
+    fullWidth
+  >
+    Ver Caixas
+  </Button>
+  <Button
+    variant="contained"
+    color="warning"
+    onClick={handleEnviarAlerta}
+    startIcon={<IconifyIcon icon="mdi:alert" />}
+    size="small"
+    fullWidth
+    disabled={!loggedInFuncionarioId || loading}
+  >
+    Enviar Alerta
+  </Button>
+</Stack>
         </Stack>
         <Dialog
           open={openModal}
@@ -2326,85 +2330,93 @@ const Faturacao: React.FC = () => {
       </Modal>
 
       <Card sx={{ mt: 2, borderRadius: 2 }}>
-        <CardContent sx={{ p: { xs: 1, sm: 2 } }}>
-          <TableContainer component={Paper}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Cliente</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Data</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Total</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Caixa</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Ações</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {paginatedFaturas.length > 0 ? (
-                  paginatedFaturas.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>{item.cliente}</TableCell>
-                      <TableCell>
-                        {new Intl.DateTimeFormat('pt-BR').format(new Date(item.data))}
-                      </TableCell>
-                      <TableCell>{calcularTotalFatura(item).toFixed(2)}kzs</TableCell>
-                      <TableCell>
-                        {item.funcionariosCaixa?.caixas?.nomeCaixa || 'Caixa Não Informado'}
-                      </TableCell>
-                      <TableCell align="right">
-                        <Stack direction="row" spacing={1} justifyContent="flex-end">
-                          <IconButton
-                            color="primary"
-                            onClick={() => handleOpenFaturaModal(item.id)}
-                            size="small"
-                            disabled={loading}
-                          >
-                            <Edit />
-                          </IconButton>
-                          <IconButton
-                            color="error"
-                            onClick={() => handleOpenConfirmModal(item.id)}
-                            size="small"
-                            disabled={loading}
-                          >
-                            <Delete />
-                          </IconButton>
-                          <IconButton
-                            color="secondary"
-                            onClick={() => generatePDF(item)}
-                            size="small"
-                            disabled={loading}
-                          >
-                            <IconifyIcon icon="mdi:download" />
-                          </IconButton>
-                        </Stack>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={5} align="center">
-                      <Typography variant="body2" color="text.secondary">
-                        Nenhuma fatura encontrada
-                      </Typography>
+  <CardContent sx={{ p: { xs: 1, sm: 2 } }}>
+    {['Admin', 'Gerente'].includes(loggedInFuncionarioCargo) ? (
+      <>
+        <TableContainer component={Paper}>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 'bold' }}>Cliente</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>Data</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>Total</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>Caixa</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>Ações</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {paginatedFaturas.length > 0 ? (
+                paginatedFaturas.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell>{item.cliente}</TableCell>
+                    <TableCell>
+                      {new Intl.DateTimeFormat('pt-BR').format(new Date(item.data))}
+                    </TableCell>
+                    <TableCell>{calcularTotalFatura(item).toFixed(2)}kzs</TableCell>
+                    <TableCell>
+                      {item.funcionariosCaixa?.caixas?.nomeCaixa || 'Caixa Não Informado'}
+                    </TableCell>
+                    <TableCell align="right">
+                      <Stack direction="row" spacing={1} justifyContent="flex-end">
+                        <IconButton
+                          color="primary"
+                          onClick={() => handleOpenFaturaModal(item.id)}
+                          size="small"
+                          disabled={loading}
+                        >
+                          <Edit />
+                        </IconButton>
+                        <IconButton
+                          color="error"
+                          onClick={() => handleOpenConfirmModal(item.id)}
+                          size="small"
+                          disabled={loading}
+                        >
+                          <Delete />
+                        </IconButton>
+                        <IconButton
+                          color="secondary"
+                          onClick={() => generatePDF(item)}
+                          size="small"
+                          disabled={loading}
+                        >
+                          <IconifyIcon icon="mdi:download" />
+                        </IconButton>
+                      </Stack>
                     </TableCell>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          <TablePagination
-            rowsPerPageOptions={[5, 10, 25]}
-            component="div"
-            count={faturas.length}
-            rowsPerPage={rowsPerPage}
-            page={page}
-            onPageChange={handleChangePage}
-            onRowsPerPageChange={handleChangeRowsPerPage}
-            labelRowsPerPage="Linhas por página:"
-            labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
-          />
-        </CardContent>
-      </Card>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={5} align="center">
+                    <Typography variant="body2" color="text.secondary">
+                      Nenhuma fatura encontrada
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        <TablePagination
+          rowsPerPageOptions={[5, 10, 25]}
+          component="div"
+          count={faturas.length}
+          rowsPerPage={rowsPerPage}
+          page={page}
+          onPageChange={handleChangePage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+          labelRowsPerPage="Linhas por página:"
+          labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+        />
+      </>
+    ) : (
+      <Typography variant="body1" color="error" align="center">
+        Você não tem permissão para visualizar a listagem de faturas.
+      </Typography>
+    )}
+  </CardContent>
+</Card>
     </>
   );
 };

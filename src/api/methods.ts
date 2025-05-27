@@ -1127,7 +1127,7 @@ export const getReportData = async (endpoint: string, queryParams: string): Prom
     const response = await api.get(`/relatorio/${endpoint}?${queryParams}`);
     return response.data;
   } catch (error) {
-    throw new ApiError(`Falha ao buscar dados do relatório ${endpoint}`);
+    throw new ApiError(`Não foram realizadas vendas neste período.`);
   }
 };
 
