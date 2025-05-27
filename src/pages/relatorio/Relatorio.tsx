@@ -293,9 +293,24 @@ const Relatorio = () => {
         return;
       }
   
+      // Mapeamento de tipos de relatório para endpoints (se necessário)
+      const reportTypeToEndpoint = {
+        AtividadesCaixa: 'atividades-caixa',
+        AtividadesDoDia: 'atividades-dia',
+        EntradasEstoque: 'entradas-estoque',
+        RelatorioEstoque: 'relatorio-estoque',
+        RelatorioLocalizacaoProdutos: 'relatorio-localizacao',
+        ProdutosMaisVendidos: 'produtos-mais-vendidos',
+        RelatorioTransferencias: 'relatorio-transferencias',
+        FaturamentoPeriodo: 'faturamento-periodo',
+        Vendas: 'vendas',
+        VendasPorCliente: 'vendas-cliente',
+      };
+  
       let headers: string[] = [];
       let data: any[][] = [];
   
+      // Processar dados conforme o tipo de relatório
       switch (reportType) {
         case 'AtividadesCaixa':
           headers = [
@@ -331,6 +346,7 @@ const Relatorio = () => {
                 ]]
           );
           break;
+  
         case 'AtividadesDoDia':
           headers = ['Tarefa', 'Descrição', 'Funcionário', 'Status', 'Data Criação'];
           data = reportData.map((item) => [
@@ -341,6 +357,7 @@ const Relatorio = () => {
             item.dataCriacao ? format(new Date(item.dataCriacao), 'dd/MM/yyyy') : '-',
           ]);
           break;
+  
         case 'EntradasEstoque':
           headers = ['Produto', 'Quantidade', 'Data Entrada', 'Fornecedor', 'Funcionário'];
           data = reportData.map((item) => [
@@ -351,6 +368,7 @@ const Relatorio = () => {
             item.funcionarioNome || '-',
           ]);
           break;
+  
         case 'RelatorioEstoque':
           headers = [
             'Produto',
@@ -377,6 +395,7 @@ const Relatorio = () => {
                 ]]
           );
           break;
+  
         case 'RelatorioLocalizacaoProdutos':
           headers = [
             'Produto',
@@ -397,6 +416,7 @@ const Relatorio = () => {
             item.localizacao?.quantidadeMinima?.toString() || '0',
           ]);
           break;
+  
         case 'ProdutosMaisVendidos':
           headers = ['Produto', 'Quantidade Vendida', 'Valor Total'];
           data = reportData.map((item) => [
@@ -405,6 +425,7 @@ const Relatorio = () => {
             item.valorTotal?.toFixed(2) || '0.00',
           ]);
           break;
+  
         case 'RelatorioTransferencias':
           headers = [
             'Produto',
@@ -427,6 +448,7 @@ const Relatorio = () => {
             item.funcionarioNome || '-',
           ]);
           break;
+  
         case 'FaturamentoPeriodo':
           headers = ['Nome Produto', 'Total Faturado', 'Data Emissão', 'Funcionário'];
           data = reportData.map((item) => [
@@ -436,6 +458,7 @@ const Relatorio = () => {
             item.funcionariosCaixa || '-',
           ]);
           break;
+  
         case 'Vendas':
           headers = [
             'Documento',
@@ -454,10 +477,11 @@ const Relatorio = () => {
             item.funcionarioCaixa?.nomeCaixa || '-',
             item.funcionarioCaixa?.funcionario?.nomeFuncionario || '-',
             item.produtos
-              ?.map((p: any) => `${p.nomeProduto} (Qtd: ${p.quantidadeVendida}, kzs${p.precoVenda?.toFixed(2)})`)
+              ?.map((p: any) => `${p.nomeProduto} (Qtd: ${p.quantidadeVendida}, kzs${p.precoVenda?.toFixed(2)}`)
               .join('; ') || '-',
           ]);
           break;
+  
         case 'VendasPorCliente':
           headers = ['Documento', 'Data Emissão', 'Valor Total', 'Funcionário', 'Produtos'];
           data = reportData.map((item) => [
@@ -470,66 +494,98 @@ const Relatorio = () => {
               .join('; ') || '-',
           ]);
           break;
+  
         default:
-          break;
+          setReportError('Tipo de relatório não suportado.');
+          return;
       }
   
+      // Criar nova planilha
       const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
+      const ws = XLSX.utils.aoa_to_sheet([]);
   
-      // Cabeçalho informativo
+      // Adicionar cabeçalho informativo
       const reportTitle = reportType.replace(/([A-Z])/g, ' $1').trim();
-      const titleInfo = [[`Relatório: ${reportTitle}`], []];
+      XLSX.utils.sheet_add_aoa(ws, [[`Relatório: ${reportTitle}`]], { origin: 'A1' });
   
+      // Adicionar período se existir
       if (startDate && endDate && reportType !== 'AtividadesDoDia') {
-        titleInfo.push([
-          `Período: ${format(new Date(startDate), 'dd/MM/yyyy')} a ${format(new Date(endDate), 'dd/MM/yyyy')}`,
-        ]);
+        XLSX.utils.sheet_add_aoa(
+          ws,
+          [[`Período: ${format(new Date(startDate), 'dd/MM/yyyy')} a ${format(new Date(endDate), 'dd/MM/yyyy')}`]],
+          { origin: { r: 1, c: 0 } }
+        );
       } else if (startDate && reportType === 'AtividadesDoDia') {
-        titleInfo.push([`Data: ${format(new Date(startDate), 'dd/MM/yyyy')}`]);
+        XLSX.utils.sheet_add_aoa(
+          ws,
+          [[`Data: ${format(new Date(startDate), 'dd/MM/yyyy')}`]],
+          { origin: { r: 1, c: 0 } }
+        );
       }
   
-      titleInfo.push([`Data de Emissão: ${format(new Date(), 'dd/MM/yyyy')}`]);
-      titleInfo.push([]);
+      // Adicionar data de emissão
+      XLSX.utils.sheet_add_aoa(
+        ws,
+        [[`Data de Emissão: ${format(new Date(), 'dd/MM/yyyy')}`]],
+        { origin: { r: 2, c: 0 } }
+      );
   
-      // Inserir título acima dos dados
-      XLSX.utils.sheet_add_aoa(ws, titleInfo, { origin: 'A1' });
+      // Adicionar linha em branco
+      XLSX.utils.sheet_add_aoa(ws, [['']], { origin: { r: 3, c: 0 } });
   
-      const dataStartRow = titleInfo.length; // cabeçalho começa nesta linha
+      // Adicionar cabeçalhos das colunas
+      XLSX.utils.sheet_add_aoa(ws, [headers], { origin: { r: 4, c: 0 } });
   
-      // Estilo do cabeçalho (funciona em alguns leitores de Excel)
+      // Adicionar dados
+      XLSX.utils.sheet_add_aoa(ws, data, { origin: { r: 5, c: 0 } });
+  
+      // Estilizar cabeçalhos das colunas (funciona em Excel)
       headers.forEach((_, colIndex) => {
-        const cellAddress = XLSX.utils.encode_cell({ r: dataStartRow, c: colIndex });
-        if (ws[cellAddress]) {
-          ws[cellAddress].s = {
-            font: { bold: true },
-            alignment: { horizontal: 'center', vertical: 'center' },
-          };
-        }
+        const cellAddress = XLSX.utils.encode_cell({ r: 4, c: colIndex });
+        if (!ws[cellAddress]) ws[cellAddress] = {};
+        if (!ws[cellAddress].s) ws[cellAddress].s = {};
+        
+        ws[cellAddress].s = {
+          font: { bold: true, color: { rgb: "FFFFFF" } },
+          fill: { fgColor: { rgb: "4472C4" } },
+          alignment: { horizontal: 'center', vertical: 'center' },
+          border: {
+            top: { style: 'thin', color: { rgb: "000000" } },
+            bottom: { style: 'thin', color: { rgb: "000000" } },
+            left: { style: 'thin', color: { rgb: "000000" } },
+            right: { style: 'thin', color: { rgb: "000000" } }
+          }
+        };
       });
   
       // Autoajuste de largura de colunas
-      const maxColWidths = headers.map((_, colIndex) => {
-        const allRows = [headers, ...data];
-        const maxWidth = allRows.reduce((max, row) => {
+      const maxColWidths = headers.map((header, colIndex) => {
+        const maxWidth = data.reduce((max, row) => {
           const value = row[colIndex] ? row[colIndex].toString() : '';
           return Math.max(max, value.length);
-        }, 10);
-        return { wch: maxWidth + 2 };
+        }, header.length);
+        return { wch: Math.min(Math.max(maxWidth, 10), 50) }; // Limita entre 10 e 50 caracteres
       });
   
       ws['!cols'] = maxColWidths;
   
+      // Congelar cabeçalhos (funciona em Excel)
+      ws['!freeze'] = { xSplit: 0, ySplit: 5, topLeftCell: 'A6', activePane: 'bottomRight' };
+  
+      // Adicionar planilha ao workbook
       XLSX.utils.book_append_sheet(wb, ws, 'Relatório');
-      XLSX.writeFile(wb, `relatorio_${reportTypeToEndpoint[reportType]}.xlsx`);
+  
+      // Gerar arquivo Excel
+      XLSX.writeFile(wb, `relatorio_${reportTypeToEndpoint[reportType] || 'dados'}.xlsx`);
+  
     } catch (error) {
       setReportError(
         error instanceof Error ? error.message : 'Erro ao gerar o Excel. Tente novamente.',
       );
+      console.error('Erro ao gerar Excel:', error);
     }
   };
-  
-  
+
 
   const generatePDF = () => {
     try {
