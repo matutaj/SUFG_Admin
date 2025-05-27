@@ -56,7 +56,7 @@ export const drawerItems: DrawerItem[] = [
         title: 'Estoque',
         path: `/${rootPaths.pagesRoot}/stock`,
         active: true,
-        requiredRoles: ['Admin', 'Gerente', 'Estoquista', 'Repositor'],
+        requiredRoles: ['Admin', 'Gerente', 'Estoquista'],
       },
       {
         id: 39,
@@ -70,7 +70,7 @@ export const drawerItems: DrawerItem[] = [
         title: 'Categoria',
         path: `/${rootPaths.pagesRoot}/categorias`,
         active: true,
-        requiredRoles: ['Admin', 'Gerente'],
+        requiredRoles: ['Admin', 'Gerente', 'Estoquista'],
       },
     ],
   },

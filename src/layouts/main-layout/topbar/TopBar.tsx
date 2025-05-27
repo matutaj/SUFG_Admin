@@ -36,7 +36,6 @@ const TopBar = ({ drawerWidth, onHandleDrawerToggle }: TopBarProps) => {
 
   const handleOpenNotifications = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
-    // Removido o loop que marca as notificações como lidas
   };
 
   useEffect(() => {
@@ -62,6 +61,12 @@ const TopBar = ({ drawerWidth, onHandleDrawerToggle }: TopBarProps) => {
   const handleClearNotification = (id: string) => {
     removeNotification(id);
   };
+
+  // Lista de funções que têm permissão para ver o botão de notificações
+  const allowedRoles = [ 'Estoquista', 'Repositor'];
+
+  // Verifica se o usuário tem permissão para ver o botão de notificações
+  const hasNotificationPermission = user && allowedRoles.includes(user.role || '');
 
   return (
     <ElevationScroll>
@@ -91,170 +96,173 @@ const TopBar = ({ drawerWidth, onHandleDrawerToggle }: TopBarProps) => {
           </Stack>
 
           <Stack direction="row" alignItems="center" columnGap={{ xs: 1, sm: 2, md: 3 }}>
-            <IconButton
-              aria-label="notifications"
-              color="inherit"
-              onClick={handleOpenNotifications}
-            >
-              <OutlinedBadge
-                badgeContent={
-                  filteredNotifications.filter((n) => !n.read).length > 0
-                    ? filteredNotifications.filter((n) => !n.read).length
-                    : ' '
-                }
-                color="error"
-                variant={
-                  filteredNotifications.filter((n) => !n.read).length > 0 ? 'standard' : 'dot'
-                }
-                overlap="circular"
+            {/* Renderiza o botão de notificações apenas se o usuário tiver permissão */}
+            {hasNotificationPermission && (
+              <IconButton
+                aria-label="notifications"
+                color="inherit"
+                onClick={handleOpenNotifications}
               >
-                <Notification />
-              </OutlinedBadge>
-            </IconButton>
+                <OutlinedBadge
+                  badgeContent={
+                    filteredNotifications.filter((n) => !n.read).length > 0
+                      ? filteredNotifications.filter((n) => !n.read).length
+                      : ' '
+                  }
+                  color="error"
+                  variant={
+                    filteredNotifications.filter((n) => !n.read).length > 0 ? 'standard' : 'dot'
+                  }
+                  overlap="circular"
+                >
+                  <Notification />
+                </OutlinedBadge>
+              </IconButton>
+            )}
             <AccountMenu />
           </Stack>
         </Toolbar>
 
-        <Popover
-          open={Boolean(anchorEl)}
-          anchorEl={anchorEl}
-          onClose={handleCloseNotifications}
-          anchorOrigin={{
-            vertical: 'bottom',
-            horizontal: 'right',
-          }}
-          transformOrigin={{
-            vertical: 'top',
-            horizontal: 'right',
-          }}
-        >
-          <Box sx={{ minWidth: 300, maxHeight: 400, display: 'flex', flexDirection: 'column' }}>
-            {/* Área fixa com título e botões */}
-            <Box
-              sx={{
-                p: 2,
-                position: 'sticky',
-                top: 0,
-                zIndex: 1,
-                bgcolor: 'background.default', // Fundo para a área fixa
-                borderBottom: '1px solid',
-                borderColor: 'grey.300', // Borda inferior para separar da lista
-              }}
-            >
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Notificações ({filteredNotifications.length})
-              </Typography>
-
-              {/* Botões destacados com fundo, sombra e bordas */}
-              {filteredNotifications.length > 0 && (
-                <Box
-                  sx={{
-                    display: 'flex',
-                    justifyContent: 'flex-end',
-                    mb: 2,
-                    p: 1, // Padding interno para os botões
-                    bgcolor: 'background.paper', // Fundo claro
-                    borderRadius: 1, // Bordas arredondadas
-                    boxShadow: 2, // Sombra suave para elevação
-                    border: '1px solid', // Borda sutil
-                    borderColor: 'grey.300', // Cor da borda
-                  }}
-                >
-                  <Button
-                    size="small"
-                    onClick={() => {
-                      filteredNotifications.forEach((notif) => {
-                        if (!notif.read) {
-                          markAsRead(notif.id);
-                        }
-                      });
-                    }}
-                    sx={{
-                      bgcolor: 'primary.light', // Fundo do botão
-                      color: 'primary.contrastText', // Cor do texto contrastante
-                      '&:hover': {
-                        bgcolor: 'primary.main', // Cor mais escura ao passar o mouse
-                      },
-                    }}
-                  >
-                    Marcar todas como lidas
-                  </Button>
-                  <Button
-                    size="small"
-                    color="error"
-                    onClick={() => {
-                      filteredNotifications.forEach((notif) => {
-                        removeNotification(notif.id);
-                      });
-                    }}
-                    sx={{
-                      ml: 1,
-                      bgcolor: 'error.light', // Fundo do botão
-                      color: 'error.contrastText', // Cor do texto contrastante
-                      '&:hover': {
-                        bgcolor: 'error.main', // Cor mais escura ao passar o mouse
-                      },
-                    }}
-                  >
-                    Limpar todas
-                  </Button>
-                </Box>
-              )}
-            </Box>
-
-            {/* Área rolável com a lista de notificações */}
-            <Box sx={{ flex: 1, overflowY: 'auto', px: 2, pb: 2 }}>
-              {filteredNotifications.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  Nenhuma notificação
+        {/* O Popover de notificações também deve ser condicional */}
+        {hasNotificationPermission && (
+          <Popover
+            open={Boolean(anchorEl)}
+            anchorEl={anchorEl}
+            onClose={handleCloseNotifications}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'right',
+            }}
+            transformOrigin={{
+              vertical: 'top',
+              horizontal: 'right',
+            }}
+          >
+            <Box sx={{ minWidth: 300, maxHeight: 400, display: 'flex', flexDirection: 'column' }}>
+              <Box
+                sx={{
+                  p: 2,
+                  position: 'sticky',
+                  top: 0,
+                  zIndex: 1,
+                  bgcolor: 'background.default',
+                  borderBottom: '1px solid',
+                  borderColor: 'grey.300',
+                }}
+              >
+                <Typography variant="h6" sx={{ mb: 2 }}>
+                  Notificações ({filteredNotifications.length})
                 </Typography>
-              ) : (
-                <List>
-                  {[...filteredNotifications]
-                    .sort(
-                      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-                    )
-                    .map((notification) => (
-                      <ListItem
-                        key={notification.id}
-                        secondaryAction={
-                          <IconButton
-                            edge="end"
-                            aria-label="delete"
-                            onClick={() => handleClearNotification(notification.id)}
-                          >
-                            <IconifyIcon icon="mdi:close" />
-                          </IconButton>
-                        }
-                        sx={{
-                          bgcolor: notification.read ? 'background.paper' : 'grey.200', // Fundo cinza claro para não lidas
-                          borderLeft: notification.read ? 'none' : '4px solid', // Borda para reforçar
-                          borderLeftColor: 'grey.600', // Borda cinza escura para não lidas
-                          transition: 'all 0.2s ease-in-out', // Transição suave
-                          '&:hover': {
-                            bgcolor: notification.read ? 'action.hover' : 'grey.300', // Hover cinza um pouco mais escuro para não lidas
-                          },
-                        }}
-                      >
-                        <ListItemText
-                          primary={notification.message}
-                          secondary={notification.timestamp?.toLocaleString()}
-                          primaryTypographyProps={{
-                            variant: 'body2',
-                            fontWeight: notification.read ? 'normal' : 'bold', // Negrito para não lidas
-                            color: notification.read ? '#B0BEC5' : '#424242', // Cinza claro para lidas, cinza escuro para não lidas
+
+                {filteredNotifications.length > 0 && (
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'flex-end',
+                      mb: 2,
+                      p: 1,
+                      bgcolor: 'background.paper',
+                      borderRadius: 1,
+                      boxShadow: 2,
+                      border: '1px solid',
+                      borderColor: 'grey.300',
+                    }}
+                  >
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        filteredNotifications.forEach((notif) => {
+                          if (!notif.read) {
+                            markAsRead(notif.id);
+                          }
+                        });
+                      }}
+                      sx={{
+                        bgcolor: 'primary.light',
+                        color: 'primary.contrastText',
+                        '&:hover': {
+                          bgcolor: 'primary.main',
+                        },
+                      }}
+                    >
+                      Marcar todas como lidas
+                    </Button>
+                    <Button
+                      size="small"
+                      color="error"
+                      onClick={() => {
+                        filteredNotifications.forEach((notif) => {
+                          removeNotification(notif.id);
+                        });
+                      }}
+                      sx={{
+                        ml: 1,
+                        bgcolor: 'error.light',
+                        color: 'error.contrastText',
+                        '&:hover': {
+                          bgcolor: 'error.main',
+                        },
+                      }}
+                    >
+                      Limpar todas
+                    </Button>
+                  </Box>
+                )}
+              </Box>
+
+              <Box sx={{ flex: 1, overflowY: 'auto', px: 2, pb: 2 }}>
+                {filteredNotifications.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">
+                    Nenhuma notificação
+                  </Typography>
+                ) : (
+                  <List>
+                    {[...filteredNotifications]
+                      .sort(
+                        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+                      )
+                      .map((notification) => (
+                        <ListItem
+                          key={notification.id}
+                          secondaryAction={
+                            <IconButton
+                              edge="end"
+                              aria-label="delete"
+                              onClick={() => handleClearNotification(notification.id)}
+                            >
+                              <IconifyIcon icon="mdi:close" />
+                            </IconButton>
+                          }
+                          sx={{
+                            bgcolor: notification.read ? 'background.paper' : 'grey.200',
+                            borderLeft: notification.read ? 'none' : '4px solid',
+                            borderLeftColor: 'grey.600',
+                            transition: 'all 0.2s ease-in-out',
+                            '&:hover': {
+                              bgcolor: notification.read ? 'action.hover' : 'grey.300',
+                            },
                           }}
-                          secondaryTypographyProps={{
-                            color: 'text.secondary', // Timestamp com cor padrão
-                          }}
-                        />
-                      </ListItem>
-                    ))}
-                </List>
-              )}
+                        >
+                          <ListItemText
+                            primary={notification.message}
+                            secondary={notification.timestamp?.toLocaleString()}
+                            primaryTypographyProps={{
+                              variant: 'body2',
+                              fontWeight: notification.read ? 'normal' : 'bold',
+                              color: notification.read ? '#B0BEC5' : '#424242',
+                            }}
+                            secondaryTypographyProps={{
+                              color: 'text.secondary',
+                            }}
+                          />
+                        </ListItem>
+                      ))}
+                  </List>
+                )}
+              </Box>
             </Box>
-          </Box>
-        </Popover>
+          </Popover>
+        )}
       </AppBar>
     </ElevationScroll>
   );
