@@ -721,7 +721,7 @@ const Faturacao: React.FC = () => {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
       doc.text('LUANDA- ANGOLA', 10, 18);
-      doc.text('SUFGGERAL@EMAIL.COM', 150, 10, { align: 'right' });
+      doc.text('SUFGGERAL@EMAIL.COM', 10, 14);
 
       doc.setTextColor(blackColor);
       doc.setFontSize(40);
@@ -729,10 +729,8 @@ const Faturacao: React.FC = () => {
       doc.text('Fatura.', 10, 35);
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
-      doc.text(`Fatura: ${fatura.id.padStart(10, '00-0000')}`, 150, 30, {
-        align: 'right',
-      });
-      doc.text(`Data: ${new Date(fatura.data).toLocaleDateString('pt-BR')}`, 150, 35, {
+
+      doc.text(`Data: ${new Date(fatura.data).toLocaleDateString('pt-BR')}`, 175, 18, {
         align: 'right',
       });
 
@@ -743,10 +741,11 @@ const Faturacao: React.FC = () => {
       doc.setFontSize(10);
       doc.text(fatura.cliente, 10, 55);
       doc.text(`Tel: ${fatura.telefone || 'N/A'}`, 10, 60);
-      doc.text(`${fatura.localizacao || 'N/A'}`, 10, 65);
+      doc.text(`NIF: ${fatura.nif || 'N/A'}`, 10, 65);
+      doc.text(`${fatura.localizacao || 'N/A'}`, 10, 70);
       doc.setFontSize(20);
       doc.setFont('helvetica', 'bold');
-      doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 150, 55, { align: 'right' });
+      doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 188, 70, { align: 'right' });
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
 
@@ -795,7 +794,7 @@ const Faturacao: React.FC = () => {
       doc.setFontSize(12);
       doc.setTextColor(blackColor);
       doc.setFont('helvetica', 'normal');
-      doc.text('Subtotal', 130, finalY + 10);
+      doc.text('Subtotal', 129, finalY + 10);
       doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 170, finalY + 10, {
         align: 'right',
       });
