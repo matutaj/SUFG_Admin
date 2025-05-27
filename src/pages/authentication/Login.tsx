@@ -5,6 +5,7 @@ import {
   Divider,
   FormControlLabel,
   Grid,
+  IconButton,
   InputLabel,
   Link,
   Paper,
@@ -18,9 +19,11 @@ import { useForm, SubmitHandler } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import paths from 'routes/paths';
+
 import { login } from '../../api/methods';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Logo from 'components/icons/common/Logo';
 
 // Esquema de validação
 const schema = yup.object().shape({
@@ -88,7 +91,12 @@ const Login = () => {
       }}
     >
       <Box sx={{ width: { xs: 1, sm: 506 }, px: { xs: 2, sm: 0 }, py: 10 }}>
-        <Typography variant="h1">S . U . F . G</Typography>
+        <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center">
+          <IconButton color="inherit" aria-label="logo">
+            <Logo sx={{ fontSize: 107 }} />
+          </IconButton>
+          <Typography variant="h1">S . U . F . G</Typography>
+        </Box>
 
         <Divider></Divider>
 
@@ -111,7 +119,7 @@ const Login = () => {
               </Grid>
 
               <Grid item xs={12}>
-                <InputLabel htmlFor="password">Password</InputLabel>
+                <InputLabel htmlFor="password">Senha</InputLabel>
                 <PasswordTextField
                   id="password"
                   placeholder="Enter your password"
@@ -147,13 +155,13 @@ const Login = () => {
               }
               label={
                 <Typography variant="h6" component="p" sx={{ color: 'neutral.light' }}>
-                  Remember me
+                  Lembre me
                 </Typography>
               }
             />
 
             <Typography variant="h6" component={Link} href="#!" color="secondary">
-              Forgot your password?
+              Esqueceu a senha?
             </Typography>
           </Stack>
 
@@ -166,7 +174,7 @@ const Login = () => {
             disabled={!!errors.email || !!errors.password || isLoading}
           >
             <Typography variant="h4" sx={{ color: 'HighlightText' }}>
-              {isLoading ? 'Signing in...' : 'Sign in'}
+              {isLoading ? 'Entrando ...' : 'Entrar'}
             </Typography>
           </Button>
         </Box>
