@@ -708,7 +708,7 @@ const Faturacao: React.FC = () => {
       });
 
       doc.setFont('helvetica', 'normal');
-      const blueColor = '#1E90FF';
+      const blueColor = '#c3a2e9';
       const blackColor = '#000000';
       const whiteColor = '#FFFFFF';
 
@@ -783,7 +783,7 @@ const Faturacao: React.FC = () => {
             textColor: blackColor,
           },
           columnStyles: {
-            0: { cellWidth: 75 },
+            0: { cellWidth: 55 },
             1: { cellWidth: 40, halign: 'center' },
             2: { cellWidth: 40, halign: 'center' },
             3: { cellWidth: 35, halign: 'right' },
