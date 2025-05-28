@@ -30,6 +30,7 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
+  Snackbar,
 } from '@mui/material';
 import { SelectChangeEvent } from '@mui/material/Select';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -205,110 +206,15 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     canCreateLocation: false,
   });
   const [notifiedProducts, setNotifiedProducts] = useState<Set<string>>(new Set());
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [lowStockProducts, setLowStockProducts] = useState<ProdutoLocalizacao[]>([]);
 
-  // Função de log para depuração
   const log = (message: string, ...args: any[]) => {
     if (process.env.NODE_ENV !== 'production') {
       console.log(message, ...args);
     }
   };
-  // Adicionei este useEffect para verificar estoque baixo periodicamente
-  useEffect(() => {
-    const checkLowStock = async () => {
-      try {
-        const userData = await getUserData();
-        const userRole = userData?.role;
-
-        // Verifica se o usuário tem permissão para receber alertas
-        if (!userRole || !['Admin', 'Gerente', 'Estoquista', 'Repositor'].includes(userRole)) {
-          return;
-        }
-
-        productLocations.forEach((loc) => {
-          const currentQty = loc.quantidadeProduto ?? 0;
-          const minQty = loc.quantidadeMinimaProduto ?? 0;
-
-          if (currentQty <= minQty) {
-            const product = products.find((p) => p.id === loc.id_produto);
-            const location = locations.find((l) => l.id === loc.id_localizacao);
-
-            if (product && location) {
-              const notificationKey = `${loc.id_produto}-${loc.id_localizacao}`;
-
-              // Verifica se já notificou para evitar duplicatas
-              if (!notifiedProducts.has(notificationKey)) {
-                const locationType = isStoreLocation(location.id!) ? 'Loja' : 'Armazém';
-                const message = `Estoque baixo: ${product.nomeProduto} (${locationType}) - Quantidade: ${currentQty} (Mínimo: ${minQty})`;
-
-                addNotification({
-                  message,
-                  type: 'low_stock',
-                  productId: product.id,
-                  locationId: location.id,
-                });
-
-                // Adiciona ao conjunto de notificações enviadas
-                setNotifiedProducts((prev) => new Set(prev).add(notificationKey));
-              }
-            }
-          }
-        });
-      } catch (error) {
-        console.error('Erro ao verificar estoque baixo:', error);
-      }
-    };
-
-    // Verificar imediatamente ao carregar
-    checkLowStock();
-
-    // Verificar a cada 5 minutos
-    const interval = setInterval(checkLowStock, 300000);
-
-    return () => clearInterval(interval);
-  }, [productLocations, products, locations, notifiedProducts, addNotification]);
-
-  // Limpar notificações de produtos que já não estão com estoque baixo
-  useEffect(() => {
-    const newNotifiedProducts = new Set<string>();
-
-    productLocations.forEach((loc) => {
-      const currentQty = loc.quantidadeProduto ?? 0;
-      const minQty = loc.quantidadeMinimaProduto ?? 0;
-
-      if (currentQty <= minQty) {
-        newNotifiedProducts.add(`${loc.id_produto}-${loc.id_localizacao}`);
-      }
-    });
-
-    // Remove notificações de produtos que já não estão com estoque baixo
-    setNotifiedProducts((prev) => {
-      const updated = new Set<string>();
-      prev.forEach((key) => {
-        if (newNotifiedProducts.has(key)) {
-          updated.add(key);
-        }
-      });
-      return updated;
-    });
-  }, [productLocations]);
-
-  // Monitorar alterações no localStorage
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'notifications') {
-        log('[ProductLocation] Notificações alteradas:', {
-          oldValue: e.oldValue,
-          newValue: e.newValue,
-        });
-      } else if (e.key === null) {
-        log('[ProductLocation] localStorage limpo completamente');
-      }
-    };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
-
-  // Verificar se a localização é Loja
   const isStoreLocation = useCallback(
     (locationId: string) => {
       const location = locations.find((loc) => loc.id === locationId);
@@ -316,6 +222,14 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     },
     [locations],
   );
+
+  const handleCloseSnackbar = () => {
+    setSnackbarOpen(false);
+    setSnackbarMessage('');
+  };
+
+
+
 
   // Disparar alerta de estoque baixo
   const handleLowStockAlert = useCallback(
@@ -485,34 +399,6 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       setLoading(false);
     }
   }, [permissions.canRead]);
-
-  // Inicializar componente
-  useEffect(() => {
-    const initialize = async () => {
-      try {
-        setIsLoading(true);
-        const id = await loadUserDataAndPermissions();
-        if (!id) {
-          navigate('/login');
-          return;
-        }
-        await fetchData();
-      } catch (error) {
-        console.error('Erro no initialize:', error);
-        setAlert({ severity: 'error', message: 'Erro ao inicializar a página' });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    initialize();
-  }, [fetchData, loadUserDataAndPermissions, navigate]);
-
-  // Verificar estoque baixo
-  useEffect(() => {
-    if (productLocations.length > 0 && products.length > 0 && locations.length > 0) {
-      checkLowStock();
-    }
-  }, [productLocations, products, locations, checkLowStock]);
 
   // Atualizar dados de estoque
   const updateStockData = useCallback(async () => {
@@ -1250,7 +1136,13 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
           <Alert severity={alert.severity}>{alert.message}</Alert>
         </Box>
       )}
-
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        message={snackbarMessage}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      />
       {/* Modal de sucesso */}
       <Dialog
         open={openSuccessModal}

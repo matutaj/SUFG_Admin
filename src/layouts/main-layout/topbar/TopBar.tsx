@@ -30,13 +30,11 @@ interface TopBarProps {
 }
 
 const TopBar = ({ drawerWidth, onHandleDrawerToggle }: TopBarProps) => {
+
+
   const { notifications, removeNotification, markAsRead } = useNotifications();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [user, setUser] = useState<UserData | null>(null);
-
-  const handleOpenNotifications = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -46,16 +44,21 @@ const TopBar = ({ drawerWidth, onHandleDrawerToggle }: TopBarProps) => {
     };
     fetchUser();
   }, []);
+  
+  const handleOpenNotifications = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
 
   const filteredNotifications = notifications.filter((notification) => {
     if (notification.type === 'cashier') {
-      return user && ['Estoquista', 'Repositor'].includes(user.role || '');
+      return user && ['3', '4'].includes(user.id_funcao || '');
     }
-    if (notification.type === 'low_stock') {
-      return ['1', '2', '3', '4'].includes(user?.role || '');
+    if (notification.type === 'low_stock' || notification.type === 'expiration') {
+      return user && ['1', '2', '3', '4'].includes(user.id_funcao || '');
     }
     return true;
   });
+
 
   const handleCloseNotifications = () => {
     setAnchorEl(null);

@@ -4,13 +4,12 @@ import { getUserData, UserData } from '../src/api/authUtils';
 interface Notification {
   id: string;
   message: string;
-  type: 'stock' | 'cashier' | 'info' | 'low_stock';
+  type: 'stock' | 'cashier' | 'info' | 'low_stock' | 'expiration';
   read?: boolean;
   timestamp: Date;
   productId?: string;
   locationId?: string;
 }
-
 interface NotificationContextType {
   notifications: Notification[];
   filteredNotifications: Notification[];
@@ -112,7 +111,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  // Filtragem de notificações baseada no usuário
   const filteredNotifications = useMemo(() => {
     if (!user || !user.id_funcao) return notifications;
 
@@ -120,10 +118,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (notification.type === 'cashier') {
         return ['3', '4'].includes(user.id_funcao!);
       }
-      if (notification.type === 'low_stock') {
-        return ['1', '2', '3', '4'].includes(user.id_funcao!); // Admin, Gerente, Estoquista, Repositor
+      if (notification.type === 'low_stock' || notification.type === 'expiration') {
+        return ['1', '2', '3', '4'].includes(user.id_funcao!);
       }
-      return true; // Outras notificações são visíveis para todos
+      return true;
     });
   }, [notifications, user]);
 
