@@ -51,6 +51,9 @@ const TopBar = ({ drawerWidth, onHandleDrawerToggle }: TopBarProps) => {
     if (notification.type === 'cashier') {
       return user && ['Estoquista', 'Repositor'].includes(user.role || '');
     }
+    if (notification.type === 'low_stock') {
+      return ['1', '2', '3', '4'].includes(user?.role || '');
+    }
     return true;
   });
 
@@ -63,7 +66,7 @@ const TopBar = ({ drawerWidth, onHandleDrawerToggle }: TopBarProps) => {
   };
 
   // Lista de funções que têm permissão para ver o botão de notificações
-  const allowedRoles = [ 'Estoquista', 'Repositor'];
+  const allowedRoles = ['Estoquista', 'Repositor', 'Admin', 'Gerente'];
 
   // Verifica se o usuário tem permissão para ver o botão de notificações
   const hasNotificationPermission = user && allowedRoles.includes(user.role || '');
