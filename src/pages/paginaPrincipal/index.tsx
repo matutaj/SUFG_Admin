@@ -482,7 +482,7 @@ const DashboardPage = () => {
             title: 'Produtos em Falta',
             value: produtosEmFalta.toString(),
             gradient: 'linear-gradient(135deg, #d32f2f 0%, #ef5350 100%)',
-            caption: (
+            /*   caption: (
               <Box>
                 {dashboardData.produtosLocalizacoes
                   .filter((loc) => loc.quantidadeProduto <= loc.quantidadeMinimaProduto)
@@ -493,7 +493,7 @@ const DashboardPage = () => {
                     </Typography>
                   ))}
               </Box>
-            ),
+            ), */
           },
           {
             title: 'Atividades Pendentes',

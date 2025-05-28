@@ -51,6 +51,9 @@ const TopBar = ({ drawerWidth, onHandleDrawerToggle }: TopBarProps) => {
     if (notification.type === 'cashier') {
       return user && ['Estoquista', 'Repositor'].includes(user.role || '');
     }
+    if (notification.type === 'low_stock') {
+      return ['1', '2', '3', '4'].includes(user?.role || '');
+    }
     return true;
   });
 
