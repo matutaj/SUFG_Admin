@@ -63,7 +63,7 @@ const TopBar = ({ drawerWidth, onHandleDrawerToggle }: TopBarProps) => {
   };
 
   // Lista de funções que têm permissão para ver o botão de notificações
-  const allowedRoles = [ 'Estoquista', 'Repositor'];
+  const allowedRoles = ['Estoquista', 'Repositor', 'Admin', 'Gerente'];
 
   // Verifica se o usuário tem permissão para ver o botão de notificações
   const hasNotificationPermission = user && allowedRoles.includes(user.role || '');

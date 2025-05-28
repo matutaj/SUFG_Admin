@@ -996,7 +996,7 @@ const Faturacao: React.FC = () => {
 
     const cargo = funcionarioLogado?.role?.toLowerCase();
 
-    if (cargo === 'admin' || cargo === 'gerente') {
+    if (cargo === 'Admin' || cargo === 'Gerente') {
       return funcionariosCaixa.filter((caixa) => caixa.estadoCaixa);
     }
 
@@ -1098,7 +1098,7 @@ const Faturacao: React.FC = () => {
             id_funcionarioCaixa: faturaState.funcionariosCaixaId,
             numeroDocumento: `FAT-${Date.now()}`,
             tipoDocumento: TipoDocumento.FATURA,
-            metodoPagamento:faturaState.metodoPagamento,
+            metodoPagamento: faturaState.metodoPagamento,
             valorTotal: totalVenda,
             vendasProdutos: faturaState.produtosSelecionados.map((p) => ({
               id_produto: p.id,
@@ -1704,7 +1704,7 @@ const Faturacao: React.FC = () => {
     console.log('[Faturacao] Adicionando notificação:', { message, type: 'caixa' });
     addNotification({
       message,
-      type: 'caixa',
+      type: 'cashier',
     });
   };
 
@@ -1794,53 +1794,53 @@ const Faturacao: React.FC = () => {
             Faturação (Vendas)
           </Typography>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-  <Button
-    variant="contained"
-    color="secondary"
-    onClick={() => handleOpenFaturaModal()}
-    startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
-    size="small"
-    fullWidth
-  >
-    Nova Venda
-  </Button>
-  {funcionariosCaixa.some(
-    (fc) => fc.id_funcionario === loggedInFuncionarioId && fc.estadoCaixa,
-  ) ? null : (
-    <Button
-      variant="contained"
-      color="primary"
-      onClick={handleOpenCaixaModal}
-      startIcon={<IconifyIcon icon="mdi:cash-register" />}
-      size="small"
-      fullWidth
-      disabled={!loggedInFuncionarioId}
-    >
-      Abrir Caixa
-    </Button>
-  )}
-  <Button
-    variant="contained"
-    color="info"
-    onClick={handleOpenCaixaListModal}
-    startIcon={<IconifyIcon icon="mdi:cash-register" />}
-    size="small"
-    fullWidth
-  >
-    Ver Caixas
-  </Button>
-  <Button
-    variant="contained"
-    color="warning"
-    onClick={handleEnviarAlerta}
-    startIcon={<IconifyIcon icon="mdi:alert" />}
-    size="small"
-    fullWidth
-    disabled={!loggedInFuncionarioId || loading}
-  >
-    Enviar Alerta
-  </Button>
-</Stack>
+            <Button
+              variant="contained"
+              color="secondary"
+              onClick={() => handleOpenFaturaModal()}
+              startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
+              size="small"
+              fullWidth
+            >
+              Nova Venda
+            </Button>
+            {funcionariosCaixa.some(
+              (fc) => fc.id_funcionario === loggedInFuncionarioId && fc.estadoCaixa,
+            ) ? null : (
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={handleOpenCaixaModal}
+                startIcon={<IconifyIcon icon="mdi:cash-register" />}
+                size="small"
+                fullWidth
+                disabled={!loggedInFuncionarioId}
+              >
+                Abrir Caixa
+              </Button>
+            )}
+            <Button
+              variant="contained"
+              color="info"
+              onClick={handleOpenCaixaListModal}
+              startIcon={<IconifyIcon icon="mdi:cash-register" />}
+              size="small"
+              fullWidth
+            >
+              Ver Caixas
+            </Button>
+            <Button
+              variant="contained"
+              color="warning"
+              onClick={handleEnviarAlerta}
+              startIcon={<IconifyIcon icon="mdi:alert" />}
+              size="small"
+              fullWidth
+              disabled={!loggedInFuncionarioId || loading}
+            >
+              Enviar Alerta
+            </Button>
+          </Stack>
         </Stack>
         <Dialog
           open={openModal}
@@ -1971,37 +1971,37 @@ const Faturacao: React.FC = () => {
               </Grid>
             </Grid>
             <Grid item xs={12} sm={6} md={4}>
-  <FormControl
-    fullWidth
-    variant="outlined"
-    error={Boolean(faturaState.errors.metodoPagamento)}
-    sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
-  >
-    <InputLabel>Método de Pagamento</InputLabel>
-    <Select
-      name="metodoPagamento"
-      value={faturaState.metodoPagamento}
-      onChange={(e) =>
-        dispatchFatura({
-          type: 'UPDATE_FIELD',
-          field: 'metodoPagamento',
-          value: e.target.value,
-        })
-      }
-      label="Método de Pagamento"
-    >
-      <MenuItem value="">
-        <em>Selecione um método</em>
-      </MenuItem>
-      <MenuItem value="DINHEIRO">Dinheiro</MenuItem>
-      <MenuItem value="CARTAO">Cartão</MenuItem>
-      <MenuItem value="TRANSFERENCIA">Transferência Bancária</MenuItem>
-    </Select>
-    {faturaState.errors.metodoPagamento && (
-      <FormHelperText>{faturaState.errors.metodoPagamento}</FormHelperText>
-    )}
-  </FormControl>
-</Grid>
+              <FormControl
+                fullWidth
+                variant="outlined"
+                error={Boolean(faturaState.errors.metodoPagamento)}
+                sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
+              >
+                <InputLabel>Método de Pagamento</InputLabel>
+                <Select
+                  name="metodoPagamento"
+                  value={faturaState.metodoPagamento}
+                  onChange={(e) =>
+                    dispatchFatura({
+                      type: 'UPDATE_FIELD',
+                      field: 'metodoPagamento',
+                      value: e.target.value,
+                    })
+                  }
+                  label="Método de Pagamento"
+                >
+                  <MenuItem value="">
+                    <em>Selecione um método</em>
+                  </MenuItem>
+                  <MenuItem value="DINHEIRO">Dinheiro</MenuItem>
+                  <MenuItem value="CARTAO">Cartão</MenuItem>
+                  <MenuItem value="TRANSFERENCIA">Transferência Bancária</MenuItem>
+                </Select>
+                {faturaState.errors.metodoPagamento && (
+                  <FormHelperText>{faturaState.errors.metodoPagamento}</FormHelperText>
+                )}
+              </FormControl>
+            </Grid>
 
             <Divider sx={{ borderColor: 'primary.main' }} />
             <Typography variant="h6" color="text.secondary">
@@ -2330,93 +2330,93 @@ const Faturacao: React.FC = () => {
       </Modal>
 
       <Card sx={{ mt: 2, borderRadius: 2 }}>
-  <CardContent sx={{ p: { xs: 1, sm: 2 } }}>
-    {['Admin', 'Gerente'].includes(loggedInFuncionarioCargo) ? (
-      <>
-        <TableContainer component={Paper}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 'bold' }}>Cliente</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Data</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Total</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Caixa</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Ações</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {paginatedFaturas.length > 0 ? (
-                paginatedFaturas.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell>{item.cliente}</TableCell>
-                    <TableCell>
-                      {new Intl.DateTimeFormat('pt-BR').format(new Date(item.data))}
-                    </TableCell>
-                    <TableCell>{calcularTotalFatura(item).toFixed(2)}kzs</TableCell>
-                    <TableCell>
-                      {item.funcionariosCaixa?.caixas?.nomeCaixa || 'Caixa Não Informado'}
-                    </TableCell>
-                    <TableCell align="right">
-                      <Stack direction="row" spacing={1} justifyContent="flex-end">
-                        <IconButton
-                          color="primary"
-                          onClick={() => handleOpenFaturaModal(item.id)}
-                          size="small"
-                          disabled={loading}
-                        >
-                          <Edit />
-                        </IconButton>
-                        <IconButton
-                          color="error"
-                          onClick={() => handleOpenConfirmModal(item.id)}
-                          size="small"
-                          disabled={loading}
-                        >
-                          <Delete />
-                        </IconButton>
-                        <IconButton
-                          color="secondary"
-                          onClick={() => generatePDF(item)}
-                          size="small"
-                          disabled={loading}
-                        >
-                          <IconifyIcon icon="mdi:download" />
-                        </IconButton>
-                      </Stack>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={5} align="center">
-                    <Typography variant="body2" color="text.secondary">
-                      Nenhuma fatura encontrada
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        <TablePagination
-          rowsPerPageOptions={[5, 10, 25]}
-          component="div"
-          count={faturas.length}
-          rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={handleChangePage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
-          labelRowsPerPage="Linhas por página:"
-          labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
-        />
-      </>
-    ) : (
-      <Typography variant="body1" color="error" align="center">
-        Você não tem permissão para visualizar a listagem de faturas.
-      </Typography>
-    )}
-  </CardContent>
-</Card>
+        <CardContent sx={{ p: { xs: 1, sm: 2 } }}>
+          {['Admin', 'Gerente'].includes(loggedInFuncionarioCargo) ? (
+            <>
+              <TableContainer component={Paper}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 'bold' }}>Cliente</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>Data</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>Total</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>Caixa</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>Ações</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {paginatedFaturas.length > 0 ? (
+                      paginatedFaturas.map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell>{item.cliente}</TableCell>
+                          <TableCell>
+                            {new Intl.DateTimeFormat('pt-BR').format(new Date(item.data))}
+                          </TableCell>
+                          <TableCell>{calcularTotalFatura(item).toFixed(2)}kzs</TableCell>
+                          <TableCell>
+                            {item.funcionariosCaixa?.caixas?.nomeCaixa || 'Caixa Não Informado'}
+                          </TableCell>
+                          <TableCell align="right">
+                            <Stack direction="row" spacing={1} justifyContent="flex-end">
+                              <IconButton
+                                color="primary"
+                                onClick={() => handleOpenFaturaModal(item.id)}
+                                size="small"
+                                disabled={loading}
+                              >
+                                <Edit />
+                              </IconButton>
+                              <IconButton
+                                color="error"
+                                onClick={() => handleOpenConfirmModal(item.id)}
+                                size="small"
+                                disabled={loading}
+                              >
+                                <Delete />
+                              </IconButton>
+                              <IconButton
+                                color="secondary"
+                                onClick={() => generatePDF(item)}
+                                size="small"
+                                disabled={loading}
+                              >
+                                <IconifyIcon icon="mdi:download" />
+                              </IconButton>
+                            </Stack>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={5} align="center">
+                          <Typography variant="body2" color="text.secondary">
+                            Nenhuma fatura encontrada
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              <TablePagination
+                rowsPerPageOptions={[5, 10, 25]}
+                component="div"
+                count={faturas.length}
+                rowsPerPage={rowsPerPage}
+                page={page}
+                onPageChange={handleChangePage}
+                onRowsPerPageChange={handleChangeRowsPerPage}
+                labelRowsPerPage="Linhas por página:"
+                labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+              />
+            </>
+          ) : (
+            <Typography variant="body1" color="error" align="center">
+              Você não tem permissão para visualizar a listagem de faturas.
+            </Typography>
+          )}
+        </CardContent>
+      </Card>
     </>
   );
 };
