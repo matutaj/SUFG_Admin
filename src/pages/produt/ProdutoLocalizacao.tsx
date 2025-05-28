@@ -1169,24 +1169,24 @@ const handleOpenDestinationModal = useCallback(
       log('Validação do formulário de destino falhou');
       return;
     }
-
+  
     try {
       setLoading(true);
       setAlert(null);
-
+  
       if (currentDestinationIndex >= transferItems.length || currentDestinationIndex < 0) {
         throw new Error('Índice inválido');
       }
-
+  
       const transferItem = transferItems[currentDestinationIndex];
       if (!transferItem?.id_localizacao_origem || !transferItem.id_produto) {
         throw new Error('Item inválido');
       }
-
+  
       log(
         `Salvando transferência para produto ${destinationForm.id_produto}, quantidade: ${destinationForm.quantidadeProduto}`,
       );
-
+  
       const transferData = {
         id_funcionario: loggedInFuncionarioId,
         id_produto: destinationForm.id_produto,
@@ -1199,19 +1199,20 @@ const handleOpenDestinationModal = useCallback(
         dataTransferencia: new Date(),
         id_produtoLocalizacao: '',
       };
-
+  
       log('Criando transferência:', transferData);
       await createTransfer(transferData);
-
+  
       if (currentDestinationIndex < transferItems.length - 1) {
         const nextIndex = currentDestinationIndex + 1;
+        const nextDestination = destinationLocations[nextIndex]; // Pega os dados do próximo item
         setCurrentDestinationIndex(nextIndex);
         setDestinationForm({
           id_produto: transferItems[nextIndex].id_produto,
-          id_localizacao: '',
-          id_seccao: '',
-          id_prateleira: '',
-          id_corredor: '',
+          id_localizacao: nextDestination.id_localizacao, // Usa os dados de destinationLocations
+          id_seccao: nextDestination.id_seccao,
+          id_prateleira: nextDestination.id_prateleira,
+          id_corredor: nextDestination.id_corredor,
           quantidadeProduto: transferItems[nextIndex].quantidadeTransferida,
         });
         setErrors({ transferItems: [], destinationForm: {} });
@@ -1242,6 +1243,7 @@ const handleOpenDestinationModal = useCallback(
     updateStockData,
     permissions.canCreateTransfer,
     permissions.canCreateLocation,
+    destinationLocations, // Adicionei destinationLocations como dependência
   ]);
 
   return (
