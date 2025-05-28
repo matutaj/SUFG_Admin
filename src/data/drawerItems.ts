@@ -125,7 +125,7 @@ export const drawerItems: DrawerItem[] = [
         title: 'Venda',
         path: `/${rootPaths.pagesRoot}/faturacao`,
         active: true,
-        requiredRoles: ['Admin', 'Operador de caixa'],
+        requiredRoles: ['Admin', 'Operador de caixa', 'Gerente'],
       },
       {
         id: 4,

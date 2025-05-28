@@ -110,7 +110,6 @@ interface FaturaState {
 interface CaixaState {
   funcionarioId: string;
   caixaId: string;
-  valorInicial: string;
   errors: { [key: string]: string };
 }
 
@@ -143,7 +142,6 @@ const initialFaturaState: FaturaState = {
 const initialCaixaState: CaixaState = {
   funcionarioId: '',
   caixaId: '',
-  valorInicial: '',
   errors: {},
 };
 
@@ -318,11 +316,7 @@ const validateCaixa = (
   if (funcionariosCaixa.some((fc) => fc.id_funcionario === state.funcionarioId && fc.estadoCaixa)) {
     errors.funcionarioId = 'Este funcionário já tem um caixa aberto';
   }
-  if (!state.valorInicial) {
-    errors.valorInicial = 'O valor inicial é obrigatório';
-  } else if (isNaN(Number(state.valorInicial)) || Number(state.valorInicial) < 0) {
-    errors.valorInicial = 'O valor inicial deve ser um número maior ou igual a zero';
-  }
+  
   return errors;
 };
 
@@ -360,6 +354,7 @@ const Faturacao: React.FC = () => {
   const [loggedInFuncionarioCargo, setLoggedInFuncionarioCargo] = useState<string>('');
   const [notifiedLowStock, setNotifiedLowStock] = useState<Set<string>>(new Set());
 
+  
   // Função para verificar estoque baixo
   const checkLowStock = useCallback(async () => {
     try {
@@ -992,17 +987,7 @@ const Faturacao: React.FC = () => {
     return funcionario?.nomeFuncionario || 'Usuário Desconhecido';
   };
   const getCaixasExibidas = () => {
-    const funcionarioLogado = funcionarios.find((f) => f.id === loggedInFuncionarioId);
-
-    const cargo = funcionarioLogado?.role?.toLowerCase();
-
-    if (cargo === 'admin' || cargo === 'gerente') {
-      return funcionariosCaixa.filter((caixa) => caixa.estadoCaixa);
-    }
-
-    return funcionariosCaixa.filter(
-      (caixa) => caixa.id_funcionario === loggedInFuncionarioId && caixa.estadoCaixa,
-    );
+    return funcionariosCaixa.filter((caixa) => caixa.estadoCaixa);
   };
 
   const adicionarNovoProdutoInput = () => {
@@ -1503,7 +1488,133 @@ const Faturacao: React.FC = () => {
       await fetchProductsAndLocations();
     }
   };
-
+  
+  /*useEffect(() => {
+    let barcodeBuffer = '';
+    let lastKeyTime = Date.now();
+  
+    const handleBarcodeScan = (event: KeyboardEvent) => {
+      const currentTime = Date.now();
+      const timeDiff = currentTime - lastKeyTime;
+  
+      // Detectar entrada rápida (típica de scanners de código de barras)
+      if (timeDiff < 50 && event.key !== 'Enter') {
+        barcodeBuffer += event.key;
+      } else if (event.key === 'Enter' && barcodeBuffer) {
+        // Processar o código de barras quando "Enter" é detectado
+        const referencia = barcodeBuffer.trim();
+        const foundProduct = productsInStore.find(
+          (p) => p.referenciaProduto.toLowerCase() === referencia.toLowerCase(),
+        );
+  
+        if (foundProduct && foundProduct.id && openFaturaModal) {
+          const index = faturaState.produtosSelecionados.length - 1;
+          handleProdutoChange(index, 'id', foundProduct.id);
+          if (index === faturaState.produtosSelecionados.length - 1) {
+            adicionarNovoProdutoInput();
+          }
+        } else if (openFaturaModal) {
+          setAlert({
+            severity: 'error',
+            message: `Produto com referência ${referencia} não encontrado.`,
+          });
+        }
+  
+        barcodeBuffer = ''; // Limpar o buffer após processar
+      }
+  
+      lastKeyTime = currentTime;
+    };
+  
+    window.addEventListener('keydown', handleBarcodeScan);
+  
+    return () => {
+      window.removeEventListener('keydown', handleBarcodeScan);
+    };
+  }, [productsInStore, openFaturaModal, faturaState.produtosSelecionados, handleProdutoChange, adicionarNovoProdutoInput, setAlert]);*/
+  useEffect(() => {
+    let barcodeInput = '';
+    let lastKeyTime = Date.now();
+    let isScanning = false;
+  
+    const handleKeyEvent = (event: KeyboardEvent) => {
+      if (!openFaturaModal) return; // Só processa eventos se o modal de fatura estiver aberto
+  
+      const currentTime = Date.now();
+      const timeDiff = currentTime - lastKeyTime;
+  
+      // Log detalhado do elemento focado e evento
+      console.log('Elemento focado:', document.activeElement?.tagName, document.activeElement?.id);
+      console.log('Tecla:', event.key, 'Code:', event.code, 'TimeDiff:', timeDiff);
+  
+      // Detectar entrada rápida (típica de scanners, < 100ms entre teclas)
+      if (timeDiff < 100 && event.key !== 'Enter') {
+        event.preventDefault(); // Impede que os caracteres sejam inseridos em qualquer campo
+        // Filtra apenas caracteres numéricos
+        if (/^[0-9]$/.test(event.key)) {
+          barcodeInput += event.key;
+          console.log('Buffer atual:', barcodeInput, 'Tamanho:', barcodeInput.length);
+          isScanning = true;
+        } else {
+          console.log('Caractere ignorado (não numérico):', event.key);
+        }
+      } else if (event.key === 'Enter' && barcodeInput && isScanning) {
+        event.preventDefault(); // Impede que o "Enter" afete outros campos
+        // Processa o código de barras
+        const referencia = barcodeInput.trim();
+        console.log('Código de barras lido:', referencia, 'Tamanho:', referencia.length);
+  
+        // Valida o tamanho do código (ex.: 12 ou 13 dígitos para EAN-13)
+        if (referencia.length >= 12 && referencia.length <= 13) {
+          let foundProduct = productsInStore.find(
+            (p) => p.referenciaProduto.toLowerCase() === referencia.toLowerCase(),
+          );
+          // Tenta sem o primeiro dígito, se necessário
+          if (!foundProduct && referencia.length > 1) {
+            console.log('Tentando sem o primeiro dígito:', referencia.slice(1));
+            foundProduct = productsInStore.find(
+              (p) => p.referenciaProduto.slice(1).toLowerCase() === referencia.toLowerCase(),
+            );
+          }
+          if (foundProduct && foundProduct.id) {
+            const lastIndex = faturaState.produtosSelecionados.length - 1;
+            handleProdutoChange(lastIndex, 'id', foundProduct.id);
+            // Adiciona um novo campo de produto
+            if (lastIndex === faturaState.produtosSelecionados.length - 1) {
+              adicionarNovoProdutoInput();
+            }
+          } else {
+            setAlert({
+              severity: 'error',
+              message: `Produto com referência ${referencia} não encontrado.`,
+            });
+          }
+        } else {
+          console.log('Código inválido: tamanho incorreto', referencia);
+          setAlert({
+            severity: 'error',
+            message: `Código de barras inválido: ${referencia} (tamanho: ${referencia.length})`,
+          });
+        }
+  
+        barcodeInput = ''; // Reseta o buffer
+        isScanning = false; // Reseta o estado
+      } else if (timeDiff >= 100) {
+        // Reseta o buffer se a entrada for lenta
+        console.log('Resetando buffer: entrada lenta, TimeDiff:', timeDiff);
+        barcodeInput = '';
+        isScanning = false;
+      }
+  
+      lastKeyTime = currentTime;
+    };
+  
+    window.addEventListener('keydown', handleKeyEvent);
+  
+    return () => {
+      window.removeEventListener('keydown', handleKeyEvent);
+    };
+  }, [openFaturaModal, productsInStore, faturaState.produtosSelecionados, handleProdutoChange, adicionarNovoProdutoInput, setAlert]);
   const handleOpenCaixaModal = async () => {
     if (!loggedInFuncionarioId) {
       setAlert({ severity: 'error', message: 'Usuário não autenticado. Faça login novamente.' });
@@ -1554,21 +1665,6 @@ const Faturacao: React.FC = () => {
           return new Date(dateB).getTime() - new Date(dateA).getTime();
         })[0];
 
-      if (ultimoCaixa) {
-        const ultimoValorTotal =
-          (Number(ultimoCaixa.valorInicial) || 0) + (Number(ultimoCaixa.quantidadaFaturada) || 0);
-        dispatchCaixa({
-          type: 'UPDATE_FIELD',
-          field: 'valorInicial',
-          value: ultimoValorTotal.toFixed(2),
-        });
-      } else {
-        dispatchCaixa({
-          type: 'UPDATE_FIELD',
-          field: 'valorInicial',
-          value: '0.00',
-        });
-      }
 
       dispatchCaixa({
         type: 'UPDATE_FIELD',
@@ -1625,22 +1721,6 @@ const Faturacao: React.FC = () => {
           const dateB = b.horarioFechamento || b.horarioAbertura || new Date(0);
           return new Date(dateB).getTime() - new Date(dateA).getTime();
         })[0];
-
-      if (ultimoCaixa) {
-        const ultimoValorTotal =
-          (Number(ultimoCaixa.valorInicial) || 0) + (Number(ultimoCaixa.quantidadaFaturada) || 0);
-        dispatchCaixa({
-          type: 'UPDATE_FIELD',
-          field: 'valorInicial',
-          value: ultimoValorTotal.toFixed(2),
-        });
-      } else {
-        dispatchCaixa({
-          type: 'UPDATE_FIELD',
-          field: 'valorInicial',
-          value: '0.00',
-        });
-      }
     }
   };
 
@@ -1662,7 +1742,6 @@ const Faturacao: React.FC = () => {
         id_funcionario: loggedInFuncionarioId,
         estadoCaixa: true,
         quantidadaFaturada: 0,
-        valorInicial: Number(caixaState.valorInicial),
         horarioAbertura: new Date(),
         horarioFechamento: null,
       };
@@ -1689,7 +1768,7 @@ const Faturacao: React.FC = () => {
       const updatedFuncionariosCaixa = await getAllEmployeeCashRegisters();
       console.log('Lista de caixas atualizada:', updatedFuncionariosCaixa);
       setFuncionariosCaixa(updatedFuncionariosCaixa);
-      setAlert({ severity: 'success', message: 'Caixa aberto com sucesso!' });
+      setAlert({ severity: 'success', message: 'aberto com sucesso!' });
       handleCloseCaixaModal();
     } catch (error: any) {
       setAlert({
@@ -1794,52 +1873,171 @@ const Faturacao: React.FC = () => {
             Faturação (Vendas)
           </Typography>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-  <Button
-    variant="contained"
-    color="secondary"
-    onClick={() => handleOpenFaturaModal()}
-    startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
-    size="small"
-    fullWidth
-  >
-    Nova Venda
-  </Button>
   {funcionariosCaixa.some(
     (fc) => fc.id_funcionario === loggedInFuncionarioId && fc.estadoCaixa,
-  ) ? null : (
+  ) && (
+    <Button
+      variant="contained"
+      color="secondary"
+      onClick={() => handleOpenFaturaModal()}
+      startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
+      size="small"
+      fullWidth
+    >
+      Nova Venda
+    </Button>
+  )}
+  {funcionariosCaixa.some(
+    (fc) => fc.id_funcionario === loggedInFuncionarioId && fc.estadoCaixa,
+  ) ? null : loggedInFuncionarioCargo !== 'Gerente' && (
     <Button
       variant="contained"
       color="primary"
-      onClick={handleOpenCaixaModal}
+      onClick={async () => {
+        if (!loggedInFuncionarioId) {
+          setAlert({ severity: 'error', message: 'Usuário não autenticado. Faça login novamente.' });
+          navigate('/login');
+          return;
+        }
+
+        setLoading(true);
+        try {
+          // Obter o endereço MAC da máquina
+          const macResponse = await axios.get('http://localhost:3001/mac');
+          const machineMacAddress = macResponse.data.mac;
+
+          // Obter o token de autenticação
+          const token = localStorage.getItem('token');
+          if (!token) {
+            throw new Error('Token de autenticação não encontrado. Faça login novamente.');
+          }
+
+          // Buscar o caixa associado ao MAC
+          const caixaResponse = await axios.get(
+            `http://localhost:3333/caixa/mac/${machineMacAddress}`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            },
+          );
+          const caixa = caixaResponse.data;
+
+          if (!caixa || !caixa.id) {
+            throw new Error('Nenhum caixa encontrado para o endereço MAC desta máquina.');
+          }
+
+          // Configurar o estado do caixa
+          const caixaState: CaixaState = {
+            funcionarioId: loggedInFuncionarioId,
+            caixaId: caixa.id,
+            errors: {},
+          };
+
+          // Validar o caixa
+          const errors = validateCaixa(caixaState, funcionarios, caixas, funcionariosCaixa);
+          if (Object.keys(errors).length > 0) {
+            dispatchCaixa({ type: 'SET_ERRORS', errors });
+            setAlert({ severity: 'error', message: Object.values(errors)[0] });
+            return;
+          }
+
+          // Criar o caixa
+          const newFuncionarioCaixa: FuncionarioCaixa = {
+            id_caixa: caixa.id,
+            id_funcionario: loggedInFuncionarioId,
+            estadoCaixa: true,
+            quantidadaFaturada: 0,
+            horarioAbertura: new Date(),
+            horarioFechamento: null,
+          };
+
+          const createdCaixa = await createEmployeeCashRegister(newFuncionarioCaixa);
+          if (!createdCaixa.id) {
+            throw new Error('ID do caixa não retornado pela API.');
+          }
+
+          // Atualizar a lista de caixas
+          setFuncionariosCaixa((prev) => [
+            ...prev,
+            {
+              ...newFuncionarioCaixa,
+              id: createdCaixa.id,
+              caixas: caixas.find((c) => c.id === caixa.id),
+              Funcionarios: funcionarios.find((f) => f.id === loggedInFuncionarioId),
+            },
+          ]);
+
+          const updatedFuncionariosCaixa = await getAllEmployeeCashRegisters();
+          setFuncionariosCaixa(updatedFuncionariosCaixa);
+          setAlert({ severity: 'success', message: `Caixa "${caixa.nomeCaixa}" aberto com sucesso!` });
+        } catch (error: any) {
+          setAlert({
+            severity: 'error',
+            message:
+              error.response?.status === 401
+                ? 'Autenticação falhou. Faça login novamente.'
+                : error.message || 'Erro ao abrir o caixa. Tente novamente.',
+          });
+        } finally {
+          setLoading(false);
+        }
+      }}
       startIcon={<IconifyIcon icon="mdi:cash-register" />}
       size="small"
       fullWidth
-      disabled={!loggedInFuncionarioId}
+      disabled={!loggedInFuncionarioId || loading}
     >
       Abrir Caixa
     </Button>
   )}
-  <Button
-    variant="contained"
-    color="info"
-    onClick={handleOpenCaixaListModal}
-    startIcon={<IconifyIcon icon="mdi:cash-register" />}
-    size="small"
-    fullWidth
-  >
-    Ver Caixas
-  </Button>
-  <Button
-    variant="contained"
-    color="warning"
-    onClick={handleEnviarAlerta}
-    startIcon={<IconifyIcon icon="mdi:alert" />}
-    size="small"
-    fullWidth
-    disabled={!loggedInFuncionarioId || loading}
-  >
-    Enviar Alerta
-  </Button>
+  {funcionariosCaixa.some(
+    (fc) => fc.id_funcionario === loggedInFuncionarioId && fc.estadoCaixa,
+  ) && (
+    <Button
+      variant="contained"
+      color="error"
+      onClick={() => {
+        const caixaAberto = funcionariosCaixa.find(
+          (fc) => fc.id_funcionario === loggedInFuncionarioId && fc.estadoCaixa,
+        );
+        if (caixaAberto && caixaAberto.id) {
+          handleFecharCaixa(caixaAberto.id);
+        }
+      }}
+      startIcon={<IconifyIcon icon="mdi:cash-register-off" />}
+      size="small"
+      fullWidth
+      disabled={loading}
+    >
+      {loading ? 'Fechando...' : 'Fechar Caixa'}
+    </Button>
+  )}
+  {['Admin', 'Gerente'].includes(loggedInFuncionarioCargo) && (
+    <Button
+      variant="contained"
+      color="info"
+      onClick={handleOpenCaixaListModal}
+      startIcon={<IconifyIcon icon="mdi:cash-register" />}
+      size="small"
+      fullWidth
+    >
+      Ver Caixas
+    </Button>
+  )}
+  {loggedInFuncionarioCargo !== 'Gerente' && (
+    <Button
+      variant="contained"
+      color="warning"
+      onClick={handleEnviarAlerta}
+      startIcon={<IconifyIcon icon="mdi:alert" />}
+      size="small"
+      fullWidth
+      disabled={!loggedInFuncionarioId || loading}
+    >
+      Enviar Alerta
+    </Button>
+  )}
 </Stack>
         </Stack>
         <Dialog
@@ -2020,73 +2218,80 @@ const Faturacao: React.FC = () => {
                 const lojaLocations = locations.filter((loc) => loc.tipo === tipo.Loja);
                 return (
                   <Grid container spacing={2} key={index} alignItems="center" sx={{ mb: 2 }}>
-                    <Grid item xs={12} sm={6} md={5}>
-                      <FormControl
-                        fullWidth
-                        variant="outlined"
-                        error={Boolean(faturaState.errors[`produto_${index}`])}
-                        sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
-                      >
-                        <InputLabel>Produto</InputLabel>
-                        <Select
-                          value={produto.id}
-                          onChange={(e) => handleProdutoChange(index, 'id', e.target.value)}
-                          disabled={loading || !lojaLocations.length}
-                        >
-                          <MenuItem value="">
-                            <em>Selecione um produto</em>
-                          </MenuItem>
-                          {productsInStore.map((p) => {
-                            const produtoLocations = productLocations.filter(
-                              (loc) =>
-                                loc.id_produto === p.id &&
-                                lojaLocations.some((loja) => loja.id === loc.id_localizacao),
-                            );
-                            const quantidade = produtoLocations.reduce(
-                              (total, loc) => total + (loc.quantidadeProduto ?? 0),
-                              0,
-                            );
-                            return (
-                              <MenuItem key={p.id} value={p.id} disabled={quantidade === 0}>
-                                {p.nomeProduto} - {Number(p.precoVenda).toFixed(2)}kzs (Estoque:{' '}
-                                {quantidade})
-                              </MenuItem>
-                            );
-                          })}
-                        </Select>
-                        {faturaState.errors[`produto_${index}`] && (
-                          <FormHelperText>{faturaState.errors[`produto_${index}`]}</FormHelperText>
-                        )}
-                      </FormControl>
-                    </Grid>
-                    <Grid item xs={8} sm={4} md={5}>
-                      <TextField
-                        fullWidth
-                        variant="outlined"
-                        type="number"
-                        label="Quantidade"
-                        value={produto.quantidade}
-                        onChange={(e) =>
-                          handleProdutoChange(index, 'quantidade', parseInt(e.target.value) || 1)
-                        }
-                        inputProps={{ min: 1 }}
-                        error={Boolean(faturaState.errors[`produto_${index}`])}
-                        helperText={faturaState.errors[`produto_${index}`]}
-                        sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
-                        disabled={loading || !lojaLocations.length}
-                      />
-                    </Grid>
-                    <Grid item xs={4} sm={2} md={2}>
-                      <IconButton
-                        color="error"
-                        onClick={() => removerProdutoInput(index)}
-                        size="small"
-                        disabled={loading}
-                      >
-                        <Delete />
-                      </IconButton>
-                    </Grid>
-                  </Grid>
+  <Grid item xs={12} sm={6} md={5}>
+  <Autocomplete
+    options={productsInStore}
+    getOptionLabel={(option) => `${option.referenciaProduto} - ${option.nomeProduto}`}
+    onChange={(_event, newValue) => {
+      if (newValue && newValue.id) {
+        handleProdutoChange(index, 'id', newValue.id);
+        // Adiciona automaticamente um novo campo de produto após selecionar um produto
+        if (index === faturaState.produtosSelecionados.length - 1) {
+          adicionarNovoProdutoInput();
+        }
+      } else {
+        handleProdutoChange(index, 'id', '');
+      }
+    }}
+    value={productsInStore.find((p) => p.id === produto.id) || null}
+    disabled={loading || !lojaLocations.length}
+    renderInput={(params) => (
+      <TextField
+        {...params}
+        fullWidth
+        variant="outlined"
+        label="Referência ou Nome do Produto"
+        error={Boolean(faturaState.errors[`produto_${index}`])}
+        helperText={faturaState.errors[`produto_${index}`] || 'Escanear ou selecionar um produto'}
+        sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
+      />
+    )}
+    renderOption={(props, option) => {
+      const produtoLocations = productLocations.filter(
+        (loc) =>
+          loc.id_produto === option.id &&
+          lojaLocations.some((loja) => loja.id === loc.id_localizacao),
+      );
+      const quantidade = produtoLocations.reduce(
+        (total, loc) => total + (loc.quantidadeProduto ?? 0),
+        0,
+      );
+      return (
+        <li {...props} key={option.id}>
+          {option.referenciaProduto} - {option.nomeProduto} - {Number(option.precoVenda).toFixed(2)}kzs (Estoque: {quantidade})
+        </li>
+      );
+    }}
+  />
+</Grid>
+  <Grid item xs={8} sm={4} md={5}>
+    <TextField
+      fullWidth
+      variant="outlined"
+      type="number"
+      label="Quantidade"
+      value={produto.quantidade}
+      onChange={(e) =>
+        handleProdutoChange(index, 'quantidade', parseInt(e.target.value) || 1)
+      }
+      inputProps={{ min: 1 }}
+      error={Boolean(faturaState.errors[`produto_${index}`])}
+      helperText={faturaState.errors[`produto_${index}`]}
+      sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
+      disabled={loading || !lojaLocations.length}
+    />
+  </Grid>
+  <Grid item xs={4} sm={2} md={2}>
+    <IconButton
+      color="error"
+      onClick={() => removerProdutoInput(index)}
+      size="small"
+      disabled={loading}
+    >
+      <Delete />
+    </IconButton>
+  </Grid>
+</Grid>
                 );
               })
             )}
@@ -2192,33 +2397,6 @@ const Faturacao: React.FC = () => {
                   )}
                 </FormControl>
               </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  variant="outlined"
-                  label="Valor Inicial (Kz)"
-                  name="valorInicial"
-                  type="number"
-                  value={caixaState.valorInicial}
-                  onChange={(e) =>
-                    dispatchCaixa({
-                      type: 'UPDATE_FIELD',
-                      field: 'valorInicial',
-                      value: e.target.value,
-                    })
-                  }
-                  inputProps={{ min: 0, step: '0.01' }}
-                  sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
-                  error={Boolean(caixaState.errors.valorInicial)}
-                  helperText={
-                    caixaState.errors.valorInicial ||
-                    (caixaState.caixaId
-                      ? 'Último valor total do caixa selecionado. Você pode alterá-lo.'
-                      : '')
-                  }
-                  disabled={loading}
-                />
-              </Grid>
             </Grid>
             <Divider sx={{ borderColor: 'primary.main' }} />
             <Stack direction="row" spacing={2} justifyContent="flex-end">
@@ -2249,57 +2427,42 @@ const Faturacao: React.FC = () => {
           </Typography>
           <TableContainer component={Paper}>
             <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Caixa</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Funcionário</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Estado</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Valor Inicial</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Valor Faturado</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Total Final</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Ações</TableCell>
-                </TableRow>
-              </TableHead>
+            <TableHead>
+  <TableRow>
+    <TableCell sx={{ fontWeight: 'bold' }}>Caixa</TableCell>
+    <TableCell sx={{ fontWeight: 'bold' }}>Funcionário</TableCell>
+    <TableCell sx={{ fontWeight: 'bold' }}>Estado</TableCell>
+    <TableCell sx={{ fontWeight: 'bold' }}>Valor Faturado</TableCell>
+    <TableCell sx={{ fontWeight: 'bold' }}>Total Final</TableCell>
+    <TableCell sx={{ fontWeight: 'bold' }} />
+  </TableRow>
+</TableHead>
               <TableBody>
-                {getCaixasExibidas().length > 0 ? (
-                  getCaixasExibidas().map((item) => {
-                    const valorInicial = Number(item.valorInicial) || 0;
-                    const quantidadaFaturada = Number(item.quantidadaFaturada) || 0;
-                    const totalFinal = valorInicial + quantidadaFaturada;
-                    return (
-                      <TableRow key={item.id}>
-                        <TableCell>{item.caixas?.nomeCaixa || 'N/A'}</TableCell>
-                        <TableCell>{item.Funcionarios?.nomeFuncionario || 'N/A'}</TableCell>
-                        <TableCell>{item.estadoCaixa ? 'Aberto' : 'Fechado'}</TableCell>
-                        <TableCell>{valorInicial.toFixed(2)} Kz</TableCell>
-                        <TableCell>{quantidadaFaturada.toFixed(2)} Kz</TableCell>
-                        <TableCell>{totalFinal.toFixed(2)} Kz</TableCell>
-                        <TableCell>
-                          {item.estadoCaixa && item.id && (
-                            <Button
-                              variant="contained"
-                              color="error"
-                              onClick={() => handleFecharCaixa(item.id ?? '')}
-                              size="small"
-                              disabled={loading}
-                            >
-                              {loading ? 'Fechando...' : 'Fechar'}
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={7} align="center">
-                      <Typography variant="body2" color="text.secondary">
-                        Nenhum caixa aberto encontrado
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
+  {getCaixasExibidas().length > 0 ? (
+    getCaixasExibidas().map((item) => {
+      const quantidadaFaturada = Number(item.quantidadaFaturada) || 0;
+      const totalFinal = quantidadaFaturada;
+      return (
+        <TableRow key={item.id}>
+          <TableCell>{item.caixas?.nomeCaixa || 'N/A'}</TableCell>
+          <TableCell>{item.Funcionarios?.nomeFuncionario || 'N/A'}</TableCell>
+          <TableCell>{item.estadoCaixa ? 'Aberto' : 'Fechado'}</TableCell>
+          <TableCell>{quantidadaFaturada.toFixed(2)} Kz</TableCell>
+          <TableCell>{totalFinal.toFixed(2)} Kz</TableCell>
+          <TableCell />
+        </TableRow>
+      );
+    })
+  ) : (
+    <TableRow>
+      <TableCell colSpan={6} align="center">
+        <Typography variant="body2" color="text.secondary">
+          Nenhum caixa aberto encontrado
+        </Typography>
+      </TableCell>
+    </TableRow>
+  )}
+</TableBody>
             </Table>
           </TableContainer>
         </Box>
