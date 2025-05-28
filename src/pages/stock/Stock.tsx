@@ -203,7 +203,7 @@ const Stock: React.FC = () => {
 
   const groupStockEntries = (entries: DadosEntradaEstoque[]) => {
     const grouped: { [key: string]: DadosEntradaEstoque[] } = {};
-  
+
     entries.forEach((entry) => {
       if (!entry.id || !entry.dataEntrada || !entry.id_fornecedor || !entry.id_funcionario) {
         console.warn('Entrada inválida ignorada:', entry);
@@ -220,7 +220,7 @@ const Stock: React.FC = () => {
       }
       grouped[key].push(entry);
     });
-  
+
     return Object.values(grouped).map((entries, index) => ({
       id: `group-${index}-${entries[0].id_fornecedor}-${entries[0].id_funcionario}`,
       dataEntrada: new Date(entries[0].dataEntrada),
@@ -229,8 +229,11 @@ const Stock: React.FC = () => {
       entries,
     }));
   };
-  const groupedStockEntries = useMemo(() => groupStockEntries(filteredStockEntries), [filteredStockEntries]);
-  
+  const groupedStockEntries = useMemo(
+    () => groupStockEntries(filteredStockEntries),
+    [filteredStockEntries],
+  );
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -262,15 +265,15 @@ const Stock: React.FC = () => {
         getAllCorridors(),
         getAllProductLocations(),
       ]);
-  
+
       console.log('Stock Data:', stockData);
       console.log('Product Locations Data:', productLocationsData);
-  
+
       if (!productsData || productsData.length === 0) {
         console.warn('Nenhum produto retornado pela API getAllProducts');
         setFetchError('Nenhum produto encontrado. Verifique a API de produtos.');
       }
-  
+
       // Calcular produtos com quantidades não alocadas
       const productsWithoutLocationData = stockData.reduce((acc: DadosEstoque[], stockItem) => {
         const productLocationsForProduct = productLocationsData.filter(
@@ -283,7 +286,7 @@ const Stock: React.FC = () => {
           0,
         );
         const unallocatedQuantity = stockItem.quantidadeAtual - locatedQuantity;
-  
+
         if (unallocatedQuantity > 0) {
           // Adicionar o item do estoque com a quantidade não alocada ajustada
           acc.push({
@@ -293,9 +296,9 @@ const Stock: React.FC = () => {
         }
         return acc;
       }, []);
-  
+
       console.log('Products Without Location:', productsWithoutLocationData);
-  
+
       setStockEntries(stockEntriesData ?? []);
       setFilteredStockEntries(stockEntriesData ?? []);
       setCurrentStock(stockData ?? []);
@@ -392,13 +395,12 @@ const Stock: React.FC = () => {
     setSuccessMessage(null);
   }, []);
 
-  
   const handleOpenLocationModal = useCallback(
     (stocks: DadosEstoque[], entries: DadosEntradaEstoque[]) => {
       setLastEntries(entries);
       setSelectedStock(stocks[0]);
       setLocationIndex(0);
-  
+
       const productId = stocks[0].id_produto;
       const productLocationsForProduct = productLocations.filter(
         (loc) =>
@@ -411,16 +413,16 @@ const Stock: React.FC = () => {
       );
       const totalStockQuantity = stocks.reduce((sum, stock) => sum + stock.quantidadeAtual, 0);
       const unallocatedQuantity = Math.max(0, totalStockQuantity - locatedQuantity);
-  
+
       const existingLocation = productLocationsForProduct[0]; // Usar o primeiro registro correspondente, se existir
-  
+
       // Garantir que id_seccao seja válido
       const defaultSectionId = sections.length > 0 ? sections[0].id : '';
       if (!defaultSectionId) {
         setFetchError('Nenhuma seção disponível. Adicione seções antes de alocar produtos.');
         return;
       }
-  
+
       setLocationForm({
         id_produto: productId,
         id_localizacao: existingLocation?.id_localizacao || '',
@@ -435,7 +437,6 @@ const Stock: React.FC = () => {
     },
     [productLocations, locations, sections],
   );
-
 
   const handleCloseLocationModal = useCallback(() => {
     setOpenLocationModal(false);
@@ -455,16 +456,19 @@ const Stock: React.FC = () => {
     setLocationIndex(0);
   }, []);
 
-  const handleOpenDetailsModal = useCallback((group: {
-    id: string;
-    dataEntrada: Date;
-    id_fornecedor: string;
-    id_funcionario: string;
-    entries: DadosEntradaEstoque[];
-  }) => {
-    setSelectedEntry(group);
-    setOpenDetailsModal(true);
-  }, []);
+  const handleOpenDetailsModal = useCallback(
+    (group: {
+      id: string;
+      dataEntrada: Date;
+      id_fornecedor: string;
+      id_funcionario: string;
+      entries: DadosEntradaEstoque[];
+    }) => {
+      setSelectedEntry(group);
+      setOpenDetailsModal(true);
+    },
+    [],
+  );
 
   const handleCloseDetailsModal = useCallback(() => {
     setOpenDetailsModal(false);
@@ -665,12 +669,12 @@ const Stock: React.FC = () => {
     ) {
       newErrors.quantidadeMinimaProduto = 'Quantidade mínima deve ser não negativa';
     }
-  
+
     // Adicionar validação extra para garantir que id_seccao existe no banco
     if (locationForm.id_seccao && !sections.find((s) => s.id === locationForm.id_seccao)) {
       newErrors.id_seccao = 'Seção selecionada não existe';
     }
-  
+
     // Validação de quantidade
     const productId = locationForm.id_produto;
     const productLocationsForProduct = productLocations.filter(
@@ -685,7 +689,7 @@ const Stock: React.FC = () => {
     const stockItems = currentStock.filter((stock) => stock.id_produto === productId);
     const totalStockQuantity = stockItems.reduce((sum, stock) => sum + stock.quantidadeAtual, 0);
     const unallocatedQuantity = Math.max(0, totalStockQuantity - locatedQuantity);
-  
+
     // Verificar se é uma atualização de um registro existente
     const existingLocation = productLocations.find(
       (loc) =>
@@ -695,7 +699,7 @@ const Stock: React.FC = () => {
         loc.id_prateleira === locationForm.id_prateleira &&
         loc.id_corredor === locationForm.id_corredor,
     );
-  
+
     if (lastEntries.length > 0) {
       // Caso esteja processando entradas (lastEntries), limitar à quantidade da entrada
       if (locationForm.quantidadeProduto! > lastEntries[locationIndex].quantidadeRecebida) {
@@ -703,7 +707,8 @@ const Stock: React.FC = () => {
       }
     } else if (existingLocation) {
       // Atualização de registro existente: validar contra o estoque total
-      const newTotalInLocation = existingLocation.quantidadeProduto + locationForm.quantidadeProduto!;
+      const newTotalInLocation =
+        existingLocation.quantidadeProduto + locationForm.quantidadeProduto!;
       if (newTotalInLocation > totalStockQuantity) {
         newErrors.quantidadeProduto = `Quantidade total no registro (${newTotalInLocation}) não pode exceder o estoque disponível (${totalStockQuantity})`;
       }
@@ -713,29 +718,36 @@ const Stock: React.FC = () => {
         newErrors.quantidadeProduto = `Quantidade não pode exceder o disponível (${unallocatedQuantity})`;
       }
     }
-  
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [locationForm, productLocations, locations, currentStock, lastEntries, locationIndex, sections]);
-
+  }, [
+    locationForm,
+    productLocations,
+    locations,
+    currentStock,
+    lastEntries,
+    locationIndex,
+    sections,
+  ]);
 
   const onSubmit = useCallback(async () => {
     if (!validateForm()) return;
-  
+
     try {
       setLoading(true);
       setFetchError(null);
-  
+
       const newEntries: DadosEntradaEstoque[] = [];
       const newStocks: DadosEstoque[] = [];
-  
+
       if (isEditing && editEntryId?.startsWith('group-')) {
         // Encontrar o grupo correspondente
         const group = groupedStockEntries.find((g) => g.id === editEntryId);
         if (!group) {
           throw new Error('Grupo não encontrado');
         }
-  
+
         // Iterar sobre os produtos do formulário
         for (let i = 0; i < form.products.length; i++) {
           const product = form.products[i];
@@ -750,7 +762,7 @@ const Stock: React.FC = () => {
             dataValidadeLote: product.dataValidadeLote,
             adicionado: true,
           };
-  
+
           if (i < group.entries.length) {
             // Atualizar entrada existente
             const originalEntry = group.entries[i];
@@ -769,16 +781,16 @@ const Stock: React.FC = () => {
             setStockEntries((previous) => [...previous, newEntry]);
             setFilteredStockEntries((previous) => [...previous, newEntry]);
           }
-  
+
           // Atualizar ou criar estoque
           const existingStock = currentStock.find(
             (item) =>
               item.id_produto === product.id_produto &&
               item.lote === product.lote &&
               new Date(item.dataValidadeLote).toISOString() ===
-              new Date(product.dataValidadeLote).toISOString(),
+                new Date(product.dataValidadeLote).toISOString(),
           );
-  
+
           let newStock: DadosEstoque;
           if (existingStock) {
             const updatedQuantity = existingStock.quantidadeAtual + product.quantidadeRecebida;
@@ -809,7 +821,7 @@ const Stock: React.FC = () => {
           }
           newStocks.push(newStock);
         }
-  
+
         // Se o formulário tiver menos produtos, excluir entradas excedentes
         for (let i = form.products.length; i < group.entries.length; i++) {
           const entryToDelete = group.entries[i];
@@ -833,7 +845,7 @@ const Stock: React.FC = () => {
             dataValidadeLote: product.dataValidadeLote,
             adicionado: true,
           };
-  
+
           if (isEditing && editEntryId) {
             const updatedEntry = await updateStockEntry(editEntryId, entryData);
             setStockEntries((prev) =>
@@ -849,16 +861,16 @@ const Stock: React.FC = () => {
             setStockEntries((previous) => [...previous, newEntry]);
             setFilteredStockEntries((previous) => [...previous, newEntry]);
           }
-  
+
           // Atualizar ou criar estoque
           const existingStock = currentStock.find(
             (item) =>
               item.id_produto === product.id_produto &&
               item.lote === product.lote &&
               new Date(item.dataValidadeLote).toISOString() ===
-              new Date(product.dataValidadeLote).toISOString(),
+                new Date(product.dataValidadeLote).toISOString(),
           );
-  
+
           let newStock: DadosEstoque;
           if (existingStock) {
             const updatedQuantity = existingStock.quantidadeAtual + product.quantidadeRecebida;
@@ -890,7 +902,7 @@ const Stock: React.FC = () => {
           newStocks.push(newStock);
         }
       }
-  
+
       setSuccessMessage('Entradas adicionadas ao estoque. Agora selecione a localização.');
       handleClose();
       handleOpenLocationModal(newStocks, newEntries);
@@ -953,11 +965,11 @@ const Stock: React.FC = () => {
 
   const onLocationSubmit = useCallback(async () => {
     if (!validateLocationForm()) return;
-  
+
     try {
       setLoading(true);
       setFetchError(null);
-  
+
       const locationData: ProdutoLocalizacao = {
         id_produto: locationForm.id_produto!,
         id_localizacao: locationForm.id_localizacao!,
@@ -967,7 +979,7 @@ const Stock: React.FC = () => {
         id_corredor: locationForm.id_corredor!,
         quantidadeMinimaProduto: locationForm.quantidadeMinimaProduto!,
       };
-  
+
       // Verifica se já existe um registro com os mesmos identificadores
       const existingLocation = productLocations.find(
         (loc) =>
@@ -977,26 +989,26 @@ const Stock: React.FC = () => {
           loc.id_prateleira === locationData.id_prateleira &&
           loc.id_corredor === locationData.id_corredor,
       );
-  
+
       if (existingLocation) {
-  if (!existingLocation.id) {
-    throw new Error('ID inválido para ProdutoLocalizacao');
-  }
-  
+        if (!existingLocation.id) {
+          throw new Error('ID inválido para ProdutoLocalizacao');
+        }
+
         // Dados para atualização
         const updatedData: Partial<ProdutoLocalizacao> = {
           id: existingLocation.id,
-    id_produto: existingLocation.id_produto,
-    id_localizacao: existingLocation.id_localizacao,
-    id_seccao: existingLocation.id_seccao,
-    id_prateleira: existingLocation.id_prateleira,
-    id_corredor: existingLocation.id_corredor,
-    lote: existingLocation.lote,
-    dataValidadeLote: existingLocation.dataValidadeLote,
-    quantidadeProduto: existingLocation.quantidadeProduto + locationData.quantidadeProduto,
-    quantidadeMinimaProduto: locationData.quantidadeMinimaProduto,
+          id_produto: existingLocation.id_produto,
+          id_localizacao: existingLocation.id_localizacao,
+          id_seccao: existingLocation.id_seccao,
+          id_prateleira: existingLocation.id_prateleira,
+          id_corredor: existingLocation.id_corredor,
+          lote: existingLocation.lote,
+          dataValidadeLote: existingLocation.dataValidadeLote,
+          quantidadeProduto: existingLocation.quantidadeProduto + locationData.quantidadeProduto,
+          quantidadeMinimaProduto: locationData.quantidadeMinimaProduto,
         };
-  
+
         // Log dos campos do update
         console.log('Atualizando ProdutoLocalizacao:', {
           id: existingLocation.id,
@@ -1010,11 +1022,13 @@ const Stock: React.FC = () => {
           quantidadeMinimaProduto: updatedData.quantidadeMinimaProduto,
           dataUpdate: new Date().toISOString(),
         });
-  
+
         // Atualiza a quantidade do registro existente
         const updatedLocation = await updateProductLocation(existingLocation.id, updatedData);
         setProductLocations((prev) =>
-          prev.map((loc) => (loc.id === existingLocation.id ? { ...loc, ...updatedLocation } : loc)),
+          prev.map((loc) =>
+            loc.id === existingLocation.id ? { ...loc, ...updatedLocation } : loc,
+          ),
         );
       } else {
         // Log dos campos para criação
@@ -1028,12 +1042,12 @@ const Stock: React.FC = () => {
           quantidadeMinimaProduto: locationData.quantidadeMinimaProduto,
           dataCriacao: new Date().toISOString(),
         });
-  
+
         // Cria um novo registro
         const newLocation = await createProductLocation(locationData);
         setProductLocations((prev) => [...prev, newLocation]);
       }
-  
+
       // Atualizar productsWithoutLocation
       const updatedStock = currentStock.map((stockItem) => {
         if (stockItem.id_produto === locationData.id_produto) {
@@ -1054,25 +1068,25 @@ const Stock: React.FC = () => {
         }
         return stockItem;
       });
-  
+
       const productsWithoutLocationData = updatedStock.filter(
         (stockItem) => stockItem.quantidadeAtual > 0,
       );
-  
+
       setProductsWithoutLocation(productsWithoutLocationData);
       setFilteredProductsWithoutLocation(productsWithoutLocationData);
-  
+
       if (locationIndex < lastEntries.length - 1) {
         const nextIndex = locationIndex + 1;
         const nextProductId = lastEntries[nextIndex].id_produto;
-  
+
         // Verifica se já existe um registro para o próximo produto no armazém
         const nextExistingLocation = productLocations.find(
           (loc) =>
             loc.id_produto === nextProductId &&
             locations.find((l) => l.id === loc.id_localizacao)?.tipo === tipo.Armazem,
         );
-  
+
         setLocationIndex(nextIndex);
         setLocationForm({
           id_produto: nextProductId,
@@ -1088,7 +1102,7 @@ const Stock: React.FC = () => {
         setSuccessMessage('Todos os produtos foram adicionados ao armazém com sucesso!');
         handleCloseLocationModal();
       }
-  
+
       await fetchData();
     } catch (error: any) {
       console.error('Erro ao adicionar produto ao armazém:', error);
@@ -1107,7 +1121,6 @@ const Stock: React.FC = () => {
     currentStock,
     fetchData,
   ]);
-  
 
   const handleEditStock = useCallback((stock: DadosEstoque) => {
     setEditStockId(stock.id!);
@@ -1128,41 +1141,46 @@ const Stock: React.FC = () => {
       id_fornecedor: entry.id_fornecedor,
       id_funcionario: entry.id_funcionario,
       dataEntrada: new Date(entry.dataEntrada), // Garantir que é Date
-      products: [{
-        id_produto: entry.id_produto,
-        quantidadeRecebida: entry.quantidadeRecebida,
-        custoUnitario: entry.custoUnitario,
-        lote: entry.lote,
-        dataValidadeLote: new Date(entry.dataValidadeLote), // Garantir que é Date
-      }],
+      products: [
+        {
+          id_produto: entry.id_produto,
+          quantidadeRecebida: entry.quantidadeRecebida,
+          custoUnitario: entry.custoUnitario,
+          lote: entry.lote,
+          dataValidadeLote: new Date(entry.dataValidadeLote), // Garantir que é Date
+        },
+      ],
     });
     setErrors({});
     setOpenModal(true);
   }, []);
-  const handleEditGroup = useCallback((group: {
-    id: string;
-    dataEntrada: Date;
-    id_fornecedor: string;
-    id_funcionario: string;
-    entries: DadosEntradaEstoque[];
-  }) => {
-    setIsEditing(true);
-    setEditEntryId(group.id); // Usamos o ID do grupo como identificador
-    setForm({
-      id_fornecedor: group.id_fornecedor,
-      id_funcionario: group.id_funcionario,
-      dataEntrada: group.dataEntrada,
-      products: group.entries.map((entry) => ({
-        id_produto: entry.id_produto,
-        quantidadeRecebida: entry.quantidadeRecebida,
-        custoUnitario: entry.custoUnitario,
-        lote: entry.lote,
-        dataValidadeLote: new Date(entry.dataValidadeLote),
-      })),
-    });
-    setErrors({});
-    setOpenModal(true);
-  }, []);
+  const handleEditGroup = useCallback(
+    (group: {
+      id: string;
+      dataEntrada: Date;
+      id_fornecedor: string;
+      id_funcionario: string;
+      entries: DadosEntradaEstoque[];
+    }) => {
+      setIsEditing(true);
+      setEditEntryId(group.id); // Usamos o ID do grupo como identificador
+      setForm({
+        id_fornecedor: group.id_fornecedor,
+        id_funcionario: group.id_funcionario,
+        dataEntrada: group.dataEntrada,
+        products: group.entries.map((entry) => ({
+          id_produto: entry.id_produto,
+          quantidadeRecebida: entry.quantidadeRecebida,
+          custoUnitario: entry.custoUnitario,
+          lote: entry.lote,
+          dataValidadeLote: new Date(entry.dataValidadeLote),
+        })),
+      });
+      setErrors({});
+      setOpenModal(true);
+    },
+    [],
+  );
   const handleDeleteGroup = useCallback(
     async (group: {
       id: string;
@@ -1189,35 +1207,37 @@ const Stock: React.FC = () => {
       setFetchError('Nenhum grupo de entradas selecionado.');
       return;
     }
-  
+
     try {
       setLoading(true);
       setFetchError(null);
-  
+
       const errors: string[] = [];
       let allDeleted = true;
-  
+
       for (const entry of selectedEntry.entries) {
         if (!entry.id) {
           errors.push(`Entrada sem ID válido: ${JSON.stringify(entry)}`);
           allDeleted = false;
           continue;
         }
-  
-        const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(entry.id);
+
+        const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          entry.id,
+        );
         if (!isValidUUID) {
           errors.push(`ID inválido para entrada ${entry.id}`);
           allDeleted = false;
           continue;
         }
-  
+
         const entryExists = stockEntries.find((e) => e.id === entry.id);
         if (!entryExists) {
           errors.push(`Entrada ${entry.id} não encontrada no estado local.`);
           allDeleted = false;
           continue;
         }
-  
+
         try {
           const deleted = await deleteStockEntry(entry.id);
           if (deleted) {
@@ -1225,9 +1245,10 @@ const Stock: React.FC = () => {
               (stock) =>
                 stock.id_produto === entry.id_produto &&
                 stock.lote === entry.lote &&
-                new Date(stock.dataValidadeLote).toISOString() === new Date(entry.dataValidadeLote).toISOString(),
+                new Date(stock.dataValidadeLote).toISOString() ===
+                  new Date(entry.dataValidadeLote).toISOString(),
             );
-  
+
             if (stockToUpdate) {
               const newQuantity = stockToUpdate.quantidadeAtual - entry.quantidadeRecebida;
               if (newQuantity > 0) {
@@ -1248,7 +1269,7 @@ const Stock: React.FC = () => {
                 setFilteredStock((prev) => prev.filter((item) => item.id !== stockToUpdate.id));
               }
             }
-  
+
             setStockEntries((prev) => prev.filter((item) => item.id !== entry.id));
             setFilteredStockEntries((prev) => prev.filter((item) => item.id !== entry.id));
           } else {
@@ -1260,14 +1281,14 @@ const Stock: React.FC = () => {
           allDeleted = false;
         }
       }
-  
+
       if (errors.length > 0) {
         setFetchError(`Algumas entradas não puderam ser excluídas: ${errors.join('; ')}`);
       }
       if (allDeleted) {
         setSuccessMessage('Grupo de entradas excluído com sucesso!');
       }
-  
+
       handleCloseConfirmDeleteEntry();
       await fetchData();
     } catch (error: any) {
@@ -1309,20 +1330,20 @@ const Stock: React.FC = () => {
       setFetchError('ID da entrada não especificado.');
       return;
     }
-  
+
     try {
       setLoading(true);
       setFetchError(null);
-  
+
       // Encontrar a entrada a ser excluída
       const entryToDelete = stockEntries.find((entry) => entry.id === deleteEntryId);
       if (!entryToDelete) {
         throw new Error('Entrada não encontrada.');
       }
-  
+
       // Excluir a entrada
       await deleteStockEntry(deleteEntryId);
-  
+
       // Atualizar o estoque correspondente
       const stockToUpdate = currentStock.find(
         (stock) =>
@@ -1331,7 +1352,7 @@ const Stock: React.FC = () => {
           new Date(stock.dataValidadeLote).toISOString() ===
             new Date(entryToDelete.dataValidadeLote).toISOString(),
       );
-  
+
       if (stockToUpdate) {
         const newQuantity = stockToUpdate.quantidadeAtual - entryToDelete.quantidadeRecebida;
         if (newQuantity > 0) {
@@ -1354,7 +1375,7 @@ const Stock: React.FC = () => {
           setFilteredStock((prev) => prev.filter((item) => item.id !== stockToUpdate.id));
         }
       }
-  
+
       // Atualizar as entradas
       setStockEntries((previous) => previous.filter((item) => item.id !== deleteEntryId));
       setFilteredStockEntries((previous) => previous.filter((item) => item.id !== deleteEntryId));
@@ -1453,7 +1474,7 @@ const Stock: React.FC = () => {
         withoutLocationQuantity: number;
       };
     } = {};
-  
+
     // Agrupar por id_produto e calcular a quantidade total não alocada
     stock.forEach((item) => {
       if (!grouped[item.id_produto]) {
@@ -1464,7 +1485,7 @@ const Stock: React.FC = () => {
       }
       grouped[item.id_produto].withoutLocationQuantity += item.quantidadeAtual;
     });
-  
+
     // Filtrar apenas produtos com quantidade não alocada positiva
     return Object.values(grouped).filter((group) => group.withoutLocationQuantity > 0);
   };
@@ -1938,22 +1959,22 @@ const Stock: React.FC = () => {
               <FormControl fullWidth error={!!errors.id_localizacao} disabled={loading}>
                 <InputLabel>Localização</InputLabel>
                 <Select
-  name="id_localizacao"
-  value={locationForm.id_localizacao || ''}
-  onChange={handleLocationSelectChange}
-  aria-label="Selecionar localização para o produto"
->
-  <MenuItem value="" disabled>
-    Selecione uma localização
-  </MenuItem>
-  {locations
-    .filter((location) => location.tipo === tipo.Armazem)
-    .map((location) => (
-      <MenuItem key={location.id} value={location.id}>
-        {location.nomeLocalizacao}
-      </MenuItem>
-    ))}
-</Select>
+                  name="id_localizacao"
+                  value={locationForm.id_localizacao || ''}
+                  onChange={handleLocationSelectChange}
+                  aria-label="Selecionar localização para o produto"
+                >
+                  <MenuItem value="" disabled>
+                    Selecione uma localização
+                  </MenuItem>
+                  {locations
+                    .filter((location) => location.tipo === tipo.Armazem)
+                    .map((location) => (
+                      <MenuItem key={location.id} value={location.id}>
+                        {location.nomeLocalizacao}
+                      </MenuItem>
+                    ))}
+                </Select>
                 {errors.id_localizacao && (
                   <FormHelperText error>{errors.id_localizacao}</FormHelperText>
                 )}
@@ -2025,35 +2046,39 @@ const Stock: React.FC = () => {
               </FormControl>
             </Grid>
             <Grid item xs={12} sm={6}>
-  <TextField
-    name="quantidadeProduto"
-    label="Quantidade"
-    type="number"
-    fullWidth
-    value={locationForm.quantidadeProduto}
-    onChange={handleLocationTextFieldChange}
-    error={!!errors.quantidadeProduto}
-    helperText={
-      errors.quantidadeProduto ||
-      (lastEntries.length > 0
-        ? `Máximo: ${lastEntries[locationIndex].quantidadeRecebida} unidades (entrada)`
-        : selectedStock
-          ? `Máximo: ${
-              groupedProductsWithoutLocation.find((group) => group.id_produto === selectedStock.id_produto)?.withoutLocationQuantity || 0
-            } unidades não alocadas`
-          : '')
-    }
-    disabled={loading}
-    inputProps={{
-      min: 1,
-      max:
-        lastEntries.length > 0
-          ? lastEntries[locationIndex].quantidadeRecebida
-          : groupedProductsWithoutLocation.find((group) => group.id_produto === selectedStock?.id_produto)?.withoutLocationQuantity || 0,
-    }}
-    aria-label="Quantidade do produto no armazém"
-  />
-</Grid>
+              <TextField
+                name="quantidadeProduto"
+                label="Quantidade"
+                type="number"
+                fullWidth
+                value={locationForm.quantidadeProduto}
+                onChange={handleLocationTextFieldChange}
+                error={!!errors.quantidadeProduto}
+                helperText={
+                  errors.quantidadeProduto ||
+                  (lastEntries.length > 0
+                    ? `Máximo: ${lastEntries[locationIndex].quantidadeRecebida} unidades (entrada)`
+                    : selectedStock
+                      ? `Máximo: ${
+                          groupedProductsWithoutLocation.find(
+                            (group) => group.id_produto === selectedStock.id_produto,
+                          )?.withoutLocationQuantity || 0
+                        } unidades não alocadas`
+                      : '')
+                }
+                disabled={loading}
+                inputProps={{
+                  min: 1,
+                  max:
+                    lastEntries.length > 0
+                      ? lastEntries[locationIndex].quantidadeRecebida
+                      : groupedProductsWithoutLocation.find(
+                          (group) => group.id_produto === selectedStock?.id_produto,
+                        )?.withoutLocationQuantity || 0,
+                }}
+                aria-label="Quantidade do produto no armazém"
+              />
+            </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
                 name="quantidadeMinimaProduto"
@@ -2128,115 +2153,133 @@ const Stock: React.FC = () => {
       </Modal>
 
       <Modal
-  open={openConfirmDeleteEntry}
-  onClose={handleCloseConfirmDeleteEntry}
-  aria-labelledby="confirm-delete-entry-modal-title"
-  aria-describedby="confirm-delete-entry-modal-description"
->
-  <Box sx={confirmModalStyle}>
-    <Typography id="confirm-delete-entry-modal-title" variant="h6" component="h2" gutterBottom>
-      Confirmar Exclusão
-    </Typography>
-    <Typography id="confirm-delete-entry-modal-description" sx={{ mb: 3 }}>
-      {selectedEntry && selectedEntry.entries.length > 1
-        ? 'Tem certeza que deseja excluir este grupo de entradas de estoque? Isso pode afetar o estoque atual.'
-        : 'Tem certeza que deseja excluir esta entrada de estoque? Isso pode afetar o estoque atual.'}
-    </Typography>
-    <Stack direction="row" spacing={2} justifyContent="flex-end">
-      <Button
-        variant="outlined"
-        color="primary"
-        onClick={handleCloseConfirmDeleteEntry}
-        disabled={loading}
-        aria-label="Cancelar exclusão da entrada de estoque"
+        open={openConfirmDeleteEntry}
+        onClose={handleCloseConfirmDeleteEntry}
+        aria-labelledby="confirm-delete-entry-modal-title"
+        aria-describedby="confirm-delete-entry-modal-description"
       >
-        Cancelar
-      </Button>
-      <Button
-        variant="contained"
-        color="error"
-        onClick={selectedEntry && selectedEntry.entries.length > 1 ? handleDeleteGroupEntries : handleDeleteStockEntry}
-        disabled={loading}
-        aria-label="Confirmar exclusão da entrada de estoque"
-      >
-        {loading ? 'Excluindo...' : 'Excluir'}
-      </Button>
-    </Stack>
-  </Box>
-</Modal>
+        <Box sx={confirmModalStyle}>
+          <Typography
+            id="confirm-delete-entry-modal-title"
+            variant="h6"
+            component="h2"
+            gutterBottom
+          >
+            Confirmar Exclusão
+          </Typography>
+          <Typography id="confirm-delete-entry-modal-description" sx={{ mb: 3 }}>
+            {selectedEntry && selectedEntry.entries.length > 1
+              ? 'Tem certeza que deseja excluir este grupo de entradas de estoque? Isso pode afetar o estoque atual.'
+              : 'Tem certeza que deseja excluir esta entrada de estoque? Isso pode afetar o estoque atual.'}
+          </Typography>
+          <Stack direction="row" spacing={2} justifyContent="flex-end">
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={handleCloseConfirmDeleteEntry}
+              disabled={loading}
+              aria-label="Cancelar exclusão da entrada de estoque"
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="contained"
+              color="error"
+              onClick={
+                selectedEntry && selectedEntry.entries.length > 1
+                  ? handleDeleteGroupEntries
+                  : handleDeleteStockEntry
+              }
+              disabled={loading}
+              aria-label="Confirmar exclusão da entrada de estoque"
+            >
+              {loading ? 'Excluindo...' : 'Excluir'}
+            </Button>
+          </Stack>
+        </Box>
+      </Modal>
 
       <Modal
-  open={openDetailsModal}
-  onClose={handleCloseDetailsModal}
-  aria-labelledby="modal-detalhes-entrada"
->
-  <Box sx={{ ...modalStyle, width: { xs: '90%', sm: '70%', md: 800 } }}>
-    <Stack
-      direction="row"
-      justifyContent="space-between"
-      alignItems="center"
-      sx={{ mb: 2 }}
-    >
-      <Typography id="modal-detalhes-entrada" variant="h5">
-        Detalhes da Entrada de Estoque
-      </Typography>
-      <Button
-        onClick={handleCloseDetailsModal}
-        variant="outlined"
-        color="error"
-        disabled={loading}
-        aria-label="Fechar modal de detalhes da entrada"
+        open={openDetailsModal}
+        onClose={handleCloseDetailsModal}
+        aria-labelledby="modal-detalhes-entrada"
       >
-        Fechar
-      </Button>
-    </Stack>
-    {selectedEntry ? (
-      <Stack spacing={2}>
-        <Typography variant="body1">
-          <strong>Data de Entrada:</strong> {formatDateToDisplay(selectedEntry.dataEntrada)}
-        </Typography>
-        <Typography variant="body1">
-          <strong>Fornecedor:</strong> {suppliers.find((s) => s.id === selectedEntry.id_fornecedor)?.nomeFornecedor || selectedEntry.id_fornecedor}
-        </Typography>
-        <Typography variant="body1">
-          <strong>Funcionário:</strong> {employees.find((e) => e.id === selectedEntry.id_funcionario)?.nomeFuncionario || selectedEntry.id_funcionario}
-        </Typography>
-        <Typography variant="body1">
-          <strong>Produtos:</strong>
-        </Typography>
-        <TableContainer component={Paper}>
-          <Table size="small" aria-label="Tabela de produtos da entrada">
-            <TableHead>
-              <TableRow>
-                <TableCell><strong>Produto</strong></TableCell>
-                <TableCell><strong>Quantidade</strong></TableCell>
-                <TableCell><strong>Custo Unitário</strong></TableCell>
-                <TableCell><strong>Lote</strong></TableCell>
-                <TableCell><strong>Validade</strong></TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {selectedEntry.entries.map((entry) => {
-                const produto = products.find((p) => p.id === entry.id_produto);
-                return (
-                  <TableRow key={entry.id}>
-                    <TableCell>{produto?.nomeProduto || entry.id_produto}</TableCell>
-                    <TableCell>{entry.quantidadeRecebida}</TableCell>
-                    <TableCell>{Number(entry.custoUnitario).toFixed(2)}</TableCell>
-                    <TableCell>{entry.lote}</TableCell>
-                    <TableCell>{formatDateToDisplay(entry.dataValidadeLote)}</TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Stack>
-    ) : (
-      <Typography variant="body2">Carregando detalhes...</Typography>
-    )}
-  </Box>
-</Modal>
+        <Box sx={{ ...modalStyle, width: { xs: '90%', sm: '70%', md: 800 } }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+            <Typography id="modal-detalhes-entrada" variant="h5">
+              Detalhes da Entrada de Estoque
+            </Typography>
+            <Button
+              onClick={handleCloseDetailsModal}
+              variant="outlined"
+              color="error"
+              disabled={loading}
+              aria-label="Fechar modal de detalhes da entrada"
+            >
+              Fechar
+            </Button>
+          </Stack>
+          {selectedEntry ? (
+            <Stack spacing={2}>
+              <Typography variant="body1">
+                <strong>Data de Entrada:</strong> {formatDateToDisplay(selectedEntry.dataEntrada)}
+              </Typography>
+              <Typography variant="body1">
+                <strong>Fornecedor:</strong>{' '}
+                {suppliers.find((s) => s.id === selectedEntry.id_fornecedor)?.nomeFornecedor ||
+                  selectedEntry.id_fornecedor}
+              </Typography>
+              <Typography variant="body1">
+                <strong>Funcionário:</strong>{' '}
+                {employees.find((e) => e.id === selectedEntry.id_funcionario)?.nomeFuncionario ||
+                  selectedEntry.id_funcionario}
+              </Typography>
+              <Typography variant="body1">
+                <strong>Produtos:</strong>
+              </Typography>
+              <TableContainer component={Paper}>
+                <Table size="small" aria-label="Tabela de produtos da entrada">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>
+                        <strong>Produto</strong>
+                      </TableCell>
+                      <TableCell>
+                        <strong>Quantidade</strong>
+                      </TableCell>
+                      <TableCell>
+                        <strong>Custo Unitário</strong>
+                      </TableCell>
+                      <TableCell>
+                        <strong>Lote</strong>
+                      </TableCell>
+                      <TableCell>
+                        <strong>Validade</strong>
+                      </TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {selectedEntry.entries.map((entry) => {
+                      const produto = products.find((p) => p.id === entry.id_produto);
+                      return (
+                        <TableRow key={entry.id}>
+                          <TableCell>{produto?.nomeProduto || entry.id_produto}</TableCell>
+                          <TableCell>{entry.quantidadeRecebida}</TableCell>
+                          <TableCell>{Number(entry.custoUnitario).toFixed(2)}</TableCell>
+                          <TableCell>{entry.lote}</TableCell>
+                          <TableCell>{formatDateToDisplay(entry.dataValidadeLote)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Stack>
+          ) : (
+            <Typography variant="body2">Carregando detalhes...</Typography>
+          )}
+        </Box>
+      </Modal>
 
       <Card sx={{ maxWidth: '100%', margin: 'auto', mt: 4 }}>
         <CardContent>
@@ -2260,76 +2303,87 @@ const Stock: React.FC = () => {
                 <Table aria-label="Tabela de entradas de estoque">
                   <TableHead>
                     <TableRow>
-                      <TableCell><strong>Quantidade</strong></TableCell>
-                      <TableCell><strong>Data de Entrada</strong></TableCell>
-                      <TableCell><strong>Validade</strong></TableCell>
-                      <TableCell><strong>Ações</strong></TableCell>
+                      <TableCell>
+                        <strong>Quantidade</strong>
+                      </TableCell>
+                      <TableCell>
+                        <strong>Data de Entrada</strong>
+                      </TableCell>
+                      <TableCell>
+                        <strong>Validade</strong>
+                      </TableCell>
+                      <TableCell>
+                        <strong>Ações</strong>
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-  {loading ? (
-    <TableRow>
-      <TableCell colSpan={4} align="center">
-        Carregando...
-      </TableCell>
-    </TableRow>
-  ) : groupedStockEntries.length > 0 ? (
-    groupedStockEntries.slice(entryPage * rowsPerPage, entryPage * rowsPerPage + rowsPerPage).map((group) => (
-      <TableRow key={group.id}>
-        <TableCell>
-          {suppliers.find((s) => s.id === group.id_fornecedor)?.nomeFornecedor || group.id_fornecedor}
-        </TableCell>
-        <TableCell>{formatDateToDisplay(group.dataEntrada)}</TableCell>
-        <TableCell>{group.entries.length} produto(s)</TableCell>
-        <TableCell align="right">
-          <IconButton
-            color="info"
-            onClick={() => handleOpenDetailsModal(group)}
-            disabled={loading}
-            aria-label={`Ver detalhes da entrada de estoque ${group.id}`}
-          >
-            <IconifyIcon icon="mdi:eye" />
-          </IconButton>
-          <IconButton
-            color="primary"
-            onClick={() => handleEditGroup(group)}
-            disabled={loading}
-            aria-label={`Editar todas as entradas do grupo ${group.id}`}
-          >
-            <Edit />
-          </IconButton>
-          <IconButton
-            color="error"
-            onClick={() => handleDeleteGroup(group)}
-            disabled={loading}
-            aria-label={`Excluir todas as entradas do grupo ${group.id}`}
-          >
-            <Delete />
-          </IconButton>
-        </TableCell>
-      </TableRow>
-    ))
-  ) : (
-    <TableRow>
-      <TableCell colSpan={4} align="center">
-        Nenhuma entrada encontrada.
-      </TableCell>
-    </TableRow>
-  )}
-</TableBody>
+                    {loading ? (
+                      <TableRow>
+                        <TableCell colSpan={4} align="center">
+                          Carregando...
+                        </TableCell>
+                      </TableRow>
+                    ) : groupedStockEntries.length > 0 ? (
+                      groupedStockEntries
+                        .slice(entryPage * rowsPerPage, entryPage * rowsPerPage + rowsPerPage)
+                        .map((group) => (
+                          <TableRow key={group.id}>
+                            <TableCell>
+                              {suppliers.find((s) => s.id === group.id_fornecedor)
+                                ?.nomeFornecedor || group.id_fornecedor}
+                            </TableCell>
+                            <TableCell>{formatDateToDisplay(group.dataEntrada)}</TableCell>
+                            <TableCell>{group.entries.length} produto(s)</TableCell>
+                            <TableCell align="right">
+                              <IconButton
+                                color="info"
+                                onClick={() => handleOpenDetailsModal(group)}
+                                disabled={loading}
+                                aria-label={`Ver detalhes da entrada de estoque ${group.id}`}
+                              >
+                                <IconifyIcon icon="mdi:eye" />
+                              </IconButton>
+                              <IconButton
+                                color="primary"
+                                onClick={() => handleEditGroup(group)}
+                                disabled={loading}
+                                aria-label={`Editar todas as entradas do grupo ${group.id}`}
+                              >
+                                <Edit />
+                              </IconButton>
+                              <IconButton
+                                color="error"
+                                onClick={() => handleDeleteGroup(group)}
+                                disabled={loading}
+                                aria-label={`Excluir todas as entradas do grupo ${group.id}`}
+                              >
+                                <Delete />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={4} align="center">
+                          Nenhuma entrada encontrada.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
                 </Table>
               </TableContainer>
               <TablePagination
-  rowsPerPageOptions={[6]}
-  component="div"
-  count={groupedStockEntries.length}
-  rowsPerPage={rowsPerPage}
-  page={entryPage}
-  onPageChange={handleChangeEntryPage}
-  labelRowsPerPage="Itens por página"
-  labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
-  aria-label="Paginação de entradas de estoque"
-/>
+                rowsPerPageOptions={[6]}
+                component="div"
+                count={groupedStockEntries.length}
+                rowsPerPage={rowsPerPage}
+                page={entryPage}
+                onPageChange={handleChangeEntryPage}
+                labelRowsPerPage="Itens por página"
+                labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+                aria-label="Paginação de entradas de estoque"
+              />
             </>
           )}
         </CardContent>
@@ -2482,69 +2536,69 @@ const Stock: React.FC = () => {
       </Card>
 
       <Card sx={{ maxWidth: '100%', margin: 'auto', mt: 4 }}>
-  <CardContent>
-    <Typography variant="h6" mb={2}>
-      Produtos Sem Localização ({groupedProductsWithoutLocation.length})
-    </Typography>
-    <TableContainer component={Paper}>
-      <Table aria-label="Tabela de produtos sem localização">
-        <TableHead>
-          <TableRow>
-            <TableCell>
-              <strong>Produto</strong>
-            </TableCell>
-            <TableCell>
-              <strong>Quantidade Não Alocada</strong>
-            </TableCell>
-            <TableCell>
-              <strong>Ações</strong>
-            </TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {loading ? (
-            <TableRow>
-              <TableCell colSpan={3} align="center">
-                Carregando...
-              </TableCell>
-            </TableRow>
-          ) : groupedProductsWithoutLocation.length > 0 ? (
-            groupedProductsWithoutLocation.map((group) => {
-              const product = products.find((p) => p.id === group.id_produto);
-              const stockItems = filteredStock.filter(
-                (stock) => stock.id_produto === group.id_produto,
-              );
-              return (
-                <TableRow key={group.id_produto}>
-                  <TableCell>{product?.nomeProduto || group.id_produto}</TableCell>
-                  <TableCell>{group.withoutLocationQuantity}</TableCell>
-                  <TableCell align="right">
-                    <IconButton
-                      color="secondary"
-                      onClick={() => handleOpenLocationModal(stockItems, [])}
-                      disabled={loading || group.withoutLocationQuantity === 0}
-                      aria-label={`Adicionar produto ${group.id_produto} ao armazém`}
-                    >
-                      <IconifyIcon icon="material-symbols:warehouse" />
-                    </IconButton>
+        <CardContent>
+          <Typography variant="h6" mb={2}>
+            Produtos Sem Localização ({groupedProductsWithoutLocation.length})
+          </Typography>
+          <TableContainer component={Paper}>
+            <Table aria-label="Tabela de produtos sem localização">
+              <TableHead>
+                <TableRow>
+                  <TableCell>
+                    <strong>Produto</strong>
+                  </TableCell>
+                  <TableCell>
+                    <strong>Quantidade Não Alocada</strong>
+                  </TableCell>
+                  <TableCell>
+                    <strong>Ações</strong>
                   </TableCell>
                 </TableRow>
-              );
-            })
-          ) : (
-            <TableRow>
-              <TableCell colSpan={3} align="center">
-                {productsWithoutLocation.length === 0 && currentStock.length > 0
-                  ? 'Todos os produtos estão localizados.'
-                  : 'Nenhum produto sem localização encontrado.'}
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </TableContainer>
-  </CardContent>
-</Card>
+              </TableHead>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={3} align="center">
+                      Carregando...
+                    </TableCell>
+                  </TableRow>
+                ) : groupedProductsWithoutLocation.length > 0 ? (
+                  groupedProductsWithoutLocation.map((group) => {
+                    const product = products.find((p) => p.id === group.id_produto);
+                    const stockItems = filteredStock.filter(
+                      (stock) => stock.id_produto === group.id_produto,
+                    );
+                    return (
+                      <TableRow key={group.id_produto}>
+                        <TableCell>{product?.nomeProduto || group.id_produto}</TableCell>
+                        <TableCell>{group.withoutLocationQuantity}</TableCell>
+                        <TableCell align="right">
+                          <IconButton
+                            color="secondary"
+                            onClick={() => handleOpenLocationModal(stockItems, [])}
+                            disabled={loading || group.withoutLocationQuantity === 0}
+                            aria-label={`Adicionar produto ${group.id_produto} ao armazém`}
+                          >
+                            <IconifyIcon icon="material-symbols:warehouse" />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={3} align="center">
+                      {productsWithoutLocation.length === 0 && currentStock.length > 0
+                        ? 'Todos os produtos estão localizados.'
+                        : 'Nenhum produto sem localização encontrado.'}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
     </>
   );
 };
