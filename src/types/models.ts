@@ -190,6 +190,7 @@ export interface ProdutoLocalizacao {
   corredores?: Corredor;
   createdAt?: string;
   updatedAt?: string;
+  id_estoque?: string;
 }
 
 export interface Transferencia {

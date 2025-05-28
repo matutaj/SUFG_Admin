@@ -630,63 +630,65 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   }, []);
 
   // Abrir modal de destino
-  const handleOpenDestinationModal = useCallback(
-    (transfers: TransferFormItem[]) => {
-      if (!permissions.canCreateTransfer) {
-        setAlert({
-          severity: 'error',
-          message: 'Você não tem permissão para criar transferências!',
-        });
-        log('Permissão de criação de transferência negada');
-        return;
-      }
-      if (!transfers || transfers.length === 0) {
-        setAlert({ severity: 'error', message: 'Nenhum item válido' });
-        return;
-      }
+  // Abrir modal de destino
+const handleOpenDestinationModal = useCallback(
+  (transfers: TransferFormItem[]) => {
+    if (!permissions.canCreateTransfer) {
+      setAlert({
+        severity: 'error',
+        message: 'Você não tem permissão para criar transferências!',
+      });
+      log('Permissão de criação de transferência negada');
+      return;
+    }
+    if (!transfers || transfers.length === 0) {
+      setAlert({ severity: 'error', message: 'Nenhum item válido' });
+      return;
+    }
 
-      const validTransfers = transfers.filter(
-        (item) => item.id_produto && item.id_localizacao_origem && item.quantidadeTransferida > 0,
+    const validTransfers = transfers.filter(
+      (item) => item.id_produto && item.id_localizacao_origem && item.quantidadeTransferida > 0,
+    );
+
+    if (validTransfers.length === 0) {
+      setAlert({ severity: 'error', message: 'Nenhum item válido' });
+      return;
+    }
+
+    const destinations = validTransfers.map((item) => {
+      // Verifica se já existe um registro para o produto em uma localização diferente da origem
+      const existingLocation = productLocations.find(
+        (loc) =>
+          loc.id_produto === item.id_produto &&
+          loc.id_localizacao !== item.id_localizacao_origem,
       );
 
-      if (validTransfers.length === 0) {
-        setAlert({ severity: 'error', message: 'Nenhum item válido' });
-        return;
-      }
+      return {
+        id_produto: item.id_produto,
+        id_localizacao: existingLocation?.id_localizacao || '',
+        id_seccao: existingLocation?.id_seccao || '',
+        id_prateleira: existingLocation?.id_prateleira || '',
+        id_corredor: existingLocation?.id_corredor || '',
+        quantidadeProduto: item.quantidadeTransferida,
+      };
+    });
 
-      const destinations = validTransfers.map((item) => {
-        // Verifica se já existe um registro para o produto no destino
-        const existingLocation = productLocations.find(
-          (loc) =>
-            loc.id_produto === item.id_produto && loc.id_localizacao !== item.id_localizacao_origem, // Evita a origem
-        );
-
-        return {
-          id_produto: item.id_produto,
-          id_localizacao: existingLocation?.id_localizacao || '',
-          id_seccao: existingLocation?.id_seccao || '',
-          id_prateleira: existingLocation?.id_prateleira || '',
-          id_corredor: existingLocation?.id_corredor || '',
-          quantidadeProduto: item.quantidadeTransferida,
-        };
-      });
-
-      setDestinationLocations(destinations);
-      setTransferItems(validTransfers);
-      setCurrentDestinationIndex(0);
-      setDestinationForm({
-        id_produto: validTransfers[0].id_produto,
-        id_localizacao: destinations[0].id_localizacao,
-        id_seccao: destinations[0].id_seccao,
-        id_prateleira: destinations[0].id_prateleira,
-        id_corredor: destinations[0].id_corredor,
-        quantidadeProduto: validTransfers[0].quantidadeTransferida,
-      });
-      setErrors({ transferItems: [], destinationForm: {} });
-      setOpenDestinationModal(true);
-    },
-    [permissions.canCreateTransfer, productLocations],
-  );
+    setDestinationLocations(destinations);
+    setTransferItems(validTransfers);
+    setCurrentDestinationIndex(0);
+    setDestinationForm({
+      id_produto: validTransfers[0].id_produto,
+      id_localizacao: destinations[0].id_localizacao,
+      id_seccao: destinations[0].id_seccao,
+      id_prateleira: destinations[0].id_prateleira,
+      id_corredor: destinations[0].id_corredor,
+      quantidadeProduto: validTransfers[0].quantidadeTransferida,
+    });
+    setErrors({ transferItems: [], destinationForm: {} });
+    setOpenDestinationModal(true);
+  },
+  [permissions.canCreateTransfer, productLocations],
+);
 
   // Fechar modal de destino
   const handleCloseDestinationModal = useCallback(

@@ -48,6 +48,7 @@ import {
   getAllLocations,
   createProductLocation,
   getAllProductLocations,
+  updateProductLocation,
 } from '../../api/methods';
 import {
   DadosEntradaEstoque,
@@ -261,23 +262,40 @@ const Stock: React.FC = () => {
         getAllCorridors(),
         getAllProductLocations(),
       ]);
-
+  
       console.log('Stock Data:', stockData);
       console.log('Product Locations Data:', productLocationsData);
-
+  
       if (!productsData || productsData.length === 0) {
         console.warn('Nenhum produto retornado pela API getAllProducts');
         setFetchError('Nenhum produto encontrado. Verifique a API de produtos.');
       }
-
-      const productsWithoutLocationData = stockData.filter((stockItem) => {
-        return !productLocationsData.some(
-          (location) => location.id_produto === stockItem.id_produto,
+  
+      // Calcular produtos com quantidades não alocadas
+      const productsWithoutLocationData = stockData.reduce((acc: DadosEstoque[], stockItem) => {
+        const productLocationsForProduct = productLocationsData.filter(
+          (loc) =>
+            loc.id_produto === stockItem.id_produto &&
+            locationsData.find((l) => l.id === loc.id_localizacao)?.tipo === tipo.Armazem,
         );
-      });
-
+        const locatedQuantity = productLocationsForProduct.reduce(
+          (sum, loc) => sum + (loc.quantidadeProduto || 0),
+          0,
+        );
+        const unallocatedQuantity = stockItem.quantidadeAtual - locatedQuantity;
+  
+        if (unallocatedQuantity > 0) {
+          // Adicionar o item do estoque com a quantidade não alocada ajustada
+          acc.push({
+            ...stockItem,
+            quantidadeAtual: unallocatedQuantity,
+          });
+        }
+        return acc;
+      }, []);
+  
       console.log('Products Without Location:', productsWithoutLocationData);
-
+  
       setStockEntries(stockEntriesData ?? []);
       setFilteredStockEntries(stockEntriesData ?? []);
       setCurrentStock(stockData ?? []);
@@ -374,33 +392,49 @@ const Stock: React.FC = () => {
     setSuccessMessage(null);
   }, []);
 
+  
   const handleOpenLocationModal = useCallback(
     (stocks: DadosEstoque[], entries: DadosEntradaEstoque[]) => {
       setLastEntries(entries);
       setSelectedStock(stocks[0]);
       setLocationIndex(0);
   
+      // Calcular a quantidade não alocada para o produto
+      const productId = stocks[0].id_produto;
+      const productLocationsForProduct = productLocations.filter(
+        (loc) =>
+          loc.id_produto === productId &&
+          locations.find((l) => l.id === loc.id_localizacao)?.tipo === tipo.Armazem,
+      );
+      const locatedQuantity = productLocationsForProduct.reduce(
+        (sum, loc) => sum + (loc.quantidadeProduto || 0),
+        0,
+      );
+      const totalStockQuantity = stocks.reduce((sum, stock) => sum + stock.quantidadeAtual, 0);
+      const unallocatedQuantity = Math.max(0, totalStockQuantity - locatedQuantity);
+  
       // Verifica se já existe um registro para o produto em uma localização do tipo "Armazém"
       const existingLocation = productLocations.find(
         (loc) =>
-          loc.id_produto === stocks[0].id_produto &&
+          loc.id_produto === productId &&
           locations.find((l) => l.id === loc.id_localizacao)?.tipo === tipo.Armazem,
       );
   
       setLocationForm({
-        id_produto: stocks[0].id_produto,
+        id_produto: productId,
         id_localizacao: existingLocation?.id_localizacao || '',
-        quantidadeProduto: entries[0]?.quantidadeRecebida || stocks[0].quantidadeAtual,
+        quantidadeProduto: entries.length > 0 ? entries[0].quantidadeRecebida : unallocatedQuantity,
         id_seccao: existingLocation?.id_seccao || '',
         id_prateleira: existingLocation?.id_prateleira || '',
         id_corredor: existingLocation?.id_corredor || '',
-        quantidadeMinimaProduto: 0,
+        quantidadeMinimaProduto: existingLocation?.quantidadeMinimaProduto || 0,
       });
       setErrors({});
       setOpenLocationModal(true);
     },
     [productLocations, locations],
   );
+
 
   const handleCloseLocationModal = useCallback(() => {
     setOpenLocationModal(false);
@@ -621,18 +655,30 @@ const Stock: React.FC = () => {
     if (!locationForm.id_localizacao) newErrors.id_localizacao = 'Localização é obrigatória';
     if (locationForm.quantidadeProduto === undefined || locationForm.quantidadeProduto <= 0)
       newErrors.quantidadeProduto = 'Quantidade deve ser maior que 0';
-    if (
-      lastEntries.length > 0 &&
-      locationForm.quantidadeProduto! > lastEntries[locationIndex].quantidadeRecebida
-    ) {
-      newErrors.quantidadeProduto = `Quantidade não pode exceder a entrada (${lastEntries[locationIndex].quantidadeRecebida})`;
-    } else if (
-      lastEntries.length === 0 &&
-      selectedStock &&
-      locationForm.quantidadeProduto! > selectedStock.quantidadeAtual
-    ) {
-      newErrors.quantidadeProduto = `Quantidade não pode exceder o estoque atual (${selectedStock.quantidadeAtual})`;
+  
+    // Calcular a quantidade não alocada para validação
+    const productId = locationForm.id_produto;
+    const productLocationsForProduct = productLocations.filter(
+      (loc) =>
+        loc.id_produto === productId &&
+        locations.find((l) => l.id === loc.id_localizacao)?.tipo === tipo.Armazem,
+    );
+    const locatedQuantity = productLocationsForProduct.reduce(
+      (sum, loc) => sum + (loc.quantidadeProduto || 0),
+      0,
+    );
+    const stockItems = currentStock.filter((stock) => stock.id_produto === productId);
+    const totalStockQuantity = stockItems.reduce((sum, stock) => sum + stock.quantidadeAtual, 0);
+    const unallocatedQuantity = Math.max(0, totalStockQuantity - locatedQuantity);
+  
+    if (lastEntries.length > 0) {
+      if (locationForm.quantidadeProduto! > lastEntries[locationIndex].quantidadeRecebida) {
+        newErrors.quantidadeProduto = `Quantidade não pode exceder a entrada (${lastEntries[locationIndex].quantidadeRecebida})`;
+      }
+    } else if (locationForm.quantidadeProduto! > unallocatedQuantity) {
+      newErrors.quantidadeProduto = `Quantidade não pode exceder o disponível (${unallocatedQuantity})`;
     }
+  
     if (!locationForm.id_seccao) newErrors.id_seccao = 'Seção é obrigatória';
     if (!locationForm.id_prateleira) newErrors.id_prateleira = 'Prateleira é obrigatória';
     if (!locationForm.id_corredor) newErrors.id_corredor = 'Corredor é obrigatório';
@@ -644,7 +690,7 @@ const Stock: React.FC = () => {
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [locationForm, selectedStock, lastEntries, locationIndex]);
+  }, [locationForm, productLocations, locations, currentStock, lastEntries, locationIndex]);
 
   const onSubmit = useCallback(async () => {
     if (!validateForm()) return;
@@ -880,11 +926,9 @@ const Stock: React.FC = () => {
 
   const onLocationSubmit = useCallback(async () => {
     if (!validateLocationForm()) return;
-
+  
     try {
       setLoading(true);
-      setFetchError(null);
-
       const locationData: ProdutoLocalizacao = {
         id_produto: locationForm.id_produto!,
         id_localizacao: locationForm.id_localizacao!,
@@ -894,30 +938,124 @@ const Stock: React.FC = () => {
         id_corredor: locationForm.id_corredor!,
         quantidadeMinimaProduto: locationForm.quantidadeMinimaProduto!,
       };
-
-      await createProductLocation(locationData);
-
+  
+      // Verifica se já existe um registro com os mesmos identificadores
+      const existingLocation = productLocations.find(
+        (loc) =>
+          loc.id_produto === locationData.id_produto &&
+          loc.id_localizacao === locationData.id_localizacao &&
+          loc.id_seccao === locationData.id_seccao &&
+          loc.id_prateleira === locationData.id_prateleira &&
+          loc.id_corredor === locationData.id_corredor,
+      );
+  
+      if (existingLocation) {
+        // Verificação adicional do ID
+        if (!existingLocation.id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(existingLocation.id)) {
+          console.error('ID inválido para ProdutoLocalizacao:', existingLocation);
+          setFetchError('ID do registro de localização inválido. Tente novamente após atualizar os dados.');
+          return;
+        }
+  
+        console.log('Atualizando localização existente:', {
+          id: existingLocation.id,
+          currentQuantity: existingLocation.quantidadeProduto,
+          newQuantity: locationData.quantidadeProduto,
+          updatedData: {
+            quantidadeProduto: existingLocation.quantidadeProduto + locationData.quantidadeProduto,
+            quantidadeMinimaProduto: locationData.quantidadeMinimaProduto,
+          },
+        });
+  
+        // Atualiza a quantidade do registro existente
+        const updatedData: Partial<ProdutoLocalizacao> = {
+          quantidadeProduto: existingLocation.quantidadeProduto + locationData.quantidadeProduto,
+          quantidadeMinimaProduto: locationData.quantidadeMinimaProduto,
+        };
+        console.log('Tentando atualizar localização:', {
+          id: existingLocation.id,
+          existingLocation,
+          updatedData,
+        });
+        const updatedLocation = await updateProductLocation(existingLocation.id!, updatedData);
+  
+        // Atualiza o estado local
+        setProductLocations((prev) =>
+          prev.map((loc) =>
+            loc.id === existingLocation.id ? { ...loc, ...updatedLocation } : loc,
+          ),
+        );
+      } else {
+        console.log('Criando novo registro de localização:', locationData);
+        // Cria um novo registro
+        const newLocation = await createProductLocation(locationData);
+        setProductLocations((prev) => [...prev, newLocation]);
+      }
+  
+      // Recalcular produtos sem localização após alocação
+      const updatedStock = currentStock.map((stockItem) => {
+        if (stockItem.id_produto === locationData.id_produto) {
+          const productLocationsForProduct = [
+            ...productLocations.filter(
+              (loc) =>
+                loc.id_produto === stockItem.id_produto &&
+                locations.find((l) => l.id === loc.id_localizacao)?.tipo === tipo.Armazem,
+            ),
+            ...(existingLocation ? [] : [locationData]), // Incluir nova localização, se criada
+          ];
+          const locatedQuantity = productLocationsForProduct.reduce(
+            (sum, loc) => sum + (loc.quantidadeProduto || 0),
+            0,
+          );
+          const unallocatedQuantity = Math.max(0, stockItem.quantidadeAtual - locatedQuantity);
+          return { ...stockItem, quantidadeAtual: unallocatedQuantity };
+        }
+        return stockItem;
+      });
+  
+      const productsWithoutLocationData = updatedStock.filter(
+        (stockItem) => stockItem.quantidadeAtual > 0,
+      );
+  
+      setProductsWithoutLocation(productsWithoutLocationData);
+      setFilteredProductsWithoutLocation(productsWithoutLocationData);
+  
       if (locationIndex < lastEntries.length - 1) {
         const nextIndex = locationIndex + 1;
+        const nextProductId = lastEntries[nextIndex].id_produto;
+  
+        // Verifica se já existe um registro para o próximo produto no armazém
+        const nextExistingLocation = productLocations.find(
+          (loc) =>
+            loc.id_produto === nextProductId &&
+            locations.find((l) => l.id === loc.id_localizacao)?.tipo === tipo.Armazem,
+        );
+  
+        console.log('Avançando para o próximo produto:', {
+          nextIndex,
+          nextProductId,
+          nextExistingLocation,
+        });
+  
         setLocationIndex(nextIndex);
         setLocationForm({
-          id_produto: lastEntries[nextIndex].id_produto,
-          id_localizacao: '',
+          id_produto: nextProductId,
+          id_localizacao: nextExistingLocation?.id_localizacao || '',
           quantidadeProduto: lastEntries[nextIndex].quantidadeRecebida,
-          id_seccao: '',
-          id_prateleira: '',
-          id_corredor: '',
-          quantidadeMinimaProduto: 0,
+          id_seccao: nextExistingLocation?.id_seccao || '',
+          id_prateleira: nextExistingLocation?.id_prateleira || '',
+          id_corredor: nextExistingLocation?.id_corredor || '',
+          quantidadeMinimaProduto: nextExistingLocation?.quantidadeMinimaProduto || 0,
         });
         setErrors({});
       } else {
         setSuccessMessage('Todos os produtos foram adicionados ao armazém com sucesso!');
         handleCloseLocationModal();
       }
-      await fetchData();
+      await fetchData(); // Recarregar dados para garantir consistência
     } catch (error) {
       console.error('Erro ao adicionar produto ao armazém:', error);
-      setFetchError('Erro ao adicionar produto ao armazém.');
+      setFetchError('Erro ao adicionar produto ao armazém. Verifique os logs para mais detalhes.');
     } finally {
       setLoading(false);
     }
@@ -927,8 +1065,12 @@ const Stock: React.FC = () => {
     handleCloseLocationModal,
     lastEntries,
     locationIndex,
+    productLocations,
+    locations,
+    currentStock,
     fetchData,
   ]);
+  
 
   const handleEditStock = useCallback((stock: DadosEstoque) => {
     setEditStockId(stock.id!);
@@ -1271,57 +1413,22 @@ const Stock: React.FC = () => {
     const grouped: {
       [key: string]: {
         id_produto: string;
-        totalQuantity: number;
-        storeQuantity: number;
-        warehouseQuantity: number;
         withoutLocationQuantity: number;
       };
     } = {};
   
+    // Agrupar por id_produto e calcular a quantidade total não alocada
     stock.forEach((item) => {
       if (!grouped[item.id_produto]) {
         grouped[item.id_produto] = {
           id_produto: item.id_produto,
-          totalQuantity: 0,
-          storeQuantity: 0,
-          warehouseQuantity: 0,
           withoutLocationQuantity: 0,
         };
       }
-      grouped[item.id_produto].totalQuantity += item.quantidadeAtual;
-  
-      // Calcular quantidade em localizações do tipo "Loja"
-      const storeLocations = locations.filter((loc) => loc.tipo === 'Loja');
-      const productLocationsForStore = productLocations.filter(
-        (loc) =>
-          loc.id_produto === item.id_produto &&
-          storeLocations.some((store) => store.id === loc.id_localizacao),
-      );
-      const storeQuantity = productLocationsForStore.reduce(
-        (sum, loc) => sum + (loc.quantidadeProduto || 0),
-        0,
-      );
-  
-      // Calcular quantidade em localizações do tipo "Armazém"
-      const warehouseLocations = locations.filter((loc) =>
-        loc.nomeLocalizacao.toLowerCase().includes('armazém'),
-      );
-      const productLocationsForWarehouse = productLocations.filter(
-        (loc) =>
-          loc.id_produto === item.id_produto &&
-          warehouseLocations.some((warehouse) => warehouse.id === loc.id_localizacao),
-      );
-      const warehouseQuantity = productLocationsForWarehouse.reduce(
-        (sum, loc) => sum + (loc.quantidadeProduto || 0),
-        0,
-      );
-  
-      grouped[item.id_produto].storeQuantity = storeQuantity;
-      grouped[item.id_produto].warehouseQuantity = warehouseQuantity;
-      grouped[item.id_produto].withoutLocationQuantity =
-        grouped[item.id_produto].totalQuantity - storeQuantity - warehouseQuantity;
+      grouped[item.id_produto].withoutLocationQuantity += item.quantidadeAtual;
     });
   
+    // Filtrar apenas produtos com quantidade não alocada positiva
     return Object.values(grouped).filter((group) => group.withoutLocationQuantity > 0);
   };
 
@@ -1881,33 +1988,35 @@ const Stock: React.FC = () => {
               </FormControl>
             </Grid>
             <Grid item xs={12} sm={6}>
-              <TextField
-                name="quantidadeProduto"
-                label="Quantidade"
-                type="number"
-                fullWidth
-                value={locationForm.quantidadeProduto}
-                onChange={handleLocationTextFieldChange}
-                error={!!errors.quantidadeProduto}
-                helperText={
-                  errors.quantidadeProduto ||
-                  (lastEntries.length > 0
-                    ? `Máximo: ${lastEntries[locationIndex].quantidadeRecebida} unidades (entrada)`
-                    : selectedStock
-                      ? `Máximo: ${selectedStock.quantidadeAtual} unidades disponíveis`
-                      : '')
-                }
-                disabled={loading}
-                inputProps={{
-                  min: 1,
-                  max:
-                    lastEntries.length > 0
-                      ? lastEntries[locationIndex].quantidadeRecebida
-                      : selectedStock?.quantidadeAtual,
-                }}
-                aria-label="Quantidade do produto no armazém"
-              />
-            </Grid>
+  <TextField
+    name="quantidadeProduto"
+    label="Quantidade"
+    type="number"
+    fullWidth
+    value={locationForm.quantidadeProduto}
+    onChange={handleLocationTextFieldChange}
+    error={!!errors.quantidadeProduto}
+    helperText={
+      errors.quantidadeProduto ||
+      (lastEntries.length > 0
+        ? `Máximo: ${lastEntries[locationIndex].quantidadeRecebida} unidades (entrada)`
+        : selectedStock
+          ? `Máximo: ${
+              groupedProductsWithoutLocation.find((group) => group.id_produto === selectedStock.id_produto)?.withoutLocationQuantity || 0
+            } unidades não alocadas`
+          : '')
+    }
+    disabled={loading}
+    inputProps={{
+      min: 1,
+      max:
+        lastEntries.length > 0
+          ? lastEntries[locationIndex].quantidadeRecebida
+          : groupedProductsWithoutLocation.find((group) => group.id_produto === selectedStock?.id_produto)?.withoutLocationQuantity || 0,
+    }}
+    aria-label="Quantidade do produto no armazém"
+  />
+</Grid>
             <Grid item xs={12} sm={6}>
               <TextField
                 name="quantidadeMinimaProduto"
@@ -2336,81 +2445,69 @@ const Stock: React.FC = () => {
       </Card>
 
       <Card sx={{ maxWidth: '100%', margin: 'auto', mt: 4 }}>
-        <CardContent>
-          <Typography variant="h6" mb={2}>
-            Produtos Sem Localização ({groupedProductsWithoutLocation.length})
-          </Typography>
-          <TableContainer component={Paper}>
-  <Table aria-label="Tabela de produtos sem localização">
-    <TableHead>
-      <TableRow>
-        <TableCell>
-          <strong>Produto</strong>
-        </TableCell>
-        <TableCell>
-          <strong>Estoque Geral</strong>
-        </TableCell>
-        <TableCell>
-          <strong>Loja</strong>
-        </TableCell>
-        <TableCell>
-          <strong>Armazém</strong>
-        </TableCell>
-        <TableCell>
-          <strong>Sem Localização</strong>
-        </TableCell>
-        <TableCell>
-          <strong>Ações</strong>
-        </TableCell>
-      </TableRow>
-    </TableHead>
-    <TableBody>
-      {loading ? (
-        <TableRow>
-          <TableCell colSpan={6} align="center">
-            Carregando...
-          </TableCell>
-        </TableRow>
-      ) : groupedProductsWithoutLocation.length > 0 ? (
-        groupedProductsWithoutLocation.map((group) => {
-          const product = products.find((p) => p.id === group.id_produto);
-          const stockItems = filteredStock.filter(
-            (stock) => stock.id_produto === group.id_produto,
-          );
-          return (
-            <TableRow key={group.id_produto}>
-              <TableCell>{product?.nomeProduto || group.id_produto}</TableCell>
-              <TableCell>{group.totalQuantity}</TableCell>
-              <TableCell>{group.storeQuantity}</TableCell>
-              <TableCell>{group.warehouseQuantity}</TableCell>
-              <TableCell>{group.withoutLocationQuantity}</TableCell>
-              <TableCell align="right">
-                <IconButton
-                  color="secondary"
-                  onClick={() => handleOpenLocationModal(stockItems, [])}
-                  disabled={loading || group.withoutLocationQuantity === 0}
-                  aria-label={`Adicionar produto ${group.id_produto} ao armazém`}
-                >
-                  <IconifyIcon icon="material-symbols:warehouse" />
-                </IconButton>
+  <CardContent>
+    <Typography variant="h6" mb={2}>
+      Produtos Sem Localização ({groupedProductsWithoutLocation.length})
+    </Typography>
+    <TableContainer component={Paper}>
+      <Table aria-label="Tabela de produtos sem localização">
+        <TableHead>
+          <TableRow>
+            <TableCell>
+              <strong>Produto</strong>
+            </TableCell>
+            <TableCell>
+              <strong>Quantidade Não Alocada</strong>
+            </TableCell>
+            <TableCell>
+              <strong>Ações</strong>
+            </TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {loading ? (
+            <TableRow>
+              <TableCell colSpan={3} align="center">
+                Carregando...
               </TableCell>
             </TableRow>
-          );
-        })
-      ) : (
-        <TableRow>
-          <TableCell colSpan={6} align="center">
-            {productsWithoutLocation.length === 0 && currentStock.length > 0
-              ? 'Todos os produtos estão localizados.'
-              : 'Nenhum produto sem localização encontrado. Verifique os dados do estoque.'}
-          </TableCell>
-        </TableRow>
-      )}
-    </TableBody>
-  </Table>
-</TableContainer>
-        </CardContent>
-      </Card>
+          ) : groupedProductsWithoutLocation.length > 0 ? (
+            groupedProductsWithoutLocation.map((group) => {
+              const product = products.find((p) => p.id === group.id_produto);
+              const stockItems = filteredStock.filter(
+                (stock) => stock.id_produto === group.id_produto,
+              );
+              return (
+                <TableRow key={group.id_produto}>
+                  <TableCell>{product?.nomeProduto || group.id_produto}</TableCell>
+                  <TableCell>{group.withoutLocationQuantity}</TableCell>
+                  <TableCell align="right">
+                    <IconButton
+                      color="secondary"
+                      onClick={() => handleOpenLocationModal(stockItems, [])}
+                      disabled={loading || group.withoutLocationQuantity === 0}
+                      aria-label={`Adicionar produto ${group.id_produto} ao armazém`}
+                    >
+                      <IconifyIcon icon="material-symbols:warehouse" />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              );
+            })
+          ) : (
+            <TableRow>
+              <TableCell colSpan={3} align="center">
+                {productsWithoutLocation.length === 0 && currentStock.length > 0
+                  ? 'Todos os produtos estão localizados.'
+                  : 'Nenhum produto sem localização encontrado.'}
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  </CardContent>
+</Card>
     </>
   );
 };
