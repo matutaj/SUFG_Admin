@@ -212,7 +212,7 @@ const Relatorio = () => {
       if (!token) {
         throw new Error('Token não encontrado.');
       }
-  
+
       if (
         reportType !== 'AtividadesDoDia' &&
         reportType !== 'RelatorioCaixas' &&
@@ -221,22 +221,22 @@ const Relatorio = () => {
         setReportError('Datas de início e fim são obrigatórias.');
         return;
       }
-  
+
       if (reportType === 'AtividadesDoDia' && !startDate) {
         setReportError('Data é obrigatória.');
         return;
       }
-  
+
       if (reportType === 'VendasPorCliente' && !clientId) {
         setReportError('Cliente é obrigatório.');
         return;
       }
-  
+
       const endpoint = reportTypeToEndpoint[reportType];
       if (!endpoint) {
         throw new Error('Tipo de relatório não suportado.');
       }
-  
+
       // Ajustar dataFim para incluir o final do dia
       let adjustedEndDate = endDate;
       if (endDate && reportType !== 'AtividadesDoDia') {
@@ -255,7 +255,7 @@ const Relatorio = () => {
           adjustedEndDate = endDate;
         }
       }
-  
+
       const queryParams = new URLSearchParams({
         ...(startDate && { dataInicio: startDate }),
         ...(adjustedEndDate && { dataFim: adjustedEndDate }),
@@ -265,19 +265,19 @@ const Relatorio = () => {
         ...(cashRegisterId && { idCaixa: cashRegisterId }),
         ...(limit && { limite: limit }),
       });
-  
+
       console.log('Query Params:', queryParams.toString()); // Log para depuração
-  
+
       const response = await getReportData(endpoint, queryParams.toString());
       console.log('Resposta da API:', response); // Log para depuração
-  
+
       const data = response.data || (reportType === 'FaturamentoPeriodo' ? { vendas: [] } : []);
       setReportData(
         reportType === 'FaturamentoPeriodo' && data.vendas
           ? data.vendas
           : Array.isArray(data)
-          ? data
-          : [data],
+            ? data
+            : [data],
       );
     } catch (error) {
       console.error('Erro ao buscar dados:', error);
@@ -292,7 +292,7 @@ const Relatorio = () => {
         setReportError('Nenhum dado disponível para gerar o Excel.');
         return;
       }
-  
+
       // Mapeamento de tipos de relatório para endpoints (se necessário)
       const reportTypeToEndpoint = {
         AtividadesCaixa: 'atividades-caixa',
@@ -306,10 +306,10 @@ const Relatorio = () => {
         Vendas: 'vendas',
         VendasPorCliente: 'vendas-cliente',
       };
-  
+
       let headers: string[] = [];
       let data: any[][] = [];
-  
+
       // Processar dados conforme o tipo de relatório
       switch (reportType) {
         case 'AtividadesCaixa':
@@ -335,18 +335,20 @@ const Relatorio = () => {
                     ?.map((vp: any) => `${vp.produtos.nomeProduto} (Qtd: ${vp.quantidadeVendida})`)
                     .join('; ') || '-',
                 ])
-              : [[
-                  item.nomeCaixa || '-',
-                  item.quantidadeFaturada?.toFixed(2) || '0.00',
-                  item.funcionarioNome || '-',
-                  '-',
-                  '-',
-                  '0.00',
-                  '-',
-                ]]
+              : [
+                  [
+                    item.nomeCaixa || '-',
+                    item.quantidadeFaturada?.toFixed(2) || '0.00',
+                    item.funcionarioNome || '-',
+                    '-',
+                    '-',
+                    '0.00',
+                    '-',
+                  ],
+                ],
           );
           break;
-  
+
         case 'AtividadesDoDia':
           headers = ['Tarefa', 'Descrição', 'Funcionário', 'Status', 'Data Criação'];
           data = reportData.map((item) => [
@@ -357,7 +359,7 @@ const Relatorio = () => {
             item.dataCriacao ? format(new Date(item.dataCriacao), 'dd/MM/yyyy') : '-',
           ]);
           break;
-  
+
         case 'EntradasEstoque':
           headers = ['Produto', 'Quantidade', 'Data Entrada', 'Fornecedor', 'Funcionário'];
           data = reportData.map((item) => [
@@ -368,7 +370,7 @@ const Relatorio = () => {
             item.funcionarioNome || '-',
           ]);
           break;
-  
+
         case 'RelatorioEstoque':
           headers = [
             'Produto',
@@ -388,14 +390,19 @@ const Relatorio = () => {
                   loc.corredor || '-',
                   loc.prateleira || '-',
                 ])
-              : [[
-                  item.nomeProduto || '-',
-                  item.quantidadeAtual?.toString() || '0',
-                  '-', '-', '-', '-',
-                ]]
+              : [
+                  [
+                    item.nomeProduto || '-',
+                    item.quantidadeAtual?.toString() || '0',
+                    '-',
+                    '-',
+                    '-',
+                    '-',
+                  ],
+                ],
           );
           break;
-  
+
         case 'RelatorioLocalizacaoProdutos':
           headers = [
             'Produto',
@@ -416,7 +423,7 @@ const Relatorio = () => {
             item.localizacao?.quantidadeMinima?.toString() || '0',
           ]);
           break;
-  
+
         case 'ProdutosMaisVendidos':
           headers = ['Produto', 'Quantidade Vendida', 'Valor Total'];
           data = reportData.map((item) => [
@@ -425,7 +432,7 @@ const Relatorio = () => {
             item.valorTotal?.toFixed(2) || '0.00',
           ]);
           break;
-  
+
         case 'RelatorioTransferencias':
           headers = [
             'Produto',
@@ -448,7 +455,7 @@ const Relatorio = () => {
             item.funcionarioNome || '-',
           ]);
           break;
-  
+
         case 'FaturamentoPeriodo':
           headers = ['Nome Produto', 'Total Faturado', 'Data Emissão', 'Funcionário'];
           data = reportData.map((item) => [
@@ -458,7 +465,7 @@ const Relatorio = () => {
             item.funcionariosCaixa || '-',
           ]);
           break;
-  
+
         case 'Vendas':
           headers = [
             'Documento',
@@ -477,11 +484,14 @@ const Relatorio = () => {
             item.funcionarioCaixa?.nomeCaixa || '-',
             item.funcionarioCaixa?.funcionario?.nomeFuncionario || '-',
             item.produtos
-              ?.map((p: any) => `${p.nomeProduto} (Qtd: ${p.quantidadeVendida}, kzs${p.precoVenda?.toFixed(2)}`)
+              ?.map(
+                (p: any) =>
+                  `${p.nomeProduto} (Qtd: ${p.quantidadeVendida}, kzs${p.precoVenda?.toFixed(2)}`,
+              )
               .join('; ') || '-',
           ]);
           break;
-  
+
         case 'VendasPorCliente':
           headers = ['Documento', 'Data Emissão', 'Valor Total', 'Funcionário', 'Produtos'];
           data = reportData.map((item) => [
@@ -494,70 +504,70 @@ const Relatorio = () => {
               .join('; ') || '-',
           ]);
           break;
-  
+
         default:
           setReportError('Tipo de relatório não suportado.');
           return;
       }
-  
+
       // Criar nova planilha
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet([]);
-  
+
       // Adicionar cabeçalho informativo
       const reportTitle = reportType.replace(/([A-Z])/g, ' $1').trim();
       XLSX.utils.sheet_add_aoa(ws, [[`Relatório: ${reportTitle}`]], { origin: 'A1' });
-  
+
       // Adicionar período se existir
       if (startDate && endDate && reportType !== 'AtividadesDoDia') {
         XLSX.utils.sheet_add_aoa(
           ws,
-          [[`Período: ${format(new Date(startDate), 'dd/MM/yyyy')} a ${format(new Date(endDate), 'dd/MM/yyyy')}`]],
-          { origin: { r: 1, c: 0 } }
+          [
+            [
+              `Período: ${format(new Date(startDate), 'dd/MM/yyyy')} a ${format(new Date(endDate), 'dd/MM/yyyy')}`,
+            ],
+          ],
+          { origin: { r: 1, c: 0 } },
         );
       } else if (startDate && reportType === 'AtividadesDoDia') {
-        XLSX.utils.sheet_add_aoa(
-          ws,
-          [[`Data: ${format(new Date(startDate), 'dd/MM/yyyy')}`]],
-          { origin: { r: 1, c: 0 } }
-        );
+        XLSX.utils.sheet_add_aoa(ws, [[`Data: ${format(new Date(startDate), 'dd/MM/yyyy')}`]], {
+          origin: { r: 1, c: 0 },
+        });
       }
-  
+
       // Adicionar data de emissão
-      XLSX.utils.sheet_add_aoa(
-        ws,
-        [[`Data de Emissão: ${format(new Date(), 'dd/MM/yyyy')}`]],
-        { origin: { r: 2, c: 0 } }
-      );
-  
+      XLSX.utils.sheet_add_aoa(ws, [[`Data de Emissão: ${format(new Date(), 'dd/MM/yyyy')}`]], {
+        origin: { r: 2, c: 0 },
+      });
+
       // Adicionar linha em branco
       XLSX.utils.sheet_add_aoa(ws, [['']], { origin: { r: 3, c: 0 } });
-  
+
       // Adicionar cabeçalhos das colunas
       XLSX.utils.sheet_add_aoa(ws, [headers], { origin: { r: 4, c: 0 } });
-  
+
       // Adicionar dados
       XLSX.utils.sheet_add_aoa(ws, data, { origin: { r: 5, c: 0 } });
-  
+
       // Estilizar cabeçalhos das colunas (funciona em Excel)
       headers.forEach((_, colIndex) => {
         const cellAddress = XLSX.utils.encode_cell({ r: 4, c: colIndex });
         if (!ws[cellAddress]) ws[cellAddress] = {};
         if (!ws[cellAddress].s) ws[cellAddress].s = {};
-        
+
         ws[cellAddress].s = {
-          font: { bold: true, color: { rgb: "FFFFFF" } },
-          fill: { fgColor: { rgb: "4472C4" } },
+          font: { bold: true, color: { rgb: 'FFFFFF' } },
+          fill: { fgColor: { rgb: '4472C4' } },
           alignment: { horizontal: 'center', vertical: 'center' },
           border: {
-            top: { style: 'thin', color: { rgb: "000000" } },
-            bottom: { style: 'thin', color: { rgb: "000000" } },
-            left: { style: 'thin', color: { rgb: "000000" } },
-            right: { style: 'thin', color: { rgb: "000000" } }
-          }
+            top: { style: 'thin', color: { rgb: '000000' } },
+            bottom: { style: 'thin', color: { rgb: '000000' } },
+            left: { style: 'thin', color: { rgb: '000000' } },
+            right: { style: 'thin', color: { rgb: '000000' } },
+          },
         };
       });
-  
+
       // Autoajuste de largura de colunas
       const maxColWidths = headers.map((header, colIndex) => {
         const maxWidth = data.reduce((max, row) => {
@@ -566,18 +576,17 @@ const Relatorio = () => {
         }, header.length);
         return { wch: Math.min(Math.max(maxWidth, 10), 50) }; // Limita entre 10 e 50 caracteres
       });
-  
+
       ws['!cols'] = maxColWidths;
-  
+
       // Congelar cabeçalhos (funciona em Excel)
       ws['!freeze'] = { xSplit: 0, ySplit: 5, topLeftCell: 'A6', activePane: 'bottomRight' };
-  
+
       // Adicionar planilha ao workbook
       XLSX.utils.book_append_sheet(wb, ws, 'Relatório');
-  
+
       // Gerar arquivo Excel
       XLSX.writeFile(wb, `relatorio_${reportTypeToEndpoint[reportType] || 'dados'}.xlsx`);
-  
     } catch (error) {
       setReportError(
         error instanceof Error ? error.message : 'Erro ao gerar o Excel. Tente novamente.',
@@ -585,7 +594,6 @@ const Relatorio = () => {
       console.error('Erro ao gerar Excel:', error);
     }
   };
-
 
   const generatePDF = () => {
     try {
@@ -957,7 +965,6 @@ const Relatorio = () => {
               )}
 
               {[
-                'AtividadesCaixa',
                 'EntradasEstoque',
                 'RelatorioEstoque',
                 'RelatorioLocalizacaoProdutos',
@@ -977,19 +984,6 @@ const Relatorio = () => {
                   </Select>
                 </FormControl>
               )}
-
-              {reportType === 'ProdutosMaisVendidos' && (
-                <TextField
-                  type="number"
-                  label="Limite"
-                  value={limit}
-                  onChange={handleLimitChange}
-                  InputLabelProps={{ shrink: true }}
-                  placeholder="Limite (opcional)"
-                  sx={{ width: { xs: '100%', sm: 180 } }}
-                  inputProps={{ min: 1, max: 1000 }}
-                />
-              )}
             </Stack>
             {dateError && (
               <Alert severity="error" sx={{ mt: 2 }}>
@@ -999,47 +993,47 @@ const Relatorio = () => {
           </Box>
 
           <Stack direction="row" spacing={2} mt={3} justifyContent="flex-end">
-  <Button
-    variant="contained"
-    color="primary"
-    onClick={fetchReportData}
-    disabled={
-      (reportType !== 'AtividadesDoDia' && (!startDate || !endDate || !!dateError)) ||
-      (reportType === 'AtividadesDoDia' && !startDate) ||
-      (reportType === 'VendasPorCliente' && !clientId)
-    }
-  >
-    Buscar Dados
-  </Button>
-  <Button
-    variant="contained"
-    color="success"
-    onClick={generateExcel}
-    disabled={
-      (reportType !== 'AtividadesDoDia' && (!startDate || !endDate || !!dateError)) ||
-      (reportType === 'AtividadesDoDia' && !startDate) ||
-      (reportType === 'VendasPorCliente' && !clientId) ||
-      reportData.length === 0
-    }
-    sx={{ ml: 1 }}
-  >
-    Exportar Excel
-  </Button>
-  <Button
-    variant="contained"
-    color="primary"
-    onClick={generatePDF}
-    disabled={
-      (reportType !== 'AtividadesDoDia' && (!startDate || !endDate || !!dateError)) ||
-      (reportType === 'AtividadesDoDia' && !startDate) ||
-      (reportType === 'VendasPorCliente' && !clientId) ||
-      reportData.length === 0
-    }
-    sx={{ ml: 1 }}
-  >
-    Gerar PDF
-  </Button>
-</Stack>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={fetchReportData}
+              disabled={
+                (reportType !== 'AtividadesDoDia' && (!startDate || !endDate || !!dateError)) ||
+                (reportType === 'AtividadesDoDia' && !startDate) ||
+                (reportType === 'VendasPorCliente' && !clientId)
+              }
+            >
+              Buscar Dados
+            </Button>
+            <Button
+              variant="contained"
+              color="success"
+              onClick={generateExcel}
+              disabled={
+                (reportType !== 'AtividadesDoDia' && (!startDate || !endDate || !!dateError)) ||
+                (reportType === 'AtividadesDoDia' && !startDate) ||
+                (reportType === 'VendasPorCliente' && !clientId) ||
+                reportData.length === 0
+              }
+              sx={{ ml: 1 }}
+            >
+              Exportar Excel
+            </Button>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={generatePDF}
+              disabled={
+                (reportType !== 'AtividadesDoDia' && (!startDate || !endDate || !!dateError)) ||
+                (reportType === 'AtividadesDoDia' && !startDate) ||
+                (reportType === 'VendasPorCliente' && !clientId) ||
+                reportData.length === 0
+              }
+              sx={{ ml: 1 }}
+            >
+              Gerar PDF
+            </Button>
+          </Stack>
 
           {reportData.length > 0 && (
             <Box sx={{ mt: 3 }}>

@@ -55,6 +55,7 @@ interface ProdutoLocalizacaoDisplay {
   id: string | undefined;
   nomeProduto: string;
   nomeLocalizacao: string;
+  tipoLocalizacao: string;
   quantidadeProduto: number;
   quantidadeMinimaProduto: number;
 }
@@ -140,6 +141,7 @@ const DashboardPage = () => {
           id: loc.id,
           nomeProduto: produtoMap.get(loc.id_produto) || 'Desconhecido',
           nomeLocalizacao: localizacaoMap.get(loc.id_localizacao) || 'Desconhecido',
+          tipoLocalizacao: loc.localizacoes?.tipo || 'Desconhecido', // Adicione esta linha
           quantidadeProduto: loc.quantidadeProduto,
           quantidadeMinimaProduto: loc.quantidadeMinimaProduto,
         }),
@@ -480,7 +482,18 @@ const DashboardPage = () => {
             title: 'Produtos em Falta',
             value: produtosEmFalta.toString(),
             gradient: 'linear-gradient(135deg, #d32f2f 0%, #ef5350 100%)',
-            caption: 'Abaixo do mínimo',
+            caption: (
+              <Box>
+                {dashboardData.produtosLocalizacoes
+                  .filter((loc) => loc.quantidadeProduto <= loc.quantidadeMinimaProduto)
+                  .slice(0, 3) // Mostra apenas os 3 primeiros para não sobrecarregar
+                  .map((loc, idx) => (
+                    <Typography key={idx} variant="caption" sx={{ display: 'block', opacity: 0.8 }}>
+                      Na {loc.nomeLocalizacao}
+                    </Typography>
+                  ))}
+              </Box>
+            ),
           },
           {
             title: 'Atividades Pendentes',
