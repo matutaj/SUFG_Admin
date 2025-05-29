@@ -34,6 +34,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 
+// Mapeamento de tipos de relatório para endpoints
 const reportTypeToEndpoint: { [key: string]: string } = {
   AtividadesCaixa: 'atividades-caixas',
   AtividadesDoDia: 'atividades-do-dia',
@@ -45,6 +46,7 @@ const reportTypeToEndpoint: { [key: string]: string } = {
   FaturamentoPeriodo: 'faturamento-periodo',
   Vendas: 'relatorio-vendas',
   VendasPorCliente: 'vendas-cliente',
+  FuncionarioMaisFaturado: 'funcionario-mais-faturado',
 };
 
 const Relatorio = () => {
@@ -64,8 +66,9 @@ const Relatorio = () => {
   const [authError, setAuthError] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [reportError, setReportError] = useState<string>('');
-  const [reportData, setReportData] = useState<any[]>([]);
+  const [reportData, setReportData] = useState<any>([]);
 
+  // Carrega o ID do usuário a partir do token
   useEffect(() => {
     const loadUserId = async () => {
       try {
@@ -107,11 +110,12 @@ const Relatorio = () => {
     loadUserId();
   }, [navigate]);
 
+  // Carrega listas de caixas, clientes e produtos conforme o tipo de relatório
   useEffect(() => {
     const fetchLists = async () => {
       try {
         if (usuarioId) {
-          if (reportType === 'AtividadesCaixa' || reportType === 'RelatorioCaixas') {
+          if (reportType === 'AtividadesCaixa') {
             const cashRegisterList = await getAllCashRegisters();
             setCashRegisters(cashRegisterList);
           }
@@ -141,6 +145,7 @@ const Relatorio = () => {
     fetchLists();
   }, [reportType, usuarioId]);
 
+  // Handlers para mudanças nos filtros
   const handleReportTypeChange = (event: SelectChangeEvent<string>) => {
     setReportType(event.target.value);
     setStartDate('');
@@ -205,6 +210,7 @@ const Relatorio = () => {
     setReportError('');
   };
 
+  // Busca os dados do relatório
   const fetchReportData = async () => {
     try {
       setReportError('');
@@ -213,12 +219,9 @@ const Relatorio = () => {
         throw new Error('Token não encontrado.');
       }
 
-      if (
-        reportType !== 'AtividadesDoDia' &&
-        reportType !== 'RelatorioCaixas' &&
-        (!startDate || !endDate)
-      ) {
-        setReportError('Datas de início e fim são obrigatórias.');
+      // Validação: dataInicio é obrigatória para todos os relatórios exceto AtividadesDoDia
+      if (reportType !== 'AtividadesDoDia' && !startDate) {
+        setReportError('Data de início é obrigatória.');
         return;
       }
 
@@ -237,21 +240,20 @@ const Relatorio = () => {
         throw new Error('Tipo de relatório não suportado.');
       }
 
-      // Ajustar dataFim para incluir o final do dia
+      // Ajustar dataFim: se não fornecida, usar dataInicio
       let adjustedEndDate = endDate;
-      if (endDate && reportType !== 'AtividadesDoDia') {
+      if (!endDate && reportType !== 'AtividadesDoDia') {
+        adjustedEndDate = startDate; // Mesmo dia
+      } else if (endDate && reportType !== 'AtividadesDoDia') {
         const endDateObj = new Date(endDate);
         const today = new Date();
-        // Verificar se dataFim é hoje
         if (
           endDateObj.getDate() === today.getDate() &&
           endDateObj.getMonth() === today.getMonth() &&
           endDateObj.getFullYear() === today.getFullYear()
         ) {
-          // Ajustar para o final do dia (23:59:59.999)
           adjustedEndDate = `${endDate}T23:59:59.999`;
         } else {
-          // Para outras datas, manter YYYY-MM-DD
           adjustedEndDate = endDate;
         }
       }
@@ -266,18 +268,20 @@ const Relatorio = () => {
         ...(limit && { limite: limit }),
       });
 
-      console.log('Query Params:', queryParams.toString()); // Log para depuração
+      console.log('Query Params:', queryParams.toString());
 
       const response = await getReportData(endpoint, queryParams.toString());
-      console.log('Resposta da API:', response); // Log para depuração
+      console.log('Resposta da API:', response);
 
       const data = response.data || (reportType === 'FaturamentoPeriodo' ? { vendas: [] } : []);
       setReportData(
-        reportType === 'FaturamentoPeriodo' && data.vendas
+        reportType === 'FaturamentoPeriodo'
           ? data.vendas
-          : Array.isArray(data)
-            ? data
-            : [data],
+          : reportType === 'FuncionarioMaisFaturado'
+            ? [data]
+            : Array.isArray(data)
+              ? data
+              : [data],
       );
     } catch (error) {
       console.error('Erro ao buscar dados:', error);
@@ -286,31 +290,18 @@ const Relatorio = () => {
       );
     }
   };
+
+  // Gera o arquivo Excel
   const generateExcel = () => {
     try {
-      if (reportData.length === 0) {
+      if (reportData.length === 0 || (reportType === 'FuncionarioMaisFaturado' && !reportData[0])) {
         setReportError('Nenhum dado disponível para gerar o Excel.');
         return;
       }
 
-      // Mapeamento de tipos de relatório para endpoints (se necessário)
-      const reportTypeToEndpoint = {
-        AtividadesCaixa: 'atividades-caixa',
-        AtividadesDoDia: 'atividades-dia',
-        EntradasEstoque: 'entradas-estoque',
-        RelatorioEstoque: 'relatorio-estoque',
-        RelatorioLocalizacaoProdutos: 'relatorio-localizacao',
-        ProdutosMaisVendidos: 'produtos-mais-vendidos',
-        RelatorioTransferencias: 'relatorio-transferencias',
-        FaturamentoPeriodo: 'faturamento-periodo',
-        Vendas: 'vendas',
-        VendasPorCliente: 'vendas-cliente',
-      };
-
       let headers: string[] = [];
       let data: any[][] = [];
 
-      // Processar dados conforme o tipo de relatório
       switch (reportType) {
         case 'AtividadesCaixa':
           headers = [
@@ -322,53 +313,77 @@ const Relatorio = () => {
             'Valor Total',
             'Produtos Vendidos',
           ];
-          data = reportData.flatMap((item) =>
-            item.vendas.length > 0
-              ? item.vendas.map((venda: any) => [
-                  item.nomeCaixa || '-',
-                  item.quantidadeFaturada?.toFixed(2) || '0.00',
-                  item.funcionarioNome || '-',
-                  venda.numeroDocumento || '-',
-                  venda.dataEmissao ? format(new Date(venda.dataEmissao), 'dd/MM/yyyy') : '-',
-                  venda.valorTotal?.toFixed(2) || '0.00',
-                  venda.vendasProdutos
-                    ?.map((vp: any) => `${vp.produtos.nomeProduto} (Qtd: ${vp.quantidadeVendida})`)
-                    .join('; ') || '-',
-                ])
-              : [
-                  [
+          data = reportData.flatMap(
+            (item: {
+              vendas: any[];
+              nomeCaixa: any;
+              quantidadeFaturada: number;
+              funcionarioNome: any;
+            }) =>
+              item.vendas.length > 0
+                ? item.vendas.map((venda: any) => [
                     item.nomeCaixa || '-',
                     item.quantidadeFaturada?.toFixed(2) || '0.00',
                     item.funcionarioNome || '-',
-                    '-',
-                    '-',
-                    '0.00',
-                    '-',
+                    venda.numeroDocumento || '-',
+                    venda.dataEmissao ? format(new Date(venda.dataEmissao), 'dd/MM/yyyy') : '-',
+                    venda.valorTotal?.toFixed(2) || '0.00',
+                    venda.vendasProdutos
+                      ?.map(
+                        (vp: any) => `${vp.produtos.nomeProduto} (Qtd: ${vp.quantidadeVendida})`,
+                      )
+                      .join('; ') || '-',
+                  ])
+                : [
+                    [
+                      item.nomeCaixa || '-',
+                      item.quantidadeFaturada?.toFixed(2) || '0.00',
+                      item.funcionarioNome || '-',
+                      '-',
+                      '-',
+                      '0.00',
+                      '-',
+                    ],
                   ],
-                ],
           );
           break;
 
         case 'AtividadesDoDia':
           headers = ['Tarefa', 'Descrição', 'Funcionário', 'Status', 'Data Criação'];
-          data = reportData.map((item) => [
-            item.nomeTarefa || '-',
-            item.descricao || '-',
-            item.funcionarioNome || '-',
-            item.status || '-',
-            item.dataCriacao ? format(new Date(item.dataCriacao), 'dd/MM/yyyy') : '-',
-          ]);
+          data = reportData.map(
+            (item: {
+              nomeTarefa: any;
+              descricao: any;
+              funcionarioNome: any;
+              status: any;
+              dataCriacao: string | number | Date;
+            }) => [
+              item.nomeTarefa || '-',
+              item.descricao || '-',
+              item.funcionarioNome || '-',
+              item.status || '-',
+              item.dataCriacao ? format(new Date(item.dataCriacao), 'dd/MM/yyyy') : '-',
+            ],
+          );
           break;
 
         case 'EntradasEstoque':
           headers = ['Produto', 'Quantidade', 'Data Entrada', 'Fornecedor', 'Funcionário'];
-          data = reportData.map((item) => [
-            item.produtoNome || '-',
-            item.quantidadeRecebida?.toString() || '0',
-            item.dataEntrada ? format(new Date(item.dataEntrada), 'dd/MM/yyyy') : '-',
-            item.fornecedorNome || '-',
-            item.funcionarioNome || '-',
-          ]);
+          data = reportData.map(
+            (item: {
+              produtoNome: any;
+              quantidadeRecebida: { toString: () => any };
+              dataEntrada: string | number | Date;
+              fornecedorNome: any;
+              funcionarioNome: any;
+            }) => [
+              item.produtoNome || '-',
+              item.quantidadeRecebida?.toString() || '0',
+              item.dataEntrada ? format(new Date(item.dataEntrada), 'dd/MM/yyyy') : '-',
+              item.fornecedorNome || '-',
+              item.funcionarioNome || '-',
+            ],
+          );
           break;
 
         case 'RelatorioEstoque':
@@ -380,26 +395,31 @@ const Relatorio = () => {
             'Corredor',
             'Prateleira',
           ];
-          data = reportData.flatMap((item) =>
-            item.localizacoes.length > 0
-              ? item.localizacoes.map((loc: any) => [
-                  item.nomeProduto || '-',
-                  item.quantidadeAtual?.toString() || '0',
-                  loc.nome || '-',
-                  loc.seccao || '-',
-                  loc.corredor || '-',
-                  loc.prateleira || '-',
-                ])
-              : [
-                  [
+          data = reportData.flatMap(
+            (item: {
+              localizacoes: any[];
+              nomeProduto: any;
+              quantidadeAtual: { toString: () => any };
+            }) =>
+              item.localizacoes.length > 0
+                ? item.localizacoes.map((loc: any) => [
                     item.nomeProduto || '-',
                     item.quantidadeAtual?.toString() || '0',
-                    '-',
-                    '-',
-                    '-',
-                    '-',
+                    loc.nome || '-',
+                    loc.seccao || '-',
+                    loc.corredor || '-',
+                    loc.prateleira || '-',
+                  ])
+                : [
+                    [
+                      item.nomeProduto || '-',
+                      item.quantidadeAtual?.toString() || '0',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                    ],
                   ],
-                ],
           );
           break;
 
@@ -413,24 +433,42 @@ const Relatorio = () => {
             'Quantidade',
             'Quantidade Mínima',
           ];
-          data = reportData.map((item) => [
-            item.nomeProduto || '-',
-            item.localizacao?.nome || '-',
-            item.localizacao?.seccao || '-',
-            item.localizacao?.corredor || '-',
-            item.localizacao?.prateleira || '-',
-            item.localizacao?.quantidade?.toString() || '0',
-            item.localizacao?.quantidadeMinima?.toString() || '0',
-          ]);
+          data = reportData.map(
+            (item: {
+              nomeProduto: any;
+              localizacao: {
+                nome: any;
+                seccao: any;
+                corredor: any;
+                prateleira: any;
+                quantidade: { toString: () => any };
+                quantidadeMinima: { toString: () => any };
+              };
+            }) => [
+              item.nomeProduto || '-',
+              item.localizacao?.nome || '-',
+              item.localizacao?.seccao || '-',
+              item.localizacao?.corredor || '-',
+              item.localizacao?.prateleira || '-',
+              item.localizacao?.quantidade?.toString() || '0',
+              item.localizacao?.quantidadeMinima?.toString() || '0',
+            ],
+          );
           break;
 
         case 'ProdutosMaisVendidos':
           headers = ['Produto', 'Quantidade Vendida', 'Valor Total'];
-          data = reportData.map((item) => [
-            item.nomeProduto || '-',
-            item.quantidadeVendida?.toString() || '0',
-            item.valorTotal?.toFixed(2) || '0.00',
-          ]);
+          data = reportData.map(
+            (item: {
+              nomeProduto: any;
+              quantidadeVendida: { toString: () => any };
+              valorTotal: number;
+            }) => [
+              item.nomeProduto || '-',
+              item.quantidadeVendida?.toString() || '0',
+              item.valorTotal?.toFixed(2) || '0.00',
+            ],
+          );
           break;
 
         case 'RelatorioTransferencias':
@@ -444,26 +482,44 @@ const Relatorio = () => {
             'Seção',
             'Funcionário',
           ];
-          data = reportData.map((item) => [
-            item.nomeProduto || '-',
-            item.quantidadeTransferida?.toString() || '0',
-            item.dataTransferencia ? format(new Date(item.dataTransferencia), 'dd/MM/yyyy') : '-',
-            item.nomeLocalizacao || '-',
-            item.corredor || '-',
-            item.prateleira || '-',
-            item.seccao || '-',
-            item.funcionarioNome || '-',
-          ]);
+          data = reportData.map(
+            (item: {
+              nomeProduto: any;
+              quantidadeTransferida: { toString: () => any };
+              dataTransferencia: string | number | Date;
+              nomeLocalizacao: any;
+              corredor: any;
+              prateleira: any;
+              seccao: any;
+              funcionarioNome: any;
+            }) => [
+              item.nomeProduto || '-',
+              item.quantidadeTransferida?.toString() || '0',
+              item.dataTransferencia ? format(new Date(item.dataTransferencia), 'dd/MM/yyyy') : '-',
+              item.nomeLocalizacao || '-',
+              item.corredor || '-',
+              item.prateleira || '-',
+              item.seccao || '-',
+              item.funcionarioNome || '-',
+            ],
+          );
           break;
 
         case 'FaturamentoPeriodo':
           headers = ['Nome Produto', 'Total Faturado', 'Data Emissão', 'Funcionário'];
-          data = reportData.map((item) => [
-            item.nomeProduto || '-',
-            item.totalFaturado?.toFixed(2) || '0.00',
-            item.dataEmissao ? format(new Date(item.dataEmissao), 'dd/MM/yyyy') : '-',
-            item.funcionariosCaixa || '-',
-          ]);
+          data = reportData.map(
+            (item: {
+              nomeProduto: any;
+              totalFaturado: number;
+              dataEmissao: string | number | Date;
+              funcionariosCaixa: any;
+            }) => [
+              item.nomeProduto || '-',
+              item.totalFaturado?.toFixed(2) || '0.00',
+              item.dataEmissao ? format(new Date(item.dataEmissao), 'dd/MM/yyyy') : '-',
+              item.funcionariosCaixa || '-',
+            ],
+          );
           break;
 
         case 'Vendas':
@@ -476,32 +532,58 @@ const Relatorio = () => {
             'Funcionário',
             'Produtos',
           ];
-          data = reportData.map((item) => [
-            item.numeroDocumento || '-',
-            item.dataEmissao ? format(new Date(item.dataEmissao), 'dd/MM/yyyy') : '-',
-            item.valorTotal?.toFixed(2) || '0.00',
-            item.cliente?.nomeCliente || '-',
-            item.funcionarioCaixa?.nomeCaixa || '-',
-            item.funcionarioCaixa?.funcionario?.nomeFuncionario || '-',
-            item.produtos
-              ?.map(
-                (p: any) =>
-                  `${p.nomeProduto} (Qtd: ${p.quantidadeVendida}, kzs${p.precoVenda?.toFixed(2)}`,
-              )
-              .join('; ') || '-',
-          ]);
+          data = reportData.map(
+            (item: {
+              numeroDocumento: any;
+              dataEmissao: string | number | Date;
+              valorTotal: number;
+              cliente: { nomeCliente: any };
+              funcionarioCaixa: { nomeCaixa: any; funcionario: { nomeFuncionario: any } };
+              produtos: any[];
+            }) => [
+              item.numeroDocumento || '-',
+              item.dataEmissao ? format(new Date(item.dataEmissao), 'dd/MM/yyyy') : '-',
+              item.valorTotal?.toFixed(2) || '0.00',
+              item.cliente?.nomeCliente || '-',
+              item.funcionarioCaixa?.nomeCaixa || '-',
+              item.funcionarioCaixa?.funcionario?.nomeFuncionario || '-',
+              item.produtos
+                ?.map(
+                  (p: any) =>
+                    `${p.nomeProduto} (Qtd: ${p.quantidadeVendida}, kzs${p.precoVenda?.toFixed(2)})`,
+                )
+                .join('; ') || '-',
+            ],
+          );
           break;
 
         case 'VendasPorCliente':
           headers = ['Documento', 'Data Emissão', 'Valor Total', 'Funcionário', 'Produtos'];
-          data = reportData.map((item) => [
-            item.numeroDocumento || '-',
-            item.dataEmissao ? format(new Date(item.dataEmissao), 'dd/MM/yyyy') : '-',
-            item.valorTotal?.toFixed(2) || '0.00',
+          data = reportData.map(
+            (item: {
+              numeroDocumento: any;
+              dataEmissao: string | number | Date;
+              valorTotal: number;
+              funcionarioNome: any;
+              vendasProdutos: any[];
+            }) => [
+              item.numeroDocumento || '-',
+              item.dataEmissao ? format(new Date(item.dataEmissao), 'dd/MM/yyyy') : '-',
+              item.valorTotal?.toFixed(2) || '0.00',
+              item.funcionarioNome || '-',
+              item.vendasProdutos
+                ?.map((p: any) => `${p.produtos.nomeProduto} (Qtd: ${p.quantidadeVendida})`)
+                .join('; ') || '-',
+            ],
+          );
+          break;
+
+        case 'FuncionarioMaisFaturado':
+          headers = ['Funcionário', 'Total Faturado', 'Quantidade de Vendas'];
+          data = reportData.map((item: any) => [
             item.funcionarioNome || '-',
-            item.vendasProdutos
-              ?.map((p: any) => `${p.produtos.nomeProduto} (Qtd: ${p.quantidadeVendida})`)
-              .join('; ') || '-',
+            item.totalFaturado?.toFixed(2) || '0.00',
+            item.quantidadeVendas?.toString() || '0',
           ]);
           break;
 
@@ -510,21 +592,20 @@ const Relatorio = () => {
           return;
       }
 
-      // Criar nova planilha
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet([]);
 
-      // Adicionar cabeçalho informativo
       const reportTitle = reportType.replace(/([A-Z])/g, ' $1').trim();
       XLSX.utils.sheet_add_aoa(ws, [[`Relatório: ${reportTitle}`]], { origin: 'A1' });
 
-      // Adicionar período se existir
-      if (startDate && endDate && reportType !== 'AtividadesDoDia') {
+      if (startDate && reportType !== 'AtividadesDoDia') {
         XLSX.utils.sheet_add_aoa(
           ws,
           [
             [
-              `Período: ${format(new Date(startDate), 'dd/MM/yyyy')} a ${format(new Date(endDate), 'dd/MM/yyyy')}`,
+              `Data: ${format(new Date(startDate), 'dd/MM/yyyy')}${
+                endDate ? ` a ${format(new Date(endDate), 'dd/MM/yyyy')}` : ''
+              }`,
             ],
           ],
           { origin: { r: 1, c: 0 } },
@@ -535,21 +616,16 @@ const Relatorio = () => {
         });
       }
 
-      // Adicionar data de emissão
       XLSX.utils.sheet_add_aoa(ws, [[`Data de Emissão: ${format(new Date(), 'dd/MM/yyyy')}`]], {
         origin: { r: 2, c: 0 },
       });
 
-      // Adicionar linha em branco
       XLSX.utils.sheet_add_aoa(ws, [['']], { origin: { r: 3, c: 0 } });
 
-      // Adicionar cabeçalhos das colunas
       XLSX.utils.sheet_add_aoa(ws, [headers], { origin: { r: 4, c: 0 } });
 
-      // Adicionar dados
       XLSX.utils.sheet_add_aoa(ws, data, { origin: { r: 5, c: 0 } });
 
-      // Estilizar cabeçalhos das colunas (funciona em Excel)
       headers.forEach((_, colIndex) => {
         const cellAddress = XLSX.utils.encode_cell({ r: 4, c: colIndex });
         if (!ws[cellAddress]) ws[cellAddress] = {};
@@ -568,24 +644,20 @@ const Relatorio = () => {
         };
       });
 
-      // Autoajuste de largura de colunas
       const maxColWidths = headers.map((header, colIndex) => {
         const maxWidth = data.reduce((max, row) => {
           const value = row[colIndex] ? row[colIndex].toString() : '';
           return Math.max(max, value.length);
         }, header.length);
-        return { wch: Math.min(Math.max(maxWidth, 10), 50) }; // Limita entre 10 e 50 caracteres
+        return { wch: Math.min(Math.max(maxWidth, 10), 50) };
       });
 
       ws['!cols'] = maxColWidths;
 
-      // Congelar cabeçalhos (funciona em Excel)
       ws['!freeze'] = { xSplit: 0, ySplit: 5, topLeftCell: 'A6', activePane: 'bottomRight' };
 
-      // Adicionar planilha ao workbook
       XLSX.utils.book_append_sheet(wb, ws, 'Relatório');
 
-      // Gerar arquivo Excel
       XLSX.writeFile(wb, `relatorio_${reportTypeToEndpoint[reportType] || 'dados'}.xlsx`);
     } catch (error) {
       setReportError(
@@ -595,18 +667,20 @@ const Relatorio = () => {
     }
   };
 
+  // Gera o arquivo PDF
   const generatePDF = () => {
     try {
       const doc = new jsPDF({ orientation: 'landscape' });
       const reportTitle = reportType.replace(/([A-Z])/g, ' $1').trim();
 
-      // Cabeçalho
       doc.setFontSize(20);
       doc.text(`Relatório: ${reportTitle}`, 14, 20);
       doc.setFontSize(12);
-      if (startDate && endDate && reportType !== 'AtividadesDoDia') {
+      if (startDate && reportType !== 'AtividadesDoDia') {
         doc.text(
-          `Período: ${format(new Date(startDate), 'dd/MM/yyyy')} a ${format(new Date(endDate), 'dd/MM/yyyy')}`,
+          `Data: ${format(new Date(startDate), 'dd/MM/yyyy')}${
+            endDate ? ` a ${format(new Date(endDate), 'dd/MM/yyyy')}` : ''
+          }`,
           14,
           30,
         );
@@ -615,12 +689,11 @@ const Relatorio = () => {
       }
       doc.text(`Data de Emissão: ${format(new Date(), 'dd/MM/yyyy')}`, 14, 40);
 
-      if (reportData.length === 0) {
+      if (reportData.length === 0 || (reportType === 'FuncionarioMaisFaturado' && !reportData[0])) {
         setReportError('Nenhum dado disponível para gerar o PDF.');
         return;
       }
 
-      // Configuração de tabelas por tipo de relatório
       let headers: string[] = [];
       let data: string[][] = [];
 
@@ -635,52 +708,79 @@ const Relatorio = () => {
             'Valor Total',
             'Produtos Vendidos',
           ];
-          data = reportData.flatMap((item) =>
-            item.vendas.length > 0
-              ? item.vendas.map((venda: any) => [
-                  item.nomeCaixa || '-',
-                  item.quantidadeFaturada?.toFixed(2) || '0.00',
-                  item.funcionarioNome || '-',
-                  venda.numeroDocumento || '-',
-                  venda.dataEmissao ? format(new Date(venda.dataEmissao), 'dd/MM/yyyy') : '-',
-                  venda.valorTotal?.toFixed(2) || '0.00',
-                  venda.vendasProdutos
-                    ?.map((vp: any) => `${vp.produtos.nomeProduto} (Qtd: ${vp.quantidadeVendida})`)
-                    .join('; ') || '-',
-                ])
-              : [
-                  [
+          data = reportData.flatMap(
+            (item: {
+              vendas: any[];
+              nomeCaixa: any;
+              quantidadeFaturada: number;
+              funcionarioNome: any;
+            }) =>
+              item.vendas.length > 0
+                ? item.vendas.map((venda: any) => [
                     item.nomeCaixa || '-',
                     item.quantidadeFaturada?.toFixed(2) || '0.00',
                     item.funcionarioNome || '-',
-                    '-', // Documento
-                    '-', // Data Emissão
-                    '0.00', // Valor Total
-                    '-', // Produtos Vendidos
+                    venda.numeroDocumento || '-',
+                    venda.dataEmissao ? format(new Date(venda.dataEmissao), 'dd/MM/yyyy') : '-',
+                    venda.valorTotal?.toFixed(2) || '0.00',
+                    venda.vendasProdutos
+                      ?.map(
+                        (vp: any) => `${vp.produtos.nomeProduto} (Qtd: ${vp.quantidadeVendida})`,
+                      )
+                      .join('; ') || '-',
+                  ])
+                : [
+                    [
+                      item.nomeCaixa || '-',
+                      item.quantidadeFaturada?.toFixed(2) || '0.00',
+                      item.funcionarioNome || '-',
+                      '-',
+                      '-',
+                      '0.00',
+                      '-',
+                    ],
                   ],
-                ],
           );
           break;
+
         case 'AtividadesDoDia':
           headers = ['Tarefa', 'Descrição', 'Funcionário', 'Status', 'Data Criação'];
-          data = reportData.map((item) => [
-            item.nomeTarefa || '-',
-            item.descricao || '-',
-            item.funcionarioNome || '-',
-            item.status || '-',
-            item.dataCriacao ? format(new Date(item.dataCriacao), 'dd/MM/yyyy') : '-',
-          ]);
+          data = reportData.map(
+            (item: {
+              nomeTarefa: any;
+              descricao: any;
+              funcionarioNome: any;
+              status: any;
+              dataCriacao: string | number | Date;
+            }) => [
+              item.nomeTarefa || '-',
+              item.descricao || '-',
+              item.funcionarioNome || '-',
+              item.status || '-',
+              item.dataCriacao ? format(new Date(item.dataCriacao), 'dd/MM/yyyy') : '-',
+            ],
+          );
           break;
+
         case 'EntradasEstoque':
           headers = ['Produto', 'Quantidade', 'Data Entrada', 'Fornecedor', 'Funcionário'];
-          data = reportData.map((item) => [
-            item.produtoNome || '-',
-            item.quantidadeRecebida?.toString() || '0',
-            item.dataEntrada ? format(new Date(item.dataEntrada), 'dd/MM/yyyy') : '-',
-            item.fornecedorNome || '-',
-            item.funcionarioNome || '-',
-          ]);
+          data = reportData.map(
+            (item: {
+              produtoNome: any;
+              quantidadeRecebida: { toString: () => any };
+              dataEntrada: string | number | Date;
+              fornecedorNome: any;
+              funcionarioNome: any;
+            }) => [
+              item.produtoNome || '-',
+              item.quantidadeRecebida?.toString() || '0',
+              item.dataEntrada ? format(new Date(item.dataEntrada), 'dd/MM/yyyy') : '-',
+              item.fornecedorNome || '-',
+              item.funcionarioNome || '-',
+            ],
+          );
           break;
+
         case 'RelatorioEstoque':
           headers = [
             'Produto',
@@ -690,28 +790,34 @@ const Relatorio = () => {
             'Corredor',
             'Prateleira',
           ];
-          data = reportData.flatMap((item) =>
-            item.localizacoes.length > 0
-              ? item.localizacoes.map((loc: any) => [
-                  item.nomeProduto || '-',
-                  item.quantidadeAtual?.toString() || '0',
-                  loc.nome || '-',
-                  loc.seccao || '-',
-                  loc.corredor || '-',
-                  loc.prateleira || '-',
-                ])
-              : [
-                  [
+          data = reportData.flatMap(
+            (item: {
+              localizacoes: any[];
+              nomeProduto: any;
+              quantidadeAtual: { toString: () => any };
+            }) =>
+              item.localizacoes.length > 0
+                ? item.localizacoes.map((loc: any) => [
                     item.nomeProduto || '-',
                     item.quantidadeAtual?.toString() || '0',
-                    '-', // Localização
-                    '-', // Seção
-                    '-', // Corredor
-                    '-', // Prateleira
+                    loc.nome || '-',
+                    loc.seccao || '-',
+                    loc.corredor || '-',
+                    loc.prateleira || '-',
+                  ])
+                : [
+                    [
+                      item.nomeProduto || '-',
+                      item.quantidadeAtual?.toString() || '0',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                    ],
                   ],
-                ],
           );
           break;
+
         case 'RelatorioLocalizacaoProdutos':
           headers = [
             'Produto',
@@ -722,24 +828,44 @@ const Relatorio = () => {
             'Quantidade',
             'Quantidade Mínima',
           ];
-          data = reportData.map((item) => [
-            item.nomeProduto || '-',
-            item.localizacao?.nome || '-',
-            item.localizacao?.seccao || '-',
-            item.localizacao?.corredor || '-',
-            item.localizacao?.prateleira || '-',
-            item.localizacao?.quantidade?.toString() || '0',
-            item.localizacao?.quantidadeMinima?.toString() || '0',
-          ]);
+          data = reportData.map(
+            (item: {
+              nomeProduto: any;
+              localizacao: {
+                nome: any;
+                seccao: any;
+                corredor: any;
+                prateleira: any;
+                quantidade: { toString: () => any };
+                quantidadeMinima: { toString: () => any };
+              };
+            }) => [
+              item.nomeProduto || '-',
+              item.localizacao?.nome || '-',
+              item.localizacao?.seccao || '-',
+              item.localizacao?.corredor || '-',
+              item.localizacao?.prateleira || '-',
+              item.localizacao?.quantidade?.toString() || '0',
+              item.localizacao?.quantidadeMinima?.toString() || '0',
+            ],
+          );
           break;
+
         case 'ProdutosMaisVendidos':
           headers = ['Produto', 'Quantidade Vendida', 'Valor Total'];
-          data = reportData.map((item) => [
-            item.nomeProduto || '-',
-            item.quantidadeVendida?.toString() || '0',
-            item.valorTotal?.toFixed(2) || '0.00',
-          ]);
+          data = reportData.map(
+            (item: {
+              nomeProduto: any;
+              quantidadeVendida: { toString: () => any };
+              valorTotal: number;
+            }) => [
+              item.nomeProduto || '-',
+              item.quantidadeVendida?.toString() || '0',
+              item.valorTotal?.toFixed(2) || '0.00',
+            ],
+          );
           break;
+
         case 'RelatorioTransferencias':
           headers = [
             'Produto',
@@ -751,26 +877,46 @@ const Relatorio = () => {
             'Seção',
             'Funcionário',
           ];
-          data = reportData.map((item) => [
-            item.nomeProduto || '-',
-            item.quantidadeTransferida?.toString() || '0',
-            item.dataTransferencia ? format(new Date(item.dataTransferencia), 'dd/MM/yyyy') : '-',
-            item.nomeLocalizacao || '-',
-            item.corredor || '-',
-            item.prateleira || '-',
-            item.seccao || '-',
-            item.funcionarioNome || '-',
-          ]);
+          data = reportData.map(
+            (item: {
+              nomeProduto: any;
+              quantidadeTransferida: { toString: () => any };
+              dataTransferencia: string | number | Date;
+              nomeLocalizacao: any;
+              corredor: any;
+              prateleira: any;
+              seccao: any;
+              funcionarioNome: any;
+            }) => [
+              item.nomeProduto || '-',
+              item.quantidadeTransferida?.toString() || '0',
+              item.dataTransferencia ? format(new Date(item.dataTransferencia), 'dd/MM/yyyy') : '-',
+              item.nomeLocalizacao || '-',
+              item.corredor || '-',
+              item.prateleira || '-',
+              item.seccao || '-',
+              item.funcionarioNome || '-',
+            ],
+          );
           break;
+
         case 'FaturamentoPeriodo':
           headers = ['Nome Produto', 'Total Faturado', 'Data Emissão', 'Funcionário'];
-          data = reportData.map((item) => [
-            item.nomeProduto || '-',
-            item.totalFaturado?.toFixed(2) || '0.00',
-            item.dataEmissao ? format(new Date(item.dataEmissao), 'dd/MM/yyyy') : '-',
-            item.funcionariosCaixa || '-',
-          ]);
+          data = reportData.map(
+            (item: {
+              nomeProduto: any;
+              totalFaturado: number;
+              dataEmissao: string | number | Date;
+              funcionariosCaixa: any;
+            }) => [
+              item.nomeProduto || '-',
+              item.totalFaturado?.toFixed(2) || '0.00',
+              item.dataEmissao ? format(new Date(item.dataEmissao), 'dd/MM/yyyy') : '-',
+              item.funcionariosCaixa || '-',
+            ],
+          );
           break;
+
         case 'Vendas':
           headers = [
             'Documento',
@@ -781,31 +927,58 @@ const Relatorio = () => {
             'Funcionário',
             'Produtos',
           ];
-          data = reportData.map((item) => [
-            item.numeroDocumento || '-',
-            item.dataEmissao ? format(new Date(item.dataEmissao), 'dd/MM/yyyy') : '-',
-            item.valorTotal?.toFixed(2) || '0.00',
-            item.cliente?.nomeCliente || '-',
-            item.funcionarioCaixa?.nomeCaixa || '-',
-            item.funcionarioCaixa?.funcionario?.nomeFuncionario || '-',
-            item.produtos
-              ?.map(
-                (p: any) =>
-                  `${p.nomeProduto} (Qtd: ${p.quantidadeVendida}, kzs${p.precoVenda?.toFixed(2)})`,
-              )
-              .join('; ') || '-',
-          ]);
+          data = reportData.map(
+            (item: {
+              numeroDocumento: any;
+              dataEmissao: string | number | Date;
+              valorTotal: number;
+              cliente: { nomeCliente: any };
+              funcionarioCaixa: { nomeCaixa: any; funcionario: { nomeFuncionario: any } };
+              produtos: any[];
+            }) => [
+              item.numeroDocumento || '-',
+              item.dataEmissao ? format(new Date(item.dataEmissao), 'dd/MM/yyyy') : '-',
+              item.valorTotal?.toFixed(2) || '0.00',
+              item.cliente?.nomeCliente || '-',
+              item.funcionarioCaixa?.nomeCaixa || '-',
+              item.funcionarioCaixa?.funcionario?.nomeFuncionario || '-',
+              item.produtos
+                ?.map(
+                  (p: any) =>
+                    `${p.nomeProduto} (Qtd: ${p.quantidadeVendida}, kzs${p.precoVenda?.toFixed(2)})`,
+                )
+                .join('; ') || '-',
+            ],
+          );
           break;
+
         case 'VendasPorCliente':
           headers = ['Documento', 'Data Emissão', 'Valor Total', 'Funcionário', 'Produtos'];
-          data = reportData.map((item) => [
-            item.numeroDocumento || '-',
-            item.dataEmissao ? format(new Date(item.dataEmissao), 'dd/MM/yyyy') : '-',
-            item.valorTotal?.toFixed(2) || '0.00',
+          data = reportData.map(
+            (item: {
+              numeroDocumento: any;
+              dataEmissao: string | number | Date;
+              valorTotal: number;
+              funcionarioNome: any;
+              vendasProdutos: any[];
+            }) => [
+              item.numeroDocumento || '-',
+              item.dataEmissao ? format(new Date(item.dataEmissao), 'dd/MM/yyyy') : '-',
+              item.valorTotal?.toFixed(2) || '0.00',
+              item.funcionarioNome || '-',
+              item.vendasProdutos
+                ?.map((p: any) => `${p.produtos.nomeProduto} (Qtd: ${p.quantidadeVendida})`)
+                .join('; ') || '-',
+            ],
+          );
+          break;
+
+        case 'FuncionarioMaisFaturado':
+          headers = ['Funcionário', 'Total Faturado', 'Quantidade de Vendas'];
+          data = reportData.map((item: any) => [
             item.funcionarioNome || '-',
-            item.vendasProdutos
-              ?.map((p: any) => `${p.produtos.nomeProduto} (Qtd: ${p.quantidadeVendida})`)
-              .join('; ') || '-',
+            item.totalFaturado?.toFixed(2) || '0.00',
+            item.quantidadeVendas?.toString() || '0',
           ]);
           break;
       }
@@ -827,6 +1000,7 @@ const Relatorio = () => {
     }
   };
 
+  // Formata células da tabela
   const formatTableCell = (value: any): string => {
     if (value == null) return '-';
     if (value instanceof Date) return format(value, 'dd/MM/yyyy');
@@ -851,14 +1025,14 @@ const Relatorio = () => {
             if (item.nome && item.seccao && item.corredor && item.prateleira) {
               return `${item.nome} (${item.seccao}, ${item.corredor}, ${item.prateleira})`;
             }
-            return JSON.stringify(item); // Fallback
+            return JSON.stringify(item);
           })
           .join('; ');
       }
       if (value.nome && value.seccao && value.corredor && value.prateleira) {
         return `${value.nome} (${value.seccao}, ${value.corredor}, ${value.prateleira})`;
       }
-      return value.toString(); // Fallback
+      return JSON.stringify(value);
     }
     return value.toString();
   };
@@ -906,6 +1080,7 @@ const Relatorio = () => {
                   <MenuItem value="FaturamentoPeriodo">Faturamento por Período</MenuItem>
                   <MenuItem value="Vendas">Vendas</MenuItem>
                   <MenuItem value="VendasPorCliente">Vendas por Cliente</MenuItem>
+                  <MenuItem value="FuncionarioMaisFaturado">Funcionário Mais Faturado</MenuItem>
                 </Select>
               </FormControl>
 
@@ -928,7 +1103,6 @@ const Relatorio = () => {
                   InputLabelProps={{ shrink: true }}
                   sx={{ width: { xs: '100%', sm: 180 } }}
                   error={!!dateError}
-                  required
                 />
               )}
 
@@ -965,6 +1139,7 @@ const Relatorio = () => {
               )}
 
               {[
+                'AtividadesCaixa',
                 'EntradasEstoque',
                 'RelatorioEstoque',
                 'RelatorioLocalizacaoProdutos',
@@ -984,6 +1159,17 @@ const Relatorio = () => {
                   </Select>
                 </FormControl>
               )}
+
+              {reportType === 'ProdutosMaisVendidos' && (
+                <TextField
+                  type="number"
+                  label="Limite"
+                  value={limit}
+                  onChange={handleLimitChange}
+                  InputLabelProps={{ shrink: true }}
+                  sx={{ width: { xs: '100%', sm: 180 } }}
+                />
+              )}
             </Stack>
             {dateError && (
               <Alert severity="error" sx={{ mt: 2 }}>
@@ -998,7 +1184,7 @@ const Relatorio = () => {
               color="primary"
               onClick={fetchReportData}
               disabled={
-                (reportType !== 'AtividadesDoDia' && (!startDate || !endDate || !!dateError)) ||
+                (reportType !== 'AtividadesDoDia' && (!startDate || !!dateError)) ||
                 (reportType === 'AtividadesDoDia' && !startDate) ||
                 (reportType === 'VendasPorCliente' && !clientId)
               }
@@ -1010,7 +1196,7 @@ const Relatorio = () => {
               color="success"
               onClick={generateExcel}
               disabled={
-                (reportType !== 'AtividadesDoDia' && (!startDate || !endDate || !!dateError)) ||
+                (reportType !== 'AtividadesDoDia' && (!startDate || !!dateError)) ||
                 (reportType === 'AtividadesDoDia' && !startDate) ||
                 (reportType === 'VendasPorCliente' && !clientId) ||
                 reportData.length === 0
@@ -1024,7 +1210,7 @@ const Relatorio = () => {
               color="primary"
               onClick={generatePDF}
               disabled={
-                (reportType !== 'AtividadesDoDia' && (!startDate || !endDate || !!dateError)) ||
+                (reportType !== 'AtividadesDoDia' && (!startDate || !!dateError)) ||
                 (reportType === 'AtividadesDoDia' && !startDate) ||
                 (reportType === 'VendasPorCliente' && !clientId) ||
                 reportData.length === 0
@@ -1140,6 +1326,9 @@ const Relatorio = () => {
                               'Produtos',
                             ];
                             break;
+                          case 'FuncionarioMaisFaturado':
+                            headers = ['Funcionário', 'Total Faturado', 'Quantidade de Vendas'];
+                            break;
                           default:
                             headers = Object.keys(reportData[0] || {})
                               .filter((key) => !key.toLowerCase().includes('id'))
@@ -1156,156 +1345,246 @@ const Relatorio = () => {
                       let data: string[][] = [];
                       switch (reportType) {
                         case 'AtividadesCaixa':
-                          data = reportData.flatMap((item) =>
-                            item.vendas.length > 0
-                              ? item.vendas.map((venda: any) => [
-                                  item.nomeCaixa || '-',
-                                  item.quantidadeFaturada?.toFixed(2) || '0.00',
-                                  item.funcionarioNome || '-',
-                                  venda.numeroDocumento || '-',
-                                  venda.dataEmissao
-                                    ? format(new Date(venda.dataEmissao), 'dd/MM/yyyy')
-                                    : '-',
-                                  venda.valorTotal?.toFixed(2) || '0.00',
-                                  venda.vendasProdutos
-                                    ?.map(
-                                      (vp: any) =>
-                                        `${vp.produtos.nomeProduto} (Qtd: ${vp.quantidadeVendida})`,
-                                    )
-                                    .join('; ') || '-',
-                                ])
-                              : [
-                                  [
+                          data = reportData.flatMap(
+                            (item: {
+                              vendas: any[];
+                              nomeCaixa: any;
+                              quantidadeFaturada: number;
+                              funcionarioNome: any;
+                            }) =>
+                              item.vendas.length > 0
+                                ? item.vendas.map((venda: any) => [
                                     item.nomeCaixa || '-',
                                     item.quantidadeFaturada?.toFixed(2) || '0.00',
                                     item.funcionarioNome || '-',
-                                    '-', // Documento
-                                    '-', // Data Emissão
-                                    '0.00', // Valor Total
-                                    '-', // Produtos Vendidos
+                                    venda.numeroDocumento || '-',
+                                    venda.dataEmissao
+                                      ? format(new Date(venda.dataEmissao), 'dd/MM/yyyy')
+                                      : '-',
+                                    venda.valorTotal?.toFixed(2) || '0.00',
+                                    venda.vendasProdutos
+                                      ?.map(
+                                        (vp: any) =>
+                                          `${vp.produtos.nomeProduto} (Qtd: ${vp.quantidadeVendida})`,
+                                      )
+                                      .join('; ') || '-',
+                                  ])
+                                : [
+                                    [
+                                      item.nomeCaixa || '-',
+                                      item.quantidadeFaturada?.toFixed(2) || '0.00',
+                                      item.funcionarioNome || '-',
+                                      '-',
+                                      '-',
+                                      '0.00',
+                                      '-',
+                                    ],
                                   ],
-                                ],
                           );
                           break;
                         case 'AtividadesDoDia':
-                          data = reportData.map((item) => [
-                            item.nomeTarefa || '-',
-                            item.descricao || '-',
-                            item.funcionarioNome || '-',
-                            item.status || '-',
-                            item.dataCriacao
-                              ? format(new Date(item.dataCriacao), 'dd/MM/yyyy')
-                              : '-',
-                          ]);
+                          data = reportData.map(
+                            (item: {
+                              nomeTarefa: any;
+                              descricao: any;
+                              funcionarioNome: any;
+                              status: any;
+                              dataCriacao: string | number | Date;
+                            }) => [
+                              item.nomeTarefa || '-',
+                              item.descricao || '-',
+                              item.funcionarioNome || '-',
+                              item.status || '-',
+                              item.dataCriacao
+                                ? format(new Date(item.dataCriacao), 'dd/MM/yyyy')
+                                : '-',
+                            ],
+                          );
                           break;
                         case 'EntradasEstoque':
-                          data = reportData.map((item) => [
-                            item.produtoNome || '-',
-                            item.quantidadeRecebida?.toString() || '0',
-                            item.dataEntrada
-                              ? format(new Date(item.dataEntrada), 'dd/MM/yyyy')
-                              : '-',
-                            item.fornecedorNome || '-',
-                            item.funcionarioNome || '-',
-                          ]);
+                          data = reportData.map(
+                            (item: {
+                              produtoNome: any;
+                              quantidadeRecebida: { toString: () => any };
+                              dataEntrada: string | number | Date;
+                              fornecedorNome: any;
+                              funcionarioNome: any;
+                            }) => [
+                              item.produtoNome || '-',
+                              item.quantidadeRecebida?.toString() || '0',
+                              item.dataEntrada
+                                ? format(new Date(item.dataEntrada), 'dd/MM/yyyy')
+                                : '-',
+                              item.fornecedorNome || '-',
+                              item.funcionarioNome || '-',
+                            ],
+                          );
                           break;
                         case 'RelatorioEstoque':
-                          data = reportData.flatMap((item) =>
-                            item.localizacoes.length > 0
-                              ? item.localizacoes.map((loc: any) => [
-                                  item.nomeProduto || '-',
-                                  item.quantidadeAtual?.toString() || '0',
-                                  loc.nome || '-',
-                                  loc.seccao || '-',
-                                  loc.corredor || '-',
-                                  loc.prateleira || '-',
-                                ])
-                              : [
-                                  [
+                          data = reportData.flatMap(
+                            (item: {
+                              localizacoes: any[];
+                              nomeProduto: any;
+                              quantidadeAtual: { toString: () => any };
+                            }) =>
+                              item.localizacoes.length > 0
+                                ? item.localizacoes.map((loc: any) => [
                                     item.nomeProduto || '-',
                                     item.quantidadeAtual?.toString() || '0',
-                                    '-', // Localização
-                                    '-', // Seção
-                                    '-', // Corredor
-                                    '-', // Prateleira
+                                    loc.nome || '-',
+                                    loc.seccao || '-',
+                                    loc.corredor || '-',
+                                    loc.prateleira || '-',
+                                  ])
+                                : [
+                                    [
+                                      item.nomeProduto || '-',
+                                      item.quantidadeAtual?.toString() || '0',
+                                      '-',
+                                      '-',
+                                      '-',
+                                      '-',
+                                    ],
                                   ],
-                                ],
                           );
                           break;
                         case 'RelatorioLocalizacaoProdutos':
-                          data = reportData.map((item) => [
-                            item.nomeProduto || '-',
-                            item.localizacao?.nome || '-',
-                            item.localizacao?.seccao || '-',
-                            item.localizacao?.corredor || '-',
-                            item.localizacao?.prateleira || '-',
-                            item.localizacao?.quantidade?.toString() || '0',
-                            item.localizacao?.quantidadeMinima?.toString() || '0',
-                          ]);
+                          data = reportData.map(
+                            (item: {
+                              nomeProduto: any;
+                              localizacao: {
+                                nome: any;
+                                seccao: any;
+                                corredor: any;
+                                prateleira: any;
+                                quantidade: { toString: () => any };
+                                quantidadeMinima: { toString: () => any };
+                              };
+                            }) => [
+                              item.nomeProduto || '-',
+                              item.localizacao?.nome || '-',
+                              item.localizacao?.seccao || '-',
+                              item.localizacao?.corredor || '-',
+                              item.localizacao?.prateleira || '-',
+                              item.localizacao?.quantidade?.toString() || '0',
+                              item.localizacao?.quantidadeMinima?.toString() || '0',
+                            ],
+                          );
                           break;
                         case 'ProdutosMaisVendidos':
-                          data = reportData.map((item) => [
-                            item.nomeProduto || '-',
-                            item.quantidadeVendida?.toString() || '0',
-                            item.valorTotal?.toFixed(2) || '0.00',
-                          ]);
+                          data = reportData.map(
+                            (item: {
+                              nomeProduto: any;
+                              quantidadeVendida: { toString: () => any };
+                              valorTotal: number;
+                            }) => [
+                              item.nomeProduto || '-',
+                              item.quantidadeVendida?.toString() || '0',
+                              item.valorTotal?.toFixed(2) || '0.00',
+                            ],
+                          );
                           break;
                         case 'RelatorioTransferencias':
-                          data = reportData.map((item) => [
-                            item.nomeProduto || '-',
-                            item.quantidadeTransferida?.toString() || '0',
-                            item.dataTransferencia
-                              ? format(new Date(item.dataTransferencia), 'dd/MM/yyyy')
-                              : '-',
-                            item.nomeLocalizacao || '-',
-                            item.corredor || '-',
-                            item.prateleira || '-',
-                            item.seccao || '-',
-                            item.funcionarioNome || '-',
-                          ]);
+                          data = reportData.map(
+                            (item: {
+                              nomeProduto: any;
+                              quantidadeTransferida: { toString: () => any };
+                              dataTransferencia: string | number | Date;
+                              nomeLocalizacao: any;
+                              corredor: any;
+                              prateleira: any;
+                              seccao: any;
+                              funcionarioNome: any;
+                            }) => [
+                              item.nomeProduto || '-',
+                              item.quantidadeTransferida?.toString() || '0',
+                              item.dataTransferencia
+                                ? format(new Date(item.dataTransferencia), 'dd/MM/yyyy')
+                                : '-',
+                              item.nomeLocalizacao || '-',
+                              item.corredor || '-',
+                              item.prateleira || '-',
+                              item.seccao || '-',
+                              item.funcionarioNome || '-',
+                            ],
+                          );
                           break;
                         case 'FaturamentoPeriodo':
-                          data = reportData.map((item) => [
-                            item.nomeProduto || '-',
-                            item.totalFaturado?.toFixed(2) || '0.00',
-                            item.dataEmissao
-                              ? format(new Date(item.dataEmissao), 'dd/MM/yyyy')
-                              : '-',
-                            item.funcionariosCaixa || '-',
-                          ]);
+                          data = reportData.map(
+                            (item: {
+                              nomeProduto: any;
+                              totalFaturado: number;
+                              dataEmissao: string | number | Date;
+                              funcionariosCaixa: any;
+                            }) => [
+                              item.nomeProduto || '-',
+                              item.totalFaturado?.toFixed(2) || '0.00',
+                              item.dataEmissao
+                                ? format(new Date(item.dataEmissao), 'dd/MM/yyyy')
+                                : '-',
+                              item.funcionariosCaixa || '-',
+                            ],
+                          );
                           break;
                         case 'Vendas':
-                          data = reportData.map((item) => [
-                            item.numeroDocumento || '-',
-                            item.dataEmissao
-                              ? format(new Date(item.dataEmissao), 'dd/MM/yyyy')
-                              : '-',
-                            item.valorTotal?.toFixed(2) || '0.00',
-                            item.cliente?.nomeCliente || '-',
-                            item.funcionarioCaixa?.nomeCaixa || '-',
-                            item.funcionarioCaixa?.funcionario?.nomeFuncionario || '-',
-                            item.produtos
-                              ?.map(
-                                (p: any) =>
-                                  `${p.nomeProduto} (Qtd: ${p.quantidadeVendida}, kzs${p.precoVenda?.toFixed(2)})`,
-                              )
-                              .join('; ') || '-',
-                          ]);
+                          data = reportData.map(
+                            (item: {
+                              numeroDocumento: any;
+                              dataEmissao: string | number | Date;
+                              valorTotal: number;
+                              cliente: { nomeCliente: any };
+                              funcionarioCaixa: {
+                                nomeCaixa: any;
+                                funcionario: { nomeFuncionario: any };
+                              };
+                              produtos: any[];
+                            }) => [
+                              item.numeroDocumento || '-',
+                              item.dataEmissao
+                                ? format(new Date(item.dataEmissao), 'dd/MM/yyyy')
+                                : '-',
+                              item.valorTotal?.toFixed(2) || '0.00',
+                              item.cliente?.nomeCliente || '-',
+                              item.funcionarioCaixa?.nomeCaixa || '-',
+                              item.funcionarioCaixa?.funcionario?.nomeFuncionario || '-',
+                              item.produtos
+                                ?.map(
+                                  (p: any) =>
+                                    `${p.nomeProduto} (Qtd: ${p.quantidadeVendida}, kzs${p.precoVenda?.toFixed(2)})`,
+                                )
+                                .join('; ') || '-',
+                            ],
+                          );
                           break;
                         case 'VendasPorCliente':
-                          data = reportData.map((item) => [
-                            item.numeroDocumento || '-',
-                            item.dataEmissao
-                              ? format(new Date(item.dataEmissao), 'dd/MM/yyyy')
-                              : '-',
-                            item.valorTotal?.toFixed(2) || '0.00',
+                          data = reportData.map(
+                            (item: {
+                              numeroDocumento: any;
+                              dataEmissao: string | number | Date;
+                              valorTotal: number;
+                              funcionarioNome: any;
+                              vendasProdutos: any[];
+                            }) => [
+                              item.numeroDocumento || '-',
+                              item.dataEmissao
+                                ? format(new Date(item.dataEmissao), 'dd/MM/yyyy')
+                                : '-',
+                              item.valorTotal?.toFixed(2) || '0.00',
+                              item.funcionarioNome || '-',
+                              item.vendasProdutos
+                                ?.map(
+                                  (p: any) =>
+                                    `${p.produtos.nomeProduto} (Qtd: ${p.quantidadeVendida})`,
+                                )
+                                .join('; ') || '-',
+                            ],
+                          );
+                          break;
+                        case 'FuncionarioMaisFaturado':
+                          data = reportData.map((item: any) => [
                             item.funcionarioNome || '-',
-                            item.vendasProdutos
-                              ?.map(
-                                (p: any) =>
-                                  `${p.produtos.nomeProduto} (Qtd: ${p.quantidadeVendida})`,
-                              )
-                              .join('; ') || '-',
+                            item.totalFaturado?.toFixed(2) || '0.00',
+                            item.quantidadeVendas?.toString() || '0',
                           ]);
                           break;
                       }
