@@ -304,6 +304,44 @@ const Relatorio = () => {
 
       switch (reportType) {
         case 'AtividadesCaixa':
+  headers = [
+    'Caixa',
+    'Quantidade Faturada',
+    'Funcionário',
+    'Documento',
+    'Data Emissão',
+    'Valor Total',
+    'Método de Pagamento',
+    'Produtos Vendidos',
+  ];
+  data = reportData.flatMap((item) =>
+    item.vendas.length > 0
+      ? item.vendas.map((venda: any) => [
+          item.nomeCaixa || '-',
+          item.quantidadeFaturada?.toFixed(2) || '0.00',
+          item.funcionarioNome || '-',
+          venda.numeroDocumento || '-',
+          venda.dataEmissao ? format(new Date(venda.dataEmissao), 'dd/MM/yyyy') : '-',
+          venda.valorTotal?.toFixed(2) || '0.00',
+          venda.metodoPagamento || '-',
+          venda.vendasProdutos
+            ?.map((vp: any) => `${vp.produtos.nomeProduto} (Qtd: ${vp.quantidadeVendida})`)
+            .join('; ') || '-',
+        ])
+      : [
+          [
+            item.nomeCaixa || '-',
+            item.quantidadeFaturada?.toFixed(2) || '0.00',
+            item.funcionarioNome || '-',
+            '-',
+            '-',
+            '0.00',
+            '-',
+            '-',
+          ],
+        ],
+  );
+  break;
           headers = [
             'Caixa',
             'Quantidade Faturada',
@@ -699,6 +737,44 @@ const Relatorio = () => {
 
       switch (reportType) {
         case 'AtividadesCaixa':
+  headers = [
+    'Caixa',
+    'Quantidade Faturada',
+    'Funcionário',
+    'Documento',
+    'Data Emissão',
+    'Valor Total',
+    'Método de Pagamento',
+    'Produtos Vendidos',
+  ];
+  data = reportData.flatMap((item) =>
+    item.vendas.length > 0
+      ? item.vendas.map((venda: any) => [
+          item.nomeCaixa || '-',
+          item.quantidadeFaturada?.toFixed(2) || '0.00',
+          item.funcionarioNome || '-',
+          venda.numeroDocumento || '-',
+          venda.dataEmissao ? format(new Date(venda.dataEmissao), 'dd/MM/yyyy') : '-',
+          venda.valorTotal?.toFixed(2) || '0.00',
+          venda.metodoPagamento || '-',
+          venda.vendasProdutos
+            ?.map((vp: any) => `${vp.produtos.nomeProduto} (Qtd: ${vp.quantidadeVendida})`)
+            .join('; ') || '-',
+        ])
+      : [
+          [
+            item.nomeCaixa || '-',
+            item.quantidadeFaturada?.toFixed(2) || '0.00',
+            item.funcionarioNome || '-',
+            '-',
+            '-',
+            '0.00',
+            '-',
+            '-',
+          ],
+        ],
+  );
+  break;
           headers = [
             'Caixa',
             'Quantidade Faturada',

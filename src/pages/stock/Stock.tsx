@@ -30,7 +30,6 @@ import Delete from 'components/icons/factor/Delete';
 import Edit from 'components/icons/factor/Edit';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { jwtDecode } from 'jwt-decode';
-
 import {
   getAllStock,
   createStockEntry,
@@ -201,6 +200,22 @@ const Stock: React.FC = () => {
   const [rowsPerPage] = useState(6);
   const [loading, setLoading] = useState(false);
   const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
+  const [userRole, setUserRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        const decoded: { role?: string } = jwtDecode(token);
+        setUserRole(decoded.role || null);
+      }
+    } catch (error) {
+      console.error('Erro ao obter papel do usuário:', error);
+      setFetchError('Erro ao verificar permissões do usuário.');
+    }
+  }, []);
+
+  const isManager = userRole === 'Gerente';
 
   const groupStockEntries = (entries: DadosEntradaEstoque[]) => {
     const grouped: { [key: string]: DadosEntradaEstoque[] } = {};
@@ -1542,12 +1557,10 @@ const Stock: React.FC = () => {
               variant="contained"
               color="secondary"
               onClick={handleOpen}
-              disabled={loading}
+              disabled={loading || isManager}
               startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
               aria-label="Adicionar nova entrada de estoque"
-            >
-              Adicionar Entrada
-            </Button>
+            />
           </Stack>
         </Stack>
       </Paper>
@@ -1567,11 +1580,9 @@ const Stock: React.FC = () => {
               onClick={handleClose}
               variant="outlined"
               color="error"
-              disabled={loading}
+              disabled={loading || isManager}
               aria-label="Fechar modal de entrada de estoque"
-            >
-              Fechar
-            </Button>
+            />
           </Stack>
           <Grid container spacing={2}>
             <Grid item xs={12} sm={6}>
@@ -1670,11 +1681,9 @@ const Stock: React.FC = () => {
                       <IconButton
                         color="error"
                         onClick={() => removeProduct(index)}
-                        disabled={loading}
+                        disabled={loading || isManager}
                         aria-label={`Remover produto ${index + 1}`}
-                      >
-                        <Delete />
-                      </IconButton>
+                      />
                     )}
                   </Stack>
                   <Grid container spacing={2}>
@@ -1791,7 +1800,7 @@ const Stock: React.FC = () => {
                 color="secondary"
                 fullWidth
                 onClick={onSubmit}
-                disabled={loading}
+                disabled={loading || isManager}
                 aria-label={
                   isEditing ? 'Salvar entrada de estoque' : 'Cadastrar entrada de estoque'
                 }
@@ -1822,11 +1831,9 @@ const Stock: React.FC = () => {
               onClick={handleEditStockClose}
               variant="outlined"
               color="error"
-              disabled={loading}
+              disabled={loading || isManager}
               aria-label="Fechar modal de edição de estoque"
-            >
-              Fechar
-            </Button>
+            />
           </Stack>
           <Grid container spacing={2}>
             <Grid item xs={12} sm={6}>
@@ -1899,7 +1906,7 @@ const Stock: React.FC = () => {
                 color="secondary"
                 fullWidth
                 onClick={onStockSubmit}
-                disabled={loading}
+                disabled={loading || isManager}
                 aria-label="Salvar alterações no estoque"
               >
                 {loading ? 'Salvando...' : 'Salvar'}
@@ -1923,11 +1930,9 @@ const Stock: React.FC = () => {
               onClick={handleCloseLocationModal}
               variant="outlined"
               color="error"
-              disabled={loading}
+              disabled={loading || isManager}
               aria-label="Fechar modal de localização"
-            >
-              Fechar
-            </Button>
+            />
           </Stack>
           <Typography variant="subtitle1" sx={{ mb: 2 }}>
             Produto:{' '}
@@ -2102,7 +2107,7 @@ const Stock: React.FC = () => {
                   color="secondary"
                   fullWidth
                   onClick={onLocationSubmit}
-                  disabled={loading}
+                  disabled={loading || isManager}
                   aria-label="Adicionar produto ao armazém"
                 >
                   {loading
@@ -2135,16 +2140,14 @@ const Stock: React.FC = () => {
               variant="outlined"
               color="primary"
               onClick={handleCloseConfirmDelete}
-              disabled={loading}
+              disabled={loading || isManager}
               aria-label="Cancelar exclusão do estoque"
-            >
-              Cancelar
-            </Button>
+            />
             <Button
               variant="contained"
               color="error"
               onClick={handleDeleteStock}
-              disabled={loading}
+              disabled={loading || isManager}
               aria-label="Confirmar exclusão do estoque"
             >
               {loading ? 'Excluindo...' : 'Excluir'}
@@ -2178,11 +2181,9 @@ const Stock: React.FC = () => {
               variant="outlined"
               color="primary"
               onClick={handleCloseConfirmDeleteEntry}
-              disabled={loading}
+              disabled={loading || isManager}
               aria-label="Cancelar exclusão da entrada de estoque"
-            >
-              Cancelar
-            </Button>
+            />
             <Button
               variant="contained"
               color="error"
@@ -2191,7 +2192,7 @@ const Stock: React.FC = () => {
                   ? handleDeleteGroupEntries
                   : handleDeleteStockEntry
               }
-              disabled={loading}
+              disabled={loading || isManager}
               aria-label="Confirmar exclusão da entrada de estoque"
             >
               {loading ? 'Excluindo...' : 'Excluir'}
@@ -2348,19 +2349,15 @@ const Stock: React.FC = () => {
                               <IconButton
                                 color="primary"
                                 onClick={() => handleEditGroup(group)}
-                                disabled={loading}
+                                disabled={loading || isManager}
                                 aria-label={`Editar todas as entradas do grupo ${group.id}`}
-                              >
-                                <Edit />
-                              </IconButton>
+                              />
                               <IconButton
                                 color="error"
                                 onClick={() => handleDeleteGroup(group)}
-                                disabled={loading}
+                                disabled={loading || isManager}
                                 aria-label={`Excluir todas as entradas do grupo ${group.id}`}
-                              >
-                                <Delete />
-                              </IconButton>
+                              />
                             </TableCell>
                           </TableRow>
                         ))
@@ -2479,23 +2476,21 @@ const Stock: React.FC = () => {
                                           <IconButton
                                             color="primary"
                                             onClick={() => handleEditStock(lot)}
-                                            disabled={loading}
+                                            disabled={loading || isManager}
                                             aria-label={`Editar lote ${lot.id} do produto ${group.id_produto}`}
-                                          >
-                                            <Edit />
-                                          </IconButton>
+                                          />
                                           <IconButton
                                             color="error"
                                             onClick={() => handleOpenConfirmDelete(lot.id!)}
-                                            disabled={loading}
+                                            disabled={loading || isManager}
                                             aria-label={`Excluir lote ${lot.id} do produto ${group.id_produto}`}
-                                          >
-                                            <Delete />
-                                          </IconButton>
+                                          />
                                           <IconButton
                                             color="secondary"
                                             onClick={() => handleOpenLocationModal([lot], [])}
-                                            disabled={loading || lot.quantidadeAtual === 0}
+                                            disabled={
+                                              loading || lot.quantidadeAtual === 0 || isManager
+                                            }
                                             aria-label={`Adicionar lote ${lot.id} do produto ${group.id_produto} ao armazém`}
                                           >
                                             <IconifyIcon icon="material-symbols:warehouse" />
@@ -2577,11 +2572,9 @@ const Stock: React.FC = () => {
                           <IconButton
                             color="secondary"
                             onClick={() => handleOpenLocationModal(stockItems, [])}
-                            disabled={loading || group.withoutLocationQuantity === 0}
+                            disabled={loading || isManager || group.withoutLocationQuantity === 0}
                             aria-label={`Adicionar produto ${group.id_produto} ao armazém`}
-                          >
-                            <IconifyIcon icon="material-symbols:warehouse" />
-                          </IconButton>
+                          />
                         </TableCell>
                       </TableRow>
                     );

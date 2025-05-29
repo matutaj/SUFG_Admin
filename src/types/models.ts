@@ -213,7 +213,6 @@ export interface FuncionarioCaixa {
   id_funcionario: string;
   estadoCaixa: boolean;
   quantidadaFaturada: number;
-  valorInicial: number;
   horarioAbertura: Date;
   horarioFechamento: Date | null;
   caixas?: Caixa;
