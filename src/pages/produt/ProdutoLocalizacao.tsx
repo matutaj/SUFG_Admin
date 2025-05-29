@@ -144,6 +144,7 @@ const transferModalStyle = {
 
 const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const navigate = useNavigate();
+  const [openEditModal, setOpenEditModal] = useState(false);
   const [loggedInFuncionarioId, setLoggedInFuncionarioId] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [openConfirmModal, setOpenConfirmModal] = useState(false);
@@ -937,6 +938,7 @@ const handleOpenDestinationModal = useCallback(
         setQuantidadeProduto(location.quantidadeProduto ?? 0);
         setQuantidadeMinimaProduto(location.quantidadeMinimaProduto ?? 0);
         setErrors({ transferItems: [], destinationForm: {} });
+        setOpenEditModal(true);
         log('Editando localização:', location);
       } else {
         setAlert({ severity: 'error', message: 'Localização não encontrada' });
@@ -947,6 +949,17 @@ const handleOpenDestinationModal = useCallback(
 
   // Atualizar localização
   const handleUpdateProductLocation = useCallback(async () => {
+    console.log('[handleUpdateProductLocation] Iniciando atualização:', {
+      editLocationId,
+      idProdutoLocalizacao,
+      idLocalizacao,
+      idSeccao,
+      idPrateleira,
+      idCorredor,
+      quantidadeProduto,
+      quantidadeMinimaProduto,
+    });
+  
     if (!permissions.canUpdate) {
       setAlert({
         severity: 'error',
@@ -955,27 +968,28 @@ const handleOpenDestinationModal = useCallback(
       log('Permissão de atualização negada');
       return;
     }
-    const newErrors: Record<string, string> = {};
-
-    if (!idProdutoLocalizacao) newErrors.idProdutoLocalizacao = 'Produto obrigatório';
-    if (!idLocalizacao) newErrors.idLocalizacao = 'Localização obrigatória';
-    if (!idSeccao) newErrors.idSeccao = 'Seção obrigatória';
-    if (!idPrateleira) newErrors.idPrateleira = 'Prateleira obrigatória';
-    if (!idCorredor) newErrors.idCorredor = 'Corredor obrigatório';
+  
+    const newErrors: FormErrors = {};
+  
+    if (!idProdutoLocalizacao) newErrors.id_produto = 'Produto obrigatório';
+    if (!idLocalizacao) newErrors.id_localizacao = 'Localização obrigatória';
+    if (!idSeccao) newErrors.id_seccao = 'Seção obrigatória';
+    if (!idPrateleira) newErrors.id_prateleira = 'Prateleira obrigatória';
+    if (!idCorredor) newErrors.id_corredor = 'Corredor obrigatório';
     if (quantidadeProduto <= 0) newErrors.quantidadeProduto = 'Quantidade inválida';
     if (quantidadeMinimaProduto < 0) newErrors.quantidadeMinimaProduto = 'Mínimo inválido';
-    if (quantidadeProduto < quantidadeMinimaProduto)
-      newErrors.quantidadeProduto = `Abaixo do mínimo (${quantidadeMinimaProduto})`;
-
+    // Removido: if (quantidadeProduto < quantidadeMinimaProduto) newErrors.quantidadeProduto = `Abaixo do mínimo (${quantidadeMinimaProduto})`;
+  
     let totalStock = 0;
     try {
       const stock = await getStockByProduct(idProdutoLocalizacao);
       if (!stock) throw new Error('Estoque não encontrado');
       totalStock = Number(stock.quantidadeAtual) || 0;
     } catch {
-      newErrors.idProdutoLocalizacao = 'Sem estoque registrado';
+      newErrors.id_produto = 'Sem estoque registrado';
     }
-
+  
+    // Opcional: Ajustar a validação de estoque para ser menos restritiva
     if (totalStock > 0) {
       const currentTotal = getTotalStockInLocations(idProdutoLocalizacao, editLocationId);
       const currentLocation = editLocationId
@@ -984,19 +998,18 @@ const handleOpenDestinationModal = useCallback(
       const currentLocationQty = currentLocation ? (currentLocation.quantidadeProduto ?? 0) : 0;
       const newTotal = currentTotal - currentLocationQty + quantidadeProduto;
       if (newTotal > totalStock) newErrors.quantidadeProduto = `Excede estoque (${totalStock})`;
-    } else {
-      newErrors.quantidadeProduto = 'Sem estoque disponível';
     }
-
+    // Removido: else { newErrors.quantidadeProduto = 'Sem estoque disponível'; }
+  
     if (Object.keys(newErrors).length > 0) {
-      setErrors({ transferItems: [], destinationForm: {} });
+      setErrors((prev) => ({ ...prev, destinationForm: newErrors }));
       return;
     }
-
+  
     try {
       setLoading(true);
       setAlert(null);
-
+  
       const locationData: ProdutoLocalizacao = {
         id: editLocationId,
         id_produto: idProdutoLocalizacao,
@@ -1007,13 +1020,14 @@ const handleOpenDestinationModal = useCallback(
         quantidadeProduto,
         quantidadeMinimaProduto,
       };
-
+  
       await updateProductLocation(editLocationId, locationData);
       setAlert({ severity: 'success', message: 'Localização atualizada' });
-      log('Localização de localização:', locationData);
-
+      log('Localização atualizada:', locationData);
+  
       await fetchData();
       await updateStockData();
+      setOpenEditModal(false);
       setEditLocationId('');
       setIdProdutoLocalizacao('');
       setIdLocalizacao('');
@@ -1022,6 +1036,7 @@ const handleOpenDestinationModal = useCallback(
       setIdCorredor('');
       setQuantidadeProduto(0);
       setQuantidadeMinimaProduto(0);
+      setErrors({ transferItems: [], destinationForm: {} });
     } catch (error: any) {
       console.error('Erro ao atualizar:', error);
       setAlert({ severity: 'error', message: error.message || 'Erro ao atualizar' });
@@ -1604,6 +1619,279 @@ const handleOpenDestinationModal = useCallback(
               </Grid>
             </Box>
           </Modal>
+          {/* Modal de edição */}
+<Modal
+  open={openEditModal}
+  onClose={() => {
+    setOpenEditModal(false);
+    setEditLocationId('');
+    setIdProdutoLocalizacao('');
+    setIdLocalizacao('');
+    setIdSeccao('');
+    setIdPrateleira('');
+    setIdCorredor('');
+    setQuantidadeProduto(0);
+    setQuantidadeMinimaProduto(0);
+    setErrors({ transferItems: [], destinationForm: {} });
+  }}
+  aria-labelledby="modal-edit-title"
+  aria-describedby="modal-edit-description"
+>
+  <Box sx={modalStyle}>
+    <Stack
+      direction="row"
+      justifyContent="space-between"
+      alignItems="center"
+      sx={{ mb: 2 }}
+    >
+      <Typography id="modal-edit-title" variant="h5">
+        Editar Localização do Produto
+      </Typography>
+      <Button
+        variant="outlined"
+        color="error"
+        onClick={() => {
+          setOpenEditModal(false);
+          setEditLocationId('');
+          setIdProdutoLocalizacao('');
+          setIdLocalizacao('');
+          setIdSeccao('');
+          setIdPrateleira('');
+          setIdCorredor('');
+          setQuantidadeProduto(0);
+          setQuantidadeMinimaProduto(0);
+          setErrors({ transferItems: [], destinationForm: {} });
+        }}
+        disabled={loading}
+      >
+        Fechar
+      </Button>
+    </Stack>
+    {loading && (
+      <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+        <CircularProgress size={24} />
+      </Box>
+    )}
+    <Grid container spacing={2}>
+      <Grid item xs={12} sm={6}>
+        <Select
+          value={idProdutoLocalizacao}
+          onChange={(e) => {
+            setIdProdutoLocalizacao(e.target.value);
+            setErrors((prev) => ({
+              ...prev,
+              destinationForm: { ...prev.destinationForm, id_produto: '' },
+            }));
+          }}
+          displayEmpty
+          fullWidth
+          disabled={loading || !permissions.canUpdate}
+          error={!!errors.destinationForm?.id_produto}
+        >
+          <MenuItem value="" disabled>
+            Selecione um Produto
+          </MenuItem>
+          {products.map((prod) => (
+            <MenuItem key={prod.id} value={prod.id}>
+              {prod.nomeProduto}
+            </MenuItem>
+          ))}
+        </Select>
+        {errors.destinationForm?.id_produto && (
+          <FormHelperText error>{errors.destinationForm.id_produto}</FormHelperText>
+        )}
+      </Grid>
+      <Grid item xs={12} sm={6}>
+        <Select
+          value={idLocalizacao}
+          onChange={(e) => {
+            setIdLocalizacao(e.target.value);
+            setErrors((prev) => ({
+              ...prev,
+              destinationForm: { ...prev.destinationForm, id_localizacao: '' },
+            }));
+          }}
+          displayEmpty
+          fullWidth
+          disabled={loading || !permissions.canUpdate}
+          error={!!errors.destinationForm?.id_localizacao}
+        >
+          <MenuItem value="" disabled>
+            Selecione uma Localização
+          </MenuItem>
+          {locations.map((loc) => (
+            <MenuItem key={loc.id} value={loc.id}>
+              {loc.nomeLocalizacao}
+            </MenuItem>
+          ))}
+        </Select>
+        {errors.destinationForm?.id_localizacao && (
+          <FormHelperText error>{errors.destinationForm.id_localizacao}</FormHelperText>
+        )}
+      </Grid>
+      <Grid item xs={12} sm={6}>
+        <Select
+          value={idSeccao}
+          onChange={(e) => {
+            setIdSeccao(e.target.value);
+            setErrors((prev) => ({
+              ...prev,
+              destinationForm: { ...prev.destinationForm, id_seccao: '' },
+            }));
+          }}
+          displayEmpty
+          fullWidth
+          disabled={loading || !permissions.canUpdate}
+          error={!!errors.destinationForm?.id_seccao}
+        >
+          <MenuItem value="" disabled>
+            Selecione uma Seção
+          </MenuItem>
+          {sections.map((sec) => (
+            <MenuItem key={sec.id} value={sec.id}>
+              {sec.nomeSeccao}
+            </MenuItem>
+          ))}
+        </Select>
+        {errors.destinationForm?.id_seccao && (
+          <FormHelperText error>{errors.destinationForm.id_seccao}</FormHelperText>
+        )}
+      </Grid>
+      <Grid item xs={12} sm={6}>
+        <Select
+          value={idPrateleira}
+          onChange={(e) => {
+            setIdPrateleira(e.target.value);
+            setErrors((prev) => ({
+              ...prev,
+              destinationForm: { ...prev.destinationForm, id_prateleira: '' },
+            }));
+          }}
+          displayEmpty
+          fullWidth
+          disabled={loading || !permissions.canUpdate}
+          error={!!errors.destinationForm?.id_prateleira}
+        >
+          <MenuItem value="" disabled>
+            Selecione uma Prateleira
+          </MenuItem>
+          {shelves.map((shelf) => (
+            <MenuItem key={shelf.id} value={shelf.id}>
+              {shelf.nomePrateleira}
+            </MenuItem>
+          ))}
+        </Select>
+        {errors.destinationForm?.id_prateleira && (
+          <FormHelperText error>{errors.destinationForm.id_prateleira}</FormHelperText>
+        )}
+      </Grid>
+      <Grid item xs={12} sm={6}>
+        <Select
+          value={idCorredor}
+          onChange={(e) => {
+            setIdCorredor(e.target.value);
+            setErrors((prev) => ({
+              ...prev,
+              destinationForm: { ...prev.destinationForm, id_corredor: '' },
+            }));
+          }}
+          displayEmpty
+          fullWidth
+          disabled={loading || !permissions.canUpdate}
+          error={!!errors.destinationForm?.id_corredor}
+        >
+          <MenuItem value="" disabled>
+            Selecione um Corredor
+          </MenuItem>
+          {corridors.map((corr) => (
+            <MenuItem key={corr.id} value={corr.id}>
+              {corr.nomeCorredor}
+            </MenuItem>
+          ))}
+        </Select>
+        {errors.destinationForm?.id_corredor && (
+          <FormHelperText error>{errors.destinationForm.id_corredor}</FormHelperText>
+        )}
+      </Grid>
+      <Grid item xs={12} sm={6}>
+        <TextField
+          label="Quantidade"
+          type="number"
+          value={quantidadeProduto}
+          onChange={(e) => {
+            setQuantidadeProduto(parseInt(e.target.value) || 0);
+            setErrors((prev) => ({
+              ...prev,
+              destinationForm: { ...prev.destinationForm, quantidadeProduto: '' },
+            }));
+          }}
+          fullWidth
+          disabled={loading || !permissions.canUpdate}
+          error={!!errors.destinationForm?.quantidadeProduto}
+          helperText={errors.destinationForm?.quantidadeProduto}
+          inputProps={{ min: 0 }}
+        />
+      </Grid>
+      <Grid item xs={12} sm={6}>
+        <TextField
+          label="Quantidade Mínima"
+          type="number"
+          value={quantidadeMinimaProduto}
+          onChange={(e) => {
+            setQuantidadeMinimaProduto(parseInt(e.target.value) || 0);
+            setErrors((prev) => ({
+              ...prev,
+              destinationForm: { ...prev.destinationForm, quantidadeMinimaProduto: '' },
+            }));
+          }}
+          fullWidth
+          disabled={loading || !permissions.canUpdate}
+          error={!!errors.destinationForm?.quantidadeMinimaProduto}
+          helperText={errors.destinationForm?.quantidadeMinimaProduto}
+          inputProps={{ min: 0 }}
+        />
+      </Grid>
+      <Grid item xs={12}>
+        <Stack direction="row" spacing={2}>
+          <Button
+            variant="contained"
+            color="secondary"
+            onClick={() => {
+              setOpenEditModal(false);
+              setEditLocationId('');
+              setIdProdutoLocalizacao('');
+              setIdLocalizacao('');
+              setIdSeccao('');
+              setIdPrateleira('');
+              setIdCorredor('');
+              setQuantidadeProduto(0);
+              setQuantidadeMinimaProduto(0);
+              setErrors({ transferItems: [], destinationForm: {} });
+            }}
+            disabled={loading}
+            fullWidth
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleUpdateProductLocation}
+            disabled={loading || !permissions.canUpdate}
+            fullWidth
+            title={
+              !permissions.canUpdate
+                ? 'Você não tem permissão para atualizar localizações'
+                : ''
+            }
+          >
+            {loading ? 'Salvando...' : 'Salvar'}
+          </Button>
+        </Stack>
+      </Grid>
+    </Grid>
+  </Box>
+</Modal>
 
           {/* Modal de destino */}
           <Modal

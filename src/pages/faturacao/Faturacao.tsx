@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useReducer, useCallback } from 'react';
+import React, { useState, useEffect, useReducer, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import axios from 'axios';
@@ -1525,87 +1525,52 @@ const generatePDF = (fatura: Fatura) => {
   }, [productsInStore, openFaturaModal, faturaState.produtosSelecionados, handleProdutoChange, adicionarNovoProdutoInput, setAlert]);*/
   useEffect(() => {
     let barcodeInput = '';
-    let lastKeyTime = Date.now();
-    let isScanning = false;
   
-    const handleKeyEvent = (event: KeyboardEvent) => {
+    const handleKeyPress = (event: KeyboardEvent) => {
       if (!openFaturaModal) return; // Só processa eventos se o modal de fatura estiver aberto
   
-      const currentTime = Date.now();
-      const timeDiff = currentTime - lastKeyTime;
-  
-      // Log detalhado do elemento focado e evento
-      console.log('Elemento focado:', document.activeElement?.tagName, document.activeElement?.id);
-      console.log('Tecla:', event.key, 'Code:', event.code, 'TimeDiff:', timeDiff);
-  
-      // Detectar entrada rápida (típica de scanners, < 100ms entre teclas)
-      if (timeDiff < 100 && event.key !== 'Enter') {
-        event.preventDefault(); // Impede que os caracteres sejam inseridos em qualquer campo
-        // Filtra apenas caracteres numéricos
-        if (/^[0-9]$/.test(event.key)) {
-          barcodeInput += event.key;
-          console.log('Buffer atual:', barcodeInput, 'Tamanho:', barcodeInput.length);
-          isScanning = true;
-        } else {
-          console.log('Caractere ignorado (não numérico):', event.key);
-        }
-      } else if (event.key === 'Enter' && barcodeInput && isScanning) {
-        event.preventDefault(); // Impede que o "Enter" afete outros campos
-        // Processa o código de barras
-        const referencia = barcodeInput.trim();
-        console.log('Código de barras lido:', referencia, 'Tamanho:', referencia.length);
-  
-        // Valida o tamanho do código (ex.: 12 ou 13 dígitos para EAN-13)
-        if (referencia.length >= 12 && referencia.length <= 13) {
-          let foundProduct = productsInStore.find(
-            (p) => p.referenciaProduto.toLowerCase() === referencia.toLowerCase(),
-          );
-          // Tenta sem o primeiro dígito, se necessário
-          if (!foundProduct && referencia.length > 1) {
-            console.log('Tentando sem o primeiro dígito:', referencia.slice(1));
-            foundProduct = productsInStore.find(
-              (p) => p.referenciaProduto.slice(1).toLowerCase() === referencia.toLowerCase(),
-            );
-          }
-          if (foundProduct && foundProduct.id) {
-            const lastIndex = faturaState.produtosSelecionados.length - 1;
-            handleProdutoChange(lastIndex, 'id', foundProduct.id);
-            // Adiciona um novo campo de produto
-            if (lastIndex === faturaState.produtosSelecionados.length - 1) {
-              adicionarNovoProdutoInput();
-            }
-          } else {
-            setAlert({
-              severity: 'error',
-              message: `Produto com referência ${referencia} não encontrado.`,
-            });
-          }
-        } else {
-          console.log('Código inválido: tamanho incorreto', referencia);
-          setAlert({
-            severity: 'error',
-            message: `Código de barras inválido: ${referencia} (tamanho: ${referencia.length})`,
-          });
-        }
-  
-        barcodeInput = ''; // Reseta o buffer
-        isScanning = false; // Reseta o estado
-      } else if (timeDiff >= 100) {
-        // Reseta o buffer se a entrada for lenta
-        console.log('Resetando buffer: entrada lenta, TimeDiff:', timeDiff);
-        barcodeInput = '';
-        isScanning = false;
+      if (event.key !== 'Enter') {
+        barcodeInput += event.key; // Acumula os caracteres do código de barras
+        return;
       }
   
-      lastKeyTime = currentTime;
+      // Quando "Enter" é detectado, processa o código de barras
+      const referencia = barcodeInput.trim();
+      if (referencia) {
+        const foundProduct = productsInStore.find(
+          (p) => p.referenciaProduto.toLowerCase() === referencia.toLowerCase(),
+        );
+        if (foundProduct && foundProduct.id) {
+          const lastIndex = faturaState.produtosSelecionados.length - 1;
+          handleProdutoChange(lastIndex, 'id', foundProduct.id);
+          // Adiciona um novo campo de produto para a próxima leitura
+          if (lastIndex === faturaState.produtosSelecionados.length - 1) {
+            adicionarNovoProdutoInput();
+          }
+        } else {
+          setAlert({
+            severity: 'error',
+            message: `Produto com referência ${referencia} não encontrado.`,
+          });
+        }
+      }
+      barcodeInput = ''; // Reseta o buffer após processar
     };
   
-    window.addEventListener('keydown', handleKeyEvent);
+    window.addEventListener('keypress', handleKeyPress);
   
     return () => {
-      window.removeEventListener('keydown', handleKeyEvent);
+      window.removeEventListener('keypress', handleKeyPress);
     };
   }, [openFaturaModal, productsInStore, faturaState.produtosSelecionados, handleProdutoChange, adicionarNovoProdutoInput, setAlert]);
+  const lastInputRef = useRef<HTMLInputElement | null>(null);
+
+useEffect(() => {
+  if (lastInputRef.current && openFaturaModal) {
+    lastInputRef.current.focus();
+    console.log('Foco aplicado ao TextField');
+  }
+}, [faturaState.produtosSelecionados, openFaturaModal]);
   const handleOpenCaixaModal = async () => {
     if (!loggedInFuncionarioId) {
       setAlert({ severity: 'error', message: 'Usuário não autenticado. Faça login novamente.' });
