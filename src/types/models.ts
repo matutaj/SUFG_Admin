@@ -391,4 +391,5 @@ export interface AtividadeDoDia {
   id_tarefa: string;
   status: 'Concluída' | 'Em Andamento' | 'Pendente';
   createdAt?: Date;
+  createdBy?: string;
 }

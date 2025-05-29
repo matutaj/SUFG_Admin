@@ -2,6 +2,7 @@ import React, { useState, useEffect, useReducer, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import axios from 'axios';
+import { format, toZonedTime } from 'date-fns-tz';
 import {
   Paper,
   Button,
@@ -134,7 +135,7 @@ const initialFaturaState: FaturaState = {
   localizacao: '',
   email: '',
   metodoPagamento: '',
-  produtosSelecionados: [{ id: '', quantidade: 1 }],
+  produtosSelecionados: [{ id: '', quantidade: 0 }],
   funcionariosCaixaId: '',
   errors: {},
 };
@@ -163,7 +164,7 @@ const faturaReducer = (state: FaturaState, action: FaturaAction): FaturaState =>
     case 'ADD_PRODUTO':
       return {
         ...state,
-        produtosSelecionados: [...state.produtosSelecionados, { id: '', quantidade: 1 }],
+        produtosSelecionados: [...state.produtosSelecionados, { id: '', quantidade: 0}],
       };
     case 'REMOVE_PRODUTO':
       const filteredProdutos = state.produtosSelecionados.filter((_, i) => i !== action.index);
@@ -243,12 +244,18 @@ const validateFatura = (
     errors.metodoPagamento = 'Método de pagamento é obrigatório';
   }
 
-  if (!state.cliente.trim()) {
-    errors.cliente = 'Nome do cliente é obrigatório';
-  }
+  // Removida a validação do campo cliente
+  // if (!state.cliente.trim()) {
+  //   errors.cliente = 'Nome do cliente é obrigatório';
+  // }
 
-  if (state.produtosSelecionados.length === 0 || state.produtosSelecionados.every((p) => !p.id)) {
-    errors.produtos = 'Adicione pelo menos um produto';
+  // Filtrar produtos válidos
+  const produtosValidos = state.produtosSelecionados.filter(
+    (p) => p.id && p.quantidade > 0
+  );
+
+  if (produtosValidos.length === 0) {
+    errors.produtos = 'Adicione pelo menos um produto válido com quantidade maior que 0';
   }
 
   if (!state.funcionariosCaixaId) {
@@ -266,12 +273,7 @@ const validateFatura = (
     return errors;
   }
 
-  state.produtosSelecionados.forEach((p, index) => {
-    if (!p.id) {
-      errors[`produto_${index}`] = 'Selecione um produto';
-      return;
-    }
-
+  produtosValidos.forEach((p, index) => {
     const localizacoesDoProduto = productLocations.filter(
       (loc) =>
         loc.id_produto === p.id && lojaLocations.some((loja) => loja.id === loc.id_localizacao),
@@ -694,150 +696,131 @@ const Faturacao: React.FC = () => {
     }, 0);
   };
 
-  const generatePDF = (fatura: Fatura) => {
-    try {
-      const doc = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
-      });
+  
 
-      doc.setFont('helvetica', 'normal');
-      const blueColor = '#1E90FF';
-      const blackColor = '#000000';
-      const whiteColor = '#FFFFFF';
 
-      doc.setFillColor(blueColor);
-      doc.rect(0, 0, 210, 20, 'F');
-      doc.setTextColor(whiteColor);
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.text('SISTEMA UNIFICADO DE FATURAÇÃO E GESTÃO', 10, 10);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.text('LUANDA- ANGOLA', 10, 18);
-      doc.text('SUFGGERAL@EMAIL.COM', 10, 14);
 
-      doc.setTextColor(blackColor);
-      doc.setFontSize(40);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Fatura.', 10, 35);
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
+  
 
-      doc.text(`Data: ${new Date(fatura.data).toLocaleDateString('pt-BR')}`, 175, 18, {
-        align: 'right',
-      });
+const generatePDF = (fatura: Fatura) => {
+  try {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: [80, 150 + fatura.produtos.length * 5], // 80mm largura, altura dinâmica
+    });
 
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Emitido Para', 10, 50);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      doc.text(fatura.cliente, 10, 55);
-      doc.text(`Tel: ${fatura.telefone || 'N/A'}`, 10, 60);
-      doc.text(`NIF: ${fatura.nif || 'N/A'}`, 10, 65);
-      doc.text(`${fatura.localizacao || 'N/A'}`, 10, 70);
-      doc.setFontSize(20);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 188, 70, { align: 'right' });
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
+    doc.setFont('helvetica', 'normal');
+    const blackColor = '#000000';
 
-      doc.setFontSize(12);
-      doc.setFillColor(blueColor);
-      doc.rect(10, 75, 190, 10, 'F');
-      doc.setTextColor(whiteColor);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Descrição do Produto', 15, 81);
-      doc.text('Qtd', 90, 81, { align: 'center' });
-      doc.text('Preço', 130, 81, { align: 'center' });
-      doc.text('Total', 170, 81, { align: 'center' });
+    // Cabeçalho com informações fiscais
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('SUFG - Sistema Unificado', 40, 8, { align: 'center' });
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text('NIF: 1234567890', 40, 13, { align: 'center' });
+    doc.text('Luanda, Angola', 40, 18, { align: 'center' });
+    doc.text('Email: SUFGGERAL@EMAIL.COM', 40, 23, { align: 'center' });
+    doc.text('Tel: +244 933081862', 40, 28, { align: 'center' });
 
-      const produtosTable = fatura.produtos.map((p) => {
-        const precoVenda = Number(p.produto.precoVenda) || 0;
-        return [
-          p.produto.nomeProduto || 'Produto sem nome',
-          p.quantidade.toString(),
-          `Kzs ${precoVenda.toFixed(2)}`,
-          `Kzs ${(precoVenda * p.quantidade).toFixed(2)}`,
-        ];
-      });
+    // Informações da Fatura
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Fatura: FAT-${fatura.id.slice(-4)}`, 5, 36);
 
-      let finalY = 85;
-      if (produtos.length > 0) {
-        autoTable(doc, {
-          startY: 85,
-          head: [['', '', '', '']],
-          body: produtosTable,
-          theme: 'plain',
-          styles: {
-            fontSize: 10,
-            cellPadding: 2,
-            textColor: blackColor,
-          },
-          columnStyles: {
-            0: { cellWidth: 75 },
-            1: { cellWidth: 40, halign: 'center' },
-            2: { cellWidth: 40, halign: 'center' },
-            3: { cellWidth: 35, halign: 'right' },
-          },
-        });
-        finalY = (doc as any).lastAutoTable.finalY || 85;
-      }
-
-      doc.setFontSize(12);
-      doc.setTextColor(blackColor);
-      doc.setFont('helvetica', 'normal');
-      doc.text('Subtotal', 129, finalY + 10);
-      doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 170, finalY + 10, {
-        align: 'right',
-      });
-      doc.text('Imposto', 130, finalY + 15);
-      doc.text('Kzs 0.00', 170, finalY + 15, { align: 'right' });
-      doc.setFillColor(blueColor);
-      doc.rect(130, finalY + 20, 70, 10, 'F');
-      doc.setTextColor(whiteColor);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Total', 132, finalY + 26);
-      doc.text(`Kzs ${calcularTotalFatura(fatura).toFixed(2)}`, 170, finalY + 26, {
-        align: 'right',
-      });
-
-      doc.setFontSize(12);
-      doc.setTextColor(blackColor);
-      doc.setFont('helvetica sobrenome', 'bold');
-      doc.text('Informação de pagamento', 10, finalY + 40);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      doc.text(
-        'Se você tiver alguma dúvida sobre esta fatura, favor entrar em contato:',
-        10,
-        finalY + 45,
-      );
-
-      doc.setFillColor(blueColor);
-      doc.rect(0, 270, 210, 27, 'F');
-      doc.setTextColor(whiteColor);
-      doc.setFontSize(10);
-      doc.text('+244 933081862', 10, 280);
-      doc.text('SUFGGERAL@EMAIL.COM', 70, 280);
-      doc.text('WWW.SUFGITEL.COM', 150, 280, { align: 'right' });
-
-      const pdfBlob = doc.output('blob');
-      const link = document.createElement('a');
-      link.href = window.URL.createObjectURL(pdfBlob);
-      link.download = `Fatura_${fatura.id}_${new Date().toISOString().split('T')[0]}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (error: any) {
-      setAlert({
-        severity: 'error',
-        message: 'Erro ao gerar PDF: ' + (error.message || 'Tente novamente.'),
-      });
+    // Verificação e formatação da data e hora
+    let dataFatura = new Date(fatura.data);
+    if (isNaN(dataFatura.getTime())) {
+      // Fallback para a data e hora atuais (23:16 WAT, 28 de maio de 2025)
+      dataFatura = toZonedTime(new Date('2025-05-28T23:16:00+01:00'), 'Africa/Luanda');
+    } else {
+      // Converter para o fuso horário de Angola (WAT)
+      dataFatura = toZonedTime(dataFatura, 'Africa/Luanda');
     }
-  };
+
+    doc.text(`Data: ${format(dataFatura, 'dd/MM/yyyy', { timeZone: 'Africa/Luanda' })}`, 5, 41);
+    doc.text(`Hora: ${format(dataFatura, 'HH:mm:ss', { timeZone: 'Africa/Luanda' })}`, 5, 46);
+
+    // Informações do Cliente
+    doc.setFontSize(8);
+    doc.text('----------------------------------------', 5, 51);
+    doc.text(`Cliente: ${fatura.cliente.slice(0, 30)}`, 5, 56);
+    doc.text(`NIF: ${fatura.nif || 'N/D'}`, 5, 61);
+    doc.text(`Morada: ${fatura.localizacao?.slice(0, 30) || 'N/D'}`, 5, 66);
+
+    // Tabela de Produtos
+    const produtosTable = fatura.produtos.map((p) => {
+      const precoVenda = Number(p.produto.precoVenda) || 0;
+      return [
+        p.produto.nomeProduto.slice(0, 18), // Limita o nome do produto
+        p.quantidade.toString(),
+        `${precoVenda.toLocaleString('pt-AO', { minimumFractionDigits: 2 })}`,
+        `${(precoVenda * p.quantidade).toLocaleString('pt-AO', { minimumFractionDigits: 2 })}`,
+      ];
+    });
+
+    let finalY = 71;
+    if (produtosTable.length > 0) {
+      autoTable(doc, {
+        startY: 71,
+        head: [['Descrição', 'Qtd', 'P. Unit.', 'Total']],
+        body: produtosTable,
+        theme: 'plain',
+        styles: {
+          fontSize: 7,
+          cellPadding: 1,
+          textColor: blackColor,
+          overflow: 'linebreak',
+        },
+        headStyles: {
+          fontSize: 7,
+          fontStyle: 'bold',
+          halign: 'center',
+        },
+        columnStyles: {
+          0: { cellWidth: 28 },
+          1: { cellWidth: 10, halign: 'center' },
+          2: { cellWidth: 15, halign: 'right' },
+          3: { cellWidth: 22, halign: 'right' },
+        },
+        margin: { left: 5, right: 5 },
+      });
+      finalY = (doc as any).lastAutoTable.finalY || 71;
+    }
+
+    // Total
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.text('----------------------------------------', 5, finalY + 5);
+    doc.text(
+      `Total: Kz ${calcularTotalFatura(fatura).toLocaleString('pt-AO', { minimumFractionDigits: 2 })}`,
+      5,
+      finalY + 10,
+    );
+
+    // Rodapé
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.text('----------------------------------------', 5, finalY + 15);
+    doc.text('Obrigado pela sua preferência!', 40, finalY + 20, { align: 'center' });
+    doc.text('SUFGGERAL@EMAIL.COM | +244 933081862', 40, finalY + 30, { align: 'center' });
+
+    // Saída do PDF
+    const pdfBlob = doc.output('blob');
+    const link = document.createElement('a');
+    link.href = window.URL.createObjectURL(pdfBlob);
+    link.download = `Fatura_${fatura.id}_${new Date().toISOString().split('T')[0]}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } catch (error: any) {
+    setAlert({
+      severity: 'error',
+      message: 'Erro ao gerar PDF: ' + (error.message || 'Tente novamente.'),
+    });
+  }
+};
 
   const handleOpenFaturaModal = (faturaId?: string) => {
     if (!loggedInFuncionarioId) {
@@ -1048,15 +1031,28 @@ const Faturacao: React.FC = () => {
       navigate('/login');
       return;
     }
-
+  
     try {
       setLoading(true);
-
+  
       await fetchProductsAndLocations();
       await new Promise((resolve) => setTimeout(resolve, 100));
-
+  
+      // Filtrar produtos válidos (com id e quantidade > 0)
+      const produtosValidos = faturaState.produtosSelecionados.filter(
+        (p) => p.id && p.quantidade > 0
+      );
+  
+      // Atualizar o estado com apenas produtos válidos
+      dispatchFatura({
+        type: 'UPDATE_FIELD',
+        field: 'produtosSelecionados',
+        value: produtosValidos.length > 0 ? produtosValidos : [{ id: '', quantidade: 0 }],
+      });
+  
+      // Validar a fatura com os produtos filtrados
       const errors = validateFatura(
-        faturaState,
+        { ...faturaState, produtosSelecionados: produtosValidos },
         productsInStore,
         funcionariosCaixa,
         productLocations,
@@ -1066,15 +1062,16 @@ const Faturacao: React.FC = () => {
       if (Object.keys(errors).length > 0) {
         return;
       }
-
+  
       const dataEmissao = new Date();
       const dataValidade = new Date(dataEmissao);
       dataValidade.setDate(dataEmissao.getDate() + 30);
-
+  
       const clienteExistente = clientes.find((c) => c.numeroContribuinte === faturaState.nif);
-
-      const totalVenda = calcularTotal(faturaState.produtosSelecionados, productsInStore);
-
+  
+      // Usar produtos válidos para calcular o total
+      const totalVenda = calcularTotal(produtosValidos, productsInStore);
+  
       const dadosWrapper: DadosWrapper = {
         Dados: {
           dadosVenda: {
@@ -1085,7 +1082,7 @@ const Faturacao: React.FC = () => {
             tipoDocumento: TipoDocumento.FATURA,
             metodoPagamento: faturaState.metodoPagamento,
             valorTotal: totalVenda,
-            vendasProdutos: faturaState.produtosSelecionados.map((p) => ({
+            vendasProdutos: produtosValidos.map((p) => ({
               id_produto: p.id,
               quantidade: Number(p.quantidade),
             })),
@@ -1093,36 +1090,38 @@ const Faturacao: React.FC = () => {
           },
           cliente: clienteExistente
             ? undefined
-            : [
-                {
-                  nomeCliente: faturaState.cliente,
-                  numeroContribuinte: faturaState.nif,
-                  telefoneCliente: faturaState.telefone,
-                  moradaCliente: faturaState.localizacao,
-                  emailCliente: faturaState.email,
-                } as Cliente,
-              ],
+            : faturaState.cliente.trim()
+              ? [
+                  {
+                    nomeCliente: faturaState.cliente || null,
+                    numeroContribuinte: faturaState.nif || null,
+                    telefoneCliente: faturaState.telefone || null,
+                    moradaCliente: faturaState.localizacao || null,
+                    emailCliente: faturaState.email || null,
+                  } as Cliente,
+                ]
+              : undefined,
         },
       };
-
+  
       const createdVenda = await createSale(dadosWrapper);
       if (!createdVenda.id) {
         throw new Error('ID da venda não retornado pela API.');
       }
-
+  
       const funcionarioCaixa = funcionariosCaixa.find(
         (fc) => fc.id === faturaState.funcionariosCaixaId,
       );
       if (!funcionarioCaixa || !funcionarioCaixa.id) {
         throw new Error('Caixa do funcionário não encontrado.');
       }
-
+  
       const currentQuantidadaFaturada = Number(funcionarioCaixa.quantidadaFaturada) || 0;
       const updatedFuncionarioCaixa: FuncionarioCaixa = {
         ...funcionarioCaixa,
         quantidadaFaturada: currentQuantidadaFaturada + totalVenda,
       };
-
+  
       try {
         await updateEmployeeCashRegister(funcionarioCaixa.id, updatedFuncionarioCaixa);
         setFuncionariosCaixa((prev) =>
@@ -1133,33 +1132,31 @@ const Faturacao: React.FC = () => {
           'Falha ao atualizar o total faturado do caixa: ' + (error.message || 'Tente novamente.'),
         );
       }
-
+  
       const lojaLocations = locations.filter((loc) => loc.tipo === tipo.Loja);
       if (!lojaLocations.length) {
         throw new Error('Nenhuma localização do tipo "Loja" encontrada.');
       }
-
-      const updates = faturaState.produtosSelecionados.map(async (produtoSelecionado) => {
-        // Buscar localizações do tipo "Loja" para o produto
+  
+      const updates = produtosValidos.map(async (produtoSelecionado) => {
         const produtoLocations = productLocations.filter(
           (loc) =>
             loc.id_produto === produtoSelecionado.id &&
             lojaLocations.some((loja) => loja.id === loc.id_localizacao),
         );
-
+  
         if (produtoLocations.length === 0) {
           throw new Error(`Produto ${produtoSelecionado.id} não encontrado em nenhuma loja.`);
         }
-
+  
         let quantidadeRestante = produtoSelecionado.quantidade;
-
-        // Atualizar quantidades nas localizações
+  
         for (const produtoLocation of produtoLocations) {
           if (quantidadeRestante <= 0) break;
-
+  
           const quantidadeAtual = produtoLocation.quantidadeProduto ?? 0;
           const quantidadeADescontar = Math.min(quantidadeAtual, quantidadeRestante);
-
+  
           if (quantidadeADescontar > 0) {
             const newQuantity = quantidadeAtual - quantidadeADescontar;
             try {
@@ -1169,7 +1166,6 @@ const Faturacao: React.FC = () => {
                 id_produto: produtoLocation.id_produto,
               };
               await updateProductLocation(produtoLocation?.id!, updatedLocation);
-              // Atualizar estado local imediatamente
               setProductLocations((prev) =>
                 prev.map((loc) => (loc.id === produtoLocation.id ? updatedLocation : loc)),
               );
@@ -1181,21 +1177,18 @@ const Faturacao: React.FC = () => {
             }
           }
         }
-
+  
         if (quantidadeRestante > 0) {
           throw new Error(
             `Quantidade insuficiente para o produto ${produtoSelecionado.id} após tentar todas as lojas.`,
           );
         }
       });
-
-      // Recarregar productLocations do banco de dados para garantir dados atualizados
+  
       const updatedProductLocations = await getAllProductLocations();
       setProductLocations(updatedProductLocations);
-
-      // Atualizar estoque geral e produto para cada produto selecionado
-      const stockUpdates = faturaState.produtosSelecionados.map(async (produtoSelecionado) => {
-        // Calcular lojaQuantity com base nos dados atualizados
+  
+      const stockUpdates = produtosValidos.map(async (produtoSelecionado) => {
         const lojaQuantity = updatedProductLocations
           .filter(
             (loc) =>
@@ -1203,7 +1196,7 @@ const Faturacao: React.FC = () => {
               lojaLocations.some((loja) => loja.id === loc.id_localizacao),
           )
           .reduce((total, loc) => total + (loc.quantidadeProduto ?? 0), 0);
-
+  
         const armazemLocation = locations.find((loc) =>
           loc.nomeLocalizacao.toLowerCase().includes('armazém'),
         );
@@ -1216,8 +1209,7 @@ const Faturacao: React.FC = () => {
           : null;
         const armazemQuantity = Number(armazemProdutoLocation?.quantidadeProduto) || 0;
         const estoqueGeral = lojaQuantity + armazemQuantity;
-
-        // Atualizar estoque geral
+  
         try {
           const existingStock = await getStockByProduct(produtoSelecionado.id);
           if (!existingStock || !existingStock.id) {
@@ -1235,13 +1227,12 @@ const Faturacao: React.FC = () => {
             `Falha ao atualizar estoque do produto ${produtoSelecionado.id}: ${error.message || 'Tente novamente.'}`,
           );
         }
-
-        // Atualizar produto
+  
         const produto = productsInStore.find((p) => p.id === produtoSelecionado.id);
         if (!produto || !produto.id) {
           throw new Error(`Produto ${produtoSelecionado.id} não encontrado.`);
         }
-
+  
         try {
           const updatedProduto: Produto = {
             ...produto,
@@ -1255,11 +1246,11 @@ const Faturacao: React.FC = () => {
           );
         }
       });
-
+  
       await Promise.all(updates);
       await Promise.all(stockUpdates);
-
-      const novosProdutosFatura = faturaState.produtosSelecionados.map((p) => {
+  
+      const novosProdutosFatura = produtosValidos.map((p) => {
         const produto = productsInStore.find((prod) => prod.id === p.id);
         if (!produto || !produto.id) {
           throw new Error(`Produto com ID ${p.id} não encontrado.`);
@@ -1272,10 +1263,10 @@ const Faturacao: React.FC = () => {
           quantidade: p.quantidade,
         };
       });
-
+  
       const newFatura: Fatura = {
         id: createdVenda.id,
-        cliente: faturaState.cliente,
+        cliente: faturaState.cliente || 'Cliente Anônimo',
         nif: faturaState.nif || null,
         telefone: faturaState.telefone || null,
         localizacao: faturaState.localizacao || null,
@@ -1289,13 +1280,13 @@ const Faturacao: React.FC = () => {
           quantidadaFaturada: currentQuantidadaFaturada + totalVenda,
         },
       };
-
+  
       setFaturas((prev) => [...prev, newFatura]);
-
+  
       if (!clienteExistente && createdVenda.id_cliente) {
         const novoCliente: Cliente = {
           id: createdVenda.id_cliente,
-          nomeCliente: faturaState.cliente,
+          nomeCliente: faturaState.cliente || 'Cliente Anônimo',
           numeroContribuinte: faturaState.nif,
           telefoneCliente: faturaState.telefone,
           moradaCliente: faturaState.localizacao,
@@ -1303,7 +1294,7 @@ const Faturacao: React.FC = () => {
         };
         setClientes((prev) => [...prev, novoCliente]);
       }
-
+  
       setAlert({ severity: 'success', message: 'Fatura criada com sucesso!' });
       generatePDF(newFatura);
       handleCloseFaturaModal();
