@@ -212,85 +212,104 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       console.log(message, ...args);
     }
   };
-  // Adicionei este useEffect para verificar estoque baixo periodicamente
+  const isStoreLocation = useCallback(
+    (locationId: string) => {
+      const location = locations.find((loc) => loc.id === locationId);
+      return location?.tipo === 'Loja';
+    },
+    [locations],
+  );
+  // Atualize o useEffect que verifica estoque baixo:
   useEffect(() => {
-    const checkLowStock = async () => {
-      try {
-        const userData = await getUserData();
-        const userRole = userData?.role;
+    // Na verificação de estoque baixo, use:
+    useEffect(() => {
+      const checkLowStock = async () => {
+        try {
+          const userData = await getUserData();
+          if (!userData || !userData.id_funcao) return;
 
-        // Verifica se o usuário tem permissão para receber alertas
-        if (!userRole || !['Admin', 'Gerente', 'Estoquista', 'Repositor'].includes(userRole)) {
-          return;
-        }
+          // Apenas estas funções podem receber notificações de estoque baixo
+          const allowedFunctions = ['1', '2', '3', '4'];
+          if (!allowedFunctions.includes(userData.id_funcao)) return;
 
-        productLocations.forEach((loc) => {
-          const currentQty = loc.quantidadeProduto ?? 0;
-          const minQty = loc.quantidadeMinimaProduto ?? 0;
+          productLocations.forEach((loc) => {
+            const currentQty = loc.quantidadeProduto ?? 0;
+            const minQty = loc.quantidadeMinimaProduto ?? 0;
 
-          if (currentQty <= minQty) {
-            const product = products.find((p) => p.id === loc.id_produto);
-            const location = locations.find((l) => l.id === loc.id_localizacao);
+            if (currentQty <= minQty) {
+              const product = products.find((p) => p.id === loc.id_produto);
+              const location = locations.find((l) => l.id === loc.id_localizacao);
 
-            if (product && location) {
-              const notificationKey = `${loc.id_produto}-${loc.id_localizacao}`;
+              if (product && location) {
+                const notificationKey = `${loc.id_produto}-${loc.id_localizacao}-low-stock`;
 
-              // Verifica se já notificou para evitar duplicatas
-              if (!notifiedProducts.has(notificationKey)) {
-                const locationType = isStoreLocation(location.id!) ? 'Loja' : 'Armazém';
-                const message = `Estoque baixo: ${product.nomeProduto} (${locationType}) - Quantidade: ${currentQty} (Mínimo: ${minQty})`;
+                if (!notifiedProducts.has(notificationKey)) {
+                  const locationType = isStoreLocation(location.id!) ? 'Loja' : 'Armazém';
+                  const message = `Estoque baixo: ${product.nomeProduto} (${locationType}) - Quantidade: ${currentQty} (Mínimo: ${minQty})`;
 
-                addNotification({
-                  message,
-                  type: 'low_stock',
-                  productId: product.id,
-                  locationId: location.id,
-                });
+                  addNotification({
+                    message,
+                    type: 'low_stock',
+                    productId: product.id,
+                    locationId: location.id,
+                  });
 
-                // Adiciona ao conjunto de notificações enviadas
-                setNotifiedProducts((prev) => new Set(prev).add(notificationKey));
+                  setNotifiedProducts((prev) => new Set(prev).add(notificationKey));
+                }
               }
             }
-          }
-        });
-      } catch (error) {
-        console.error('Erro ao verificar estoque baixo:', error);
-      }
-    };
-
-    // Verificar imediatamente ao carregar
-    checkLowStock();
-
-    // Verificar a cada 5 minutos
-    const interval = setInterval(checkLowStock, 300000);
-
-    return () => clearInterval(interval);
-  }, [productLocations, products, locations, notifiedProducts, addNotification]);
-
-  // Limpar notificações de produtos que já não estão com estoque baixo
-  useEffect(() => {
-    const newNotifiedProducts = new Set<string>();
-
-    productLocations.forEach((loc) => {
-      const currentQty = loc.quantidadeProduto ?? 0;
-      const minQty = loc.quantidadeMinimaProduto ?? 0;
-
-      if (currentQty <= minQty) {
-        newNotifiedProducts.add(`${loc.id_produto}-${loc.id_localizacao}`);
-      }
-    });
-
-    // Remove notificações de produtos que já não estão com estoque baixo
-    setNotifiedProducts((prev) => {
-      const updated = new Set<string>();
-      prev.forEach((key) => {
-        if (newNotifiedProducts.has(key)) {
-          updated.add(key);
+          });
+        } catch (error) {
+          console.error('Erro ao verificar estoque baixo:', error);
         }
-      });
-      return updated;
-    });
-  }, [productLocations]);
+      };
+
+      if (productLocations.length > 0 && products.length > 0 && locations.length > 0) {
+        checkLowStock();
+      }
+    }, [productLocations, products, locations, addNotification, isStoreLocation, notifiedProducts]);
+    if (productLocations.length > 0 && products.length > 0 && locations.length > 0) {
+      checkLowStock();
+    }
+  }, [productLocations, products, locations, addNotification, isStoreLocation, notifiedProducts]);
+
+  useEffect(() => {
+    if (productLocations.length > 0 && products.length > 0 && locations.length > 0) {
+      // Disparar verificação inicial de estoque baixo
+      const checkInitialStock = async () => {
+        try {
+          productLocations.forEach((loc) => {
+            if ((loc.quantidadeProduto ?? 0) <= (loc.quantidadeMinimaProduto ?? 0)) {
+              const product = products.find((p) => p.id === loc.id_produto);
+              const location = locations.find((l) => l.id === loc.id_localizacao);
+
+              if (product && location) {
+                const notificationKey = `${loc.id_produto}-${loc.id_localizacao}-low-stock`;
+
+                if (!notifiedProducts.has(notificationKey)) {
+                  const locationType = isStoreLocation(location.id!) ? 'Loja' : 'Armazém';
+                  const message = `Estoque baixo: ${product.nomeProduto} (${locationType}) - Quantidade: ${loc.quantidadeProduto} (Mínimo: ${loc.quantidadeMinimaProduto})`;
+
+                  addNotification({
+                    message,
+                    type: 'low_stock',
+                    productId: product.id,
+                    locationId: location.id,
+                  });
+
+                  setNotifiedProducts((prev) => new Set(prev).add(notificationKey));
+                }
+              }
+            }
+          });
+        } catch (error) {
+          console.error('Erro na verificação inicial de estoque:', error);
+        }
+      };
+
+      checkInitialStock();
+    }
+  }, [productLocations, products, locations]);
 
   // Monitorar alterações no localStorage
   useEffect(() => {
@@ -307,15 +326,6 @@ const ProductLocationComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
-
-  // Verificar se a localização é Loja
-  const isStoreLocation = useCallback(
-    (locationId: string) => {
-      const location = locations.find((loc) => loc.id === locationId);
-      return location?.tipo === 'Loja';
-    },
-    [locations],
-  );
 
   // Disparar alerta de estoque baixo
   const handleLowStockAlert = useCallback(

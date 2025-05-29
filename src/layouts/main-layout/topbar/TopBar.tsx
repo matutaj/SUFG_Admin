@@ -21,7 +21,9 @@ import ElevationScroll from './ElevationScroll';
 import Notification from 'components/icons/appbar/Notification';
 import { useNotifications } from '../../../NotificationContext';
 import { useState, useEffect } from 'react';
+import { getAllProductLocations, getAllProducts, getAllLocations } from 'api/methods';
 import { getUserData } from '../../../api/authUtils';
+import { ProdutoLocalizacao, Produto, Localizacao } from 'types/models';
 import type { UserData } from '../../../api/authUtils';
 
 interface TopBarProps {
@@ -33,6 +35,9 @@ const TopBar = ({ drawerWidth, onHandleDrawerToggle }: TopBarProps) => {
   const { notifications, removeNotification, markAsRead } = useNotifications();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [user, setUser] = useState<UserData | null>(null);
+  const [lowStockProducts, setLowStockProducts] = useState<ProdutoLocalizacao[]>([]);
+  const [products, setProducts] = useState<Produto[]>([]);
+  const [locations, setLocations] = useState<Localizacao[]>([]);
 
   const handleOpenNotifications = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -47,15 +52,73 @@ const TopBar = ({ drawerWidth, onHandleDrawerToggle }: TopBarProps) => {
     fetchUser();
   }, []);
 
-  const filteredNotifications = notifications.filter((notification) => {
-    if (notification.type === 'cashier') {
-      return user && ['Estoquista', 'Repositor'].includes(user.role || '');
-    }
-    if (notification.type === 'low_stock') {
-      return ['1', '2', '3', '4'].includes(user?.role || '');
-    }
-    return true;
-  });
+  // Buscar produtos com estoque baixo, produtos e localizações
+  useEffect(() => {
+    const fetchLowStockProducts = async () => {
+      try {
+        if (user && ['Admin', 'Gerente', 'Estoquista', 'Repositor'].includes(user.role || '')) {
+          // Buscar todas as localizações
+          const allLocations = await getAllLocations();
+          setLocations(allLocations);
+          console.log('[TopBar] Localizações carregadas:', allLocations);
+
+          // Buscar todas as localizações de produtos
+          const allProductLocations = await getAllProductLocations();
+          const lowStock = allProductLocations.filter(
+            (loc) => (loc.quantidadeProduto ?? 0) <= (loc.quantidadeMinimaProduto ?? 0),
+          );
+
+          // Extrair IDs únicos de produtos
+          const productIds = [...new Set(lowStock.map((loc) => loc.id_produto))];
+
+          // Buscar dados dos produtos correspondentes
+          const allProducts = await getAllProducts();
+          const filteredProducts = allProducts.filter((product) =>
+            productIds.includes(product.id!),
+          );
+
+          setLowStockProducts(lowStock);
+          setProducts(filteredProducts);
+          console.log('[TopBar] Produtos com estoque baixo filtrados:', lowStock);
+          console.log('[TopBar] Produtos carregados:', filteredProducts);
+        }
+      } catch (error) {
+        console.error('[TopBar] Erro ao buscar dados:', error);
+      }
+    };
+    fetchLowStockProducts();
+  }, [user]);
+
+  // Combinar notificações existentes com alertas de estoque baixo
+  const filteredNotifications = notifications
+    .filter((notification) => {
+      if (notification.type === 'cashier') {
+        return user && ['Estoquista', 'Repositor'].includes(user.role || '');
+      }
+      if (notification.type === 'low_stock') {
+        return ['Admin', 'Gerente', 'Estoquista', 'Repositor'].includes(user?.role || '');
+      }
+      return true;
+    })
+    .concat(
+      lowStockProducts.map((product) => {
+        const productData = products.find((p) => p.id === product.id_produto);
+        const locationData = locations.find((loc) => loc.id === product.id_localizacao);
+        return {
+          id: `low-stock-${product.id_produto}-${product.id_localizacao}`,
+          type: 'low_stock',
+          message: `ALERTA DE ESTOQUE BAIXO: ${productData?.nomeProduto || 'Produto desconhecido'} (${
+            locationData?.nomeLocalizacao ||
+            product.localizacoes?.nomeLocalizacao ||
+            'Localização desconhecida'
+          }, ${locationData?.tipo || 'Tipo desconhecido'}) - Quantidade: ${
+            product.quantidadeProduto
+          } (Mínimo: ${product.quantidadeMinimaProduto})`,
+          timestamp: new Date(),
+          read: false,
+        };
+      }),
+    );
 
   const handleCloseNotifications = () => {
     setAnchorEl(null);
@@ -65,8 +128,8 @@ const TopBar = ({ drawerWidth, onHandleDrawerToggle }: TopBarProps) => {
     removeNotification(id);
   };
 
-  // Lista de funções que têm permissão para ver o botão de notificações
-  const allowedRoles = ['Estoquista', 'Repositor', 'Admin', 'Gerente'];
+  // Lista de funções com permissão para ver o botão de notificações
+  const allowedRoles = ['Admin', 'Gerente', 'Estoquista', 'Repositor'];
 
   // Verifica se o usuário tem permissão para ver o botão de notificações
   const hasNotificationPermission = user && allowedRoles.includes(user.role || '');
@@ -99,7 +162,6 @@ const TopBar = ({ drawerWidth, onHandleDrawerToggle }: TopBarProps) => {
           </Stack>
 
           <Stack direction="row" alignItems="center" columnGap={{ xs: 1, sm: 2, md: 3 }}>
-            {/* Renderiza o botão de notificações apenas se o usuário tiver permissão */}
             {hasNotificationPermission && (
               <IconButton
                 aria-label="notifications"
@@ -126,7 +188,6 @@ const TopBar = ({ drawerWidth, onHandleDrawerToggle }: TopBarProps) => {
           </Stack>
         </Toolbar>
 
-        {/* O Popover de notificações também deve ser condicional */}
         {hasNotificationPermission && (
           <Popover
             open={Boolean(anchorEl)}
