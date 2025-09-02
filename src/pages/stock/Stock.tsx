@@ -200,22 +200,6 @@ const Stock: React.FC = () => {
   const [rowsPerPage] = useState(6);
   const [loading, setLoading] = useState(false);
   const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
-  const [userRole, setUserRole] = useState<string | null>(null);
-
-  useEffect(() => {
-    try {
-      const token = localStorage.getItem('token');
-      if (token) {
-        const decoded: { role?: string } = jwtDecode(token);
-        setUserRole(decoded.role || null);
-      }
-    } catch (error) {
-      console.error('Erro ao obter papel do usuário:', error);
-      setFetchError('Erro ao verificar permissões do usuário.');
-    }
-  }, []);
-
-  const isManager = userRole === 'Gerente';
 
   const groupStockEntries = (entries: DadosEntradaEstoque[]) => {
     const grouped: { [key: string]: DadosEntradaEstoque[] } = {};
@@ -417,6 +401,7 @@ const Stock: React.FC = () => {
       setSelectedStock(stocks[0]);
       setLocationIndex(0);
 
+      // Calcular a quantidade não alocada para o produto
       const productId = stocks[0].id_produto;
       const productLocationsForProduct = productLocations.filter(
         (loc) =>
@@ -430,20 +415,18 @@ const Stock: React.FC = () => {
       const totalStockQuantity = stocks.reduce((sum, stock) => sum + stock.quantidadeAtual, 0);
       const unallocatedQuantity = Math.max(0, totalStockQuantity - locatedQuantity);
 
-      const existingLocation = productLocationsForProduct[0]; // Usar o primeiro registro correspondente, se existir
-
-      // Garantir que id_seccao seja válido
-      const defaultSectionId = sections.length > 0 ? sections[0].id : '';
-      if (!defaultSectionId) {
-        setFetchError('Nenhuma seção disponível. Adicione seções antes de alocar produtos.');
-        return;
-      }
+      // Verifica se já existe um registro para o produto em uma localização do tipo "Armazém"
+      const existingLocation = productLocations.find(
+        (loc) =>
+          loc.id_produto === productId &&
+          locations.find((l) => l.id === loc.id_localizacao)?.tipo === tipo.Armazem,
+      );
 
       setLocationForm({
         id_produto: productId,
         id_localizacao: existingLocation?.id_localizacao || '',
         quantidadeProduto: entries.length > 0 ? entries[0].quantidadeRecebida : unallocatedQuantity,
-        id_seccao: existingLocation?.id_seccao || defaultSectionId,
+        id_seccao: existingLocation?.id_seccao || '',
         id_prateleira: existingLocation?.id_prateleira || '',
         id_corredor: existingLocation?.id_corredor || '',
         quantidadeMinimaProduto: existingLocation?.quantidadeMinimaProduto || 0,
@@ -451,7 +434,7 @@ const Stock: React.FC = () => {
       setErrors({});
       setOpenLocationModal(true);
     },
-    [productLocations, locations, sections],
+    [productLocations, locations],
   );
 
   const handleCloseLocationModal = useCallback(() => {
@@ -676,22 +659,8 @@ const Stock: React.FC = () => {
     if (!locationForm.id_localizacao) newErrors.id_localizacao = 'Localização é obrigatória';
     if (locationForm.quantidadeProduto === undefined || locationForm.quantidadeProduto <= 0)
       newErrors.quantidadeProduto = 'Quantidade deve ser maior que 0';
-    if (!locationForm.id_seccao) newErrors.id_seccao = 'Seção é obrigatória';
-    if (!locationForm.id_prateleira) newErrors.id_prateleira = 'Prateleira é obrigatória';
-    if (!locationForm.id_corredor) newErrors.id_corredor = 'Corredor é obrigatório';
-    if (
-      locationForm.quantidadeMinimaProduto === undefined ||
-      locationForm.quantidadeMinimaProduto < 0
-    ) {
-      newErrors.quantidadeMinimaProduto = 'Quantidade mínima deve ser não negativa';
-    }
 
-    // Adicionar validação extra para garantir que id_seccao existe no banco
-    if (locationForm.id_seccao && !sections.find((s) => s.id === locationForm.id_seccao)) {
-      newErrors.id_seccao = 'Seção selecionada não existe';
-    }
-
-    // Validação de quantidade
+    // Calcular a quantidade não alocada para validação
     const productId = locationForm.id_produto;
     const productLocationsForProduct = productLocations.filter(
       (loc) =>
@@ -706,46 +675,26 @@ const Stock: React.FC = () => {
     const totalStockQuantity = stockItems.reduce((sum, stock) => sum + stock.quantidadeAtual, 0);
     const unallocatedQuantity = Math.max(0, totalStockQuantity - locatedQuantity);
 
-    // Verificar se é uma atualização de um registro existente
-    const existingLocation = productLocations.find(
-      (loc) =>
-        loc.id_produto === locationForm.id_produto &&
-        loc.id_localizacao === locationForm.id_localizacao &&
-        loc.id_seccao === locationForm.id_seccao &&
-        loc.id_prateleira === locationForm.id_prateleira &&
-        loc.id_corredor === locationForm.id_corredor,
-    );
-
     if (lastEntries.length > 0) {
-      // Caso esteja processando entradas (lastEntries), limitar à quantidade da entrada
       if (locationForm.quantidadeProduto! > lastEntries[locationIndex].quantidadeRecebida) {
         newErrors.quantidadeProduto = `Quantidade não pode exceder a entrada (${lastEntries[locationIndex].quantidadeRecebida})`;
       }
-    } else if (existingLocation) {
-      // Atualização de registro existente: validar contra o estoque total
-      const newTotalInLocation =
-        existingLocation.quantidadeProduto + locationForm.quantidadeProduto!;
-      if (newTotalInLocation > totalStockQuantity) {
-        newErrors.quantidadeProduto = `Quantidade total no registro (${newTotalInLocation}) não pode exceder o estoque disponível (${totalStockQuantity})`;
-      }
-    } else {
-      // Novo registro: limitar à quantidade não alocada
-      if (locationForm.quantidadeProduto! > unallocatedQuantity) {
-        newErrors.quantidadeProduto = `Quantidade não pode exceder o disponível (${unallocatedQuantity})`;
-      }
+    } else if (locationForm.quantidadeProduto! > unallocatedQuantity) {
+      newErrors.quantidadeProduto = `Quantidade não pode exceder o disponível (${unallocatedQuantity})`;
     }
 
+    if (!locationForm.id_seccao) newErrors.id_seccao = 'Seção é obrigatória';
+    if (!locationForm.id_prateleira) newErrors.id_prateleira = 'Prateleira é obrigatória';
+    if (!locationForm.id_corredor) newErrors.id_corredor = 'Corredor é obrigatório';
+    if (
+      locationForm.quantidadeMinimaProduto === undefined ||
+      locationForm.quantidadeMinimaProduto < 0
+    ) {
+      newErrors.quantidadeMinimaProduto = 'Quantidade mínima deve ser não negativa';
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [
-    locationForm,
-    productLocations,
-    locations,
-    currentStock,
-    lastEntries,
-    locationIndex,
-    sections,
-  ]);
+  }, [locationForm, productLocations, locations, currentStock, lastEntries, locationIndex]);
 
   const onSubmit = useCallback(async () => {
     if (!validateForm()) return;
@@ -984,8 +933,6 @@ const Stock: React.FC = () => {
 
     try {
       setLoading(true);
-      setFetchError(null);
-
       const locationData: ProdutoLocalizacao = {
         id_produto: locationForm.id_produto!,
         id_localizacao: locationForm.id_localizacao!,
@@ -1007,64 +954,56 @@ const Stock: React.FC = () => {
       );
 
       if (existingLocation) {
-        if (!existingLocation.id) {
-          throw new Error('ID inválido para ProdutoLocalizacao');
+        // Verificação adicional do ID
+        if (
+          !existingLocation.id ||
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            existingLocation.id,
+          )
+        ) {
+          console.error('ID inválido para ProdutoLocalizacao:', existingLocation);
+          setFetchError(
+            'ID do registro de localização inválido. Tente novamente após atualizar os dados.',
+          );
+          return;
         }
 
-        // Dados para atualização
-        const updatedData: Partial<ProdutoLocalizacao> = {
+        console.log('Atualizando localização existente:', {
           id: existingLocation.id,
-          id_produto: existingLocation.id_produto,
-          id_localizacao: existingLocation.id_localizacao,
-          id_seccao: existingLocation.id_seccao,
-          id_prateleira: existingLocation.id_prateleira,
-          id_corredor: existingLocation.id_corredor,
-          lote: existingLocation.lote,
-          dataValidadeLote: existingLocation.dataValidadeLote,
-          quantidadeProduto: existingLocation.quantidadeProduto + locationData.quantidadeProduto,
-          quantidadeMinimaProduto: locationData.quantidadeMinimaProduto,
-        };
-
-        // Log dos campos do update
-        console.log('Atualizando ProdutoLocalizacao:', {
-          id: existingLocation.id,
-          id_produto: locationData.id_produto,
-          id_localizacao: locationData.id_localizacao,
-          id_seccao: locationData.id_seccao,
-          id_prateleira: locationData.id_prateleira,
-          id_corredor: locationData.id_corredor,
-          quantidadeProdutoAtual: existingLocation.quantidadeProduto,
-          quantidadeProdutoNova: updatedData.quantidadeProduto,
-          quantidadeMinimaProduto: updatedData.quantidadeMinimaProduto,
-          dataUpdate: new Date().toISOString(),
+          currentQuantity: existingLocation.quantidadeProduto,
+          newQuantity: locationData.quantidadeProduto,
+          updatedData: {
+            quantidadeProduto: existingLocation.quantidadeProduto + locationData.quantidadeProduto,
+            quantidadeMinimaProduto: locationData.quantidadeMinimaProduto,
+          },
         });
 
         // Atualiza a quantidade do registro existente
-        const updatedLocation = await updateProductLocation(existingLocation.id, updatedData);
+        const updatedData: Partial<ProdutoLocalizacao> = {
+          quantidadeProduto: existingLocation.quantidadeProduto + locationData.quantidadeProduto,
+          quantidadeMinimaProduto: locationData.quantidadeMinimaProduto,
+        };
+        console.log('Tentando atualizar localização:', {
+          id: existingLocation.id,
+          existingLocation,
+          updatedData,
+        });
+        const updatedLocation = await updateProductLocation(existingLocation.id!, updatedData);
+
+        // Atualiza o estado local
         setProductLocations((prev) =>
           prev.map((loc) =>
             loc.id === existingLocation.id ? { ...loc, ...updatedLocation } : loc,
           ),
         );
       } else {
-        // Log dos campos para criação
-        console.log('Criando novo ProdutoLocalizacao:', {
-          id_produto: locationData.id_produto,
-          id_localizacao: locationData.id_localizacao,
-          id_seccao: locationData.id_seccao,
-          id_prateleira: locationData.id_prateleira,
-          id_corredor: locationData.id_corredor,
-          quantidadeProduto: locationData.quantidadeProduto,
-          quantidadeMinimaProduto: locationData.quantidadeMinimaProduto,
-          dataCriacao: new Date().toISOString(),
-        });
-
+        console.log('Criando novo registro de localização:', locationData);
         // Cria um novo registro
         const newLocation = await createProductLocation(locationData);
         setProductLocations((prev) => [...prev, newLocation]);
       }
 
-      // Atualizar productsWithoutLocation
+      // Recalcular produtos sem localização após alocação
       const updatedStock = currentStock.map((stockItem) => {
         if (stockItem.id_produto === locationData.id_produto) {
           const productLocationsForProduct = [
@@ -1073,7 +1012,7 @@ const Stock: React.FC = () => {
                 loc.id_produto === stockItem.id_produto &&
                 locations.find((l) => l.id === loc.id_localizacao)?.tipo === tipo.Armazem,
             ),
-            ...(existingLocation ? [] : [locationData]),
+            ...(existingLocation ? [] : [locationData]), // Incluir nova localização, se criada
           ];
           const locatedQuantity = productLocationsForProduct.reduce(
             (sum, loc) => sum + (loc.quantidadeProduto || 0),
@@ -1103,6 +1042,12 @@ const Stock: React.FC = () => {
             locations.find((l) => l.id === loc.id_localizacao)?.tipo === tipo.Armazem,
         );
 
+        console.log('Avançando para o próximo produto:', {
+          nextIndex,
+          nextProductId,
+          nextExistingLocation,
+        });
+
         setLocationIndex(nextIndex);
         setLocationForm({
           id_produto: nextProductId,
@@ -1118,11 +1063,10 @@ const Stock: React.FC = () => {
         setSuccessMessage('Todos os produtos foram adicionados ao armazém com sucesso!');
         handleCloseLocationModal();
       }
-
-      await fetchData();
-    } catch (error: any) {
+      await fetchData(); // Recarregar dados para garantir consistência
+    } catch (error) {
       console.error('Erro ao adicionar produto ao armazém:', error);
-      setFetchError(`Erro ao adicionar produto ao armazém: ${error.message || error}`);
+      setFetchError('Erro ao adicionar produto ao armazém. Verifique os logs para mais detalhes.');
     } finally {
       setLoading(false);
     }
@@ -1557,10 +1501,12 @@ const Stock: React.FC = () => {
               variant="contained"
               color="secondary"
               onClick={handleOpen}
-              disabled={loading || isManager}
+              disabled={loading}
               startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
               aria-label="Adicionar nova entrada de estoque"
-            />
+            >
+              Adicionar Entrada
+            </Button>
           </Stack>
         </Stack>
       </Paper>
@@ -1580,9 +1526,11 @@ const Stock: React.FC = () => {
               onClick={handleClose}
               variant="outlined"
               color="error"
-              disabled={loading || isManager}
+              disabled={loading}
               aria-label="Fechar modal de entrada de estoque"
-            />
+            >
+              Fechar
+            </Button>
           </Stack>
           <Grid container spacing={2}>
             <Grid item xs={12} sm={6}>
@@ -1681,9 +1629,11 @@ const Stock: React.FC = () => {
                       <IconButton
                         color="error"
                         onClick={() => removeProduct(index)}
-                        disabled={loading || isManager}
+                        disabled={loading}
                         aria-label={`Remover produto ${index + 1}`}
-                      />
+                      >
+                        <Delete />
+                      </IconButton>
                     )}
                   </Stack>
                   <Grid container spacing={2}>
@@ -1800,7 +1750,7 @@ const Stock: React.FC = () => {
                 color="secondary"
                 fullWidth
                 onClick={onSubmit}
-                disabled={loading || isManager}
+                disabled={loading}
                 aria-label={
                   isEditing ? 'Salvar entrada de estoque' : 'Cadastrar entrada de estoque'
                 }
@@ -1831,9 +1781,11 @@ const Stock: React.FC = () => {
               onClick={handleEditStockClose}
               variant="outlined"
               color="error"
-              disabled={loading || isManager}
+              disabled={loading}
               aria-label="Fechar modal de edição de estoque"
-            />
+            >
+              Fechar
+            </Button>
           </Stack>
           <Grid container spacing={2}>
             <Grid item xs={12} sm={6}>
@@ -1906,7 +1858,7 @@ const Stock: React.FC = () => {
                 color="secondary"
                 fullWidth
                 onClick={onStockSubmit}
-                disabled={loading || isManager}
+                disabled={loading}
                 aria-label="Salvar alterações no estoque"
               >
                 {loading ? 'Salvando...' : 'Salvar'}
@@ -1930,9 +1882,11 @@ const Stock: React.FC = () => {
               onClick={handleCloseLocationModal}
               variant="outlined"
               color="error"
-              disabled={loading || isManager}
+              disabled={loading}
               aria-label="Fechar modal de localização"
-            />
+            >
+              Fechar
+            </Button>
           </Stack>
           <Typography variant="subtitle1" sx={{ mb: 2 }}>
             Produto:{' '}
@@ -2107,7 +2061,7 @@ const Stock: React.FC = () => {
                   color="secondary"
                   fullWidth
                   onClick={onLocationSubmit}
-                  disabled={loading || isManager}
+                  disabled={loading}
                   aria-label="Adicionar produto ao armazém"
                 >
                   {loading
@@ -2140,14 +2094,16 @@ const Stock: React.FC = () => {
               variant="outlined"
               color="primary"
               onClick={handleCloseConfirmDelete}
-              disabled={loading || isManager}
+              disabled={loading}
               aria-label="Cancelar exclusão do estoque"
-            />
+            >
+              Cancelar
+            </Button>
             <Button
               variant="contained"
               color="error"
               onClick={handleDeleteStock}
-              disabled={loading || isManager}
+              disabled={loading}
               aria-label="Confirmar exclusão do estoque"
             >
               {loading ? 'Excluindo...' : 'Excluir'}
@@ -2181,9 +2137,11 @@ const Stock: React.FC = () => {
               variant="outlined"
               color="primary"
               onClick={handleCloseConfirmDeleteEntry}
-              disabled={loading || isManager}
+              disabled={loading}
               aria-label="Cancelar exclusão da entrada de estoque"
-            />
+            >
+              Cancelar
+            </Button>
             <Button
               variant="contained"
               color="error"
@@ -2192,7 +2150,7 @@ const Stock: React.FC = () => {
                   ? handleDeleteGroupEntries
                   : handleDeleteStockEntry
               }
-              disabled={loading || isManager}
+              disabled={loading}
               aria-label="Confirmar exclusão da entrada de estoque"
             >
               {loading ? 'Excluindo...' : 'Excluir'}
@@ -2349,15 +2307,19 @@ const Stock: React.FC = () => {
                               <IconButton
                                 color="primary"
                                 onClick={() => handleEditGroup(group)}
-                                disabled={loading || isManager}
+                                disabled={loading}
                                 aria-label={`Editar todas as entradas do grupo ${group.id}`}
-                              />
+                              >
+                                <Edit />
+                              </IconButton>
                               <IconButton
                                 color="error"
                                 onClick={() => handleDeleteGroup(group)}
-                                disabled={loading || isManager}
+                                disabled={loading}
                                 aria-label={`Excluir todas as entradas do grupo ${group.id}`}
-                              />
+                              >
+                                <Delete />
+                              </IconButton>
                             </TableCell>
                           </TableRow>
                         ))
@@ -2476,21 +2438,23 @@ const Stock: React.FC = () => {
                                           <IconButton
                                             color="primary"
                                             onClick={() => handleEditStock(lot)}
-                                            disabled={loading || isManager}
+                                            disabled={loading}
                                             aria-label={`Editar lote ${lot.id} do produto ${group.id_produto}`}
-                                          />
+                                          >
+                                            <Edit />
+                                          </IconButton>
                                           <IconButton
                                             color="error"
                                             onClick={() => handleOpenConfirmDelete(lot.id!)}
-                                            disabled={loading || isManager}
+                                            disabled={loading}
                                             aria-label={`Excluir lote ${lot.id} do produto ${group.id_produto}`}
-                                          />
+                                          >
+                                            <Delete />
+                                          </IconButton>
                                           <IconButton
                                             color="secondary"
                                             onClick={() => handleOpenLocationModal([lot], [])}
-                                            disabled={
-                                              loading || lot.quantidadeAtual === 0 || isManager
-                                            }
+                                            disabled={loading || lot.quantidadeAtual === 0}
                                             aria-label={`Adicionar lote ${lot.id} do produto ${group.id_produto} ao armazém`}
                                           >
                                             <IconifyIcon icon="material-symbols:warehouse" />
@@ -2572,9 +2536,11 @@ const Stock: React.FC = () => {
                           <IconButton
                             color="secondary"
                             onClick={() => handleOpenLocationModal(stockItems, [])}
-                            disabled={loading || isManager || group.withoutLocationQuantity === 0}
+                            disabled={loading || group.withoutLocationQuantity === 0}
                             aria-label={`Adicionar produto ${group.id_produto} ao armazém`}
-                          />
+                          >
+                            <IconifyIcon icon="material-symbols:warehouse" />
+                          </IconButton>
                         </TableCell>
                       </TableRow>
                     );
