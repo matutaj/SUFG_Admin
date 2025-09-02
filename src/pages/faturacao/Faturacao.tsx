@@ -76,6 +76,7 @@ import autoTable from 'jspdf-autotable';
 import { DadosWrapper } from '../../types/models';
 import { useNotifications } from '../../../src/NotificationContext';
 import { getUserData } from 'api/authUtils';
+import AlertModal from 'components/Alert/Alert';
 
 interface DecodedToken {
   userId?: string;
@@ -164,7 +165,7 @@ const faturaReducer = (state: FaturaState, action: FaturaAction): FaturaState =>
     case 'ADD_PRODUTO':
       return {
         ...state,
-        produtosSelecionados: [...state.produtosSelecionados, { id: '', quantidade: 0}],
+        produtosSelecionados: [...state.produtosSelecionados, { id: '', quantidade: 0 }],
       };
     case 'REMOVE_PRODUTO':
       const filteredProdutos = state.produtosSelecionados.filter((_, i) => i !== action.index);
@@ -250,9 +251,7 @@ const validateFatura = (
   // }
 
   // Filtrar produtos válidos
-  const produtosValidos = state.produtosSelecionados.filter(
-    (p) => p.id && p.quantidade > 0
-  );
+  const produtosValidos = state.produtosSelecionados.filter((p) => p.id && p.quantidade > 0);
 
   if (produtosValidos.length === 0) {
     errors.produtos = 'Adicione pelo menos um produto válido com quantidade maior que 0';
@@ -318,15 +317,12 @@ const validateCaixa = (
   if (funcionariosCaixa.some((fc) => fc.id_funcionario === state.funcionarioId && fc.estadoCaixa)) {
     errors.funcionarioId = 'Este funcionário já tem um caixa aberto';
   }
-  
+
   return errors;
 };
 
 const Faturacao: React.FC = () => {
   const navigate = useNavigate();
-  const [openFaturaModal, setOpenFaturaModal] = useState(false);
-  const [openCaixaModal, setOpenCaixaModal] = useState(false);
-  const [openCaixaListModal, setOpenCaixaListModal] = useState(false);
   const [openConfirmModal, setOpenConfirmModal] = useState(false);
   const [faturaToDelete, setFaturaToDelete] = useState<string | null>(null);
   const [faturas, setFaturas] = useState<Fatura[]>([]);
@@ -337,10 +333,7 @@ const Faturacao: React.FC = () => {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
-  const [alert, setAlert] = useState<{
-    severity: 'success' | 'error' | 'info' | 'warning';
-    message: string;
-  } | null>(null);
+
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(5);
 
@@ -356,8 +349,46 @@ const Faturacao: React.FC = () => {
   const [loggedInFuncionarioCargo, setLoggedInFuncionarioCargo] = useState<string>('');
   const [notifiedLowStock, setNotifiedLowStock] = useState<Set<string>>(new Set());
 
-  
-  // Função para verificar estoque baixo
+  const [openFaturaModal, setOpenFaturaModal] = useState(false);
+  const [openCaixaModal, setOpenCaixaModal] = useState(false);
+  const [openCaixaListModal, setOpenCaixaListModal] = useState(false);
+  const [alertModal, setAlertModal] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    severity: 'success' | 'error' | 'info' | 'warning';
+    onConfirm?: () => void;
+    confirmText?: string;
+    showCancelButton?: boolean;
+  }>({
+    open: false,
+    title: '',
+    message: '',
+    severity: 'info',
+  });
+
+  const showAlert = (
+    title: string,
+    message: string,
+    severity: 'success' | 'error' | 'info' | 'warning' = 'info',
+    onConfirm?: () => void,
+    confirmText?: string,
+    showCancelButton?: boolean,
+  ) => {
+    setAlertModal({
+      open: true,
+      title,
+      message,
+      severity,
+      onConfirm,
+      confirmText,
+      showCancelButton,
+    });
+  };
+  const closeAlert = () => {
+    setAlertModal((prev) => ({ ...prev, open: false }));
+  };
+
   const checkLowStock = useCallback(async () => {
     try {
       const userData = await getUserData();
@@ -379,7 +410,6 @@ const Faturacao: React.FC = () => {
           if (product && location) {
             const notificationKey = `${loc.id_produto}-${loc.id_localizacao}`;
 
-            // Verifica se já notificou para evitar duplicatas
             if (!notifiedLowStock.has(notificationKey)) {
               const locationType = location.tipo === 'Loja' ? 'Loja' : 'Armazém';
               const message = `Estoque baixo: ${product.nomeProduto} (${locationType}) - Quantidade: ${currentQty} (Mínimo: ${minQty})`;
@@ -467,7 +497,7 @@ const Faturacao: React.FC = () => {
       setLoggedInFuncionarioCargo(decoded.role || '');
       return id;
     } catch (error: any) {
-      setAlert({ severity: 'error', message: error.message });
+      showAlert('Erro', error.message || 'Falha ao cadastrar fatura. Tente novamente.', 'error');
       setIsLoading(false);
       navigate('/login');
       return '';
@@ -492,7 +522,7 @@ const Faturacao: React.FC = () => {
         dispatchCaixa({ type: 'UPDATE_FIELD', field: 'funcionarioId', value: id });
         setFuncionarios(employees);
       } catch (error: any) {
-        setAlert({ severity: 'error', message: error.message });
+        showAlert('Erro', error.message || 'Falha ao cadastrar fatura. Tente novamente.', 'error');
         setLoggedInFuncionarioId('');
         dispatchCaixa({ type: 'UPDATE_FIELD', field: 'funcionarioId', value: '' });
         navigate('/login');
@@ -604,10 +634,11 @@ const Faturacao: React.FC = () => {
 
         setDataLoaded(true);
       } catch (error: any) {
-        setAlert({
-          severity: 'error',
-          message: 'Erro ao carregar dados iniciais: ' + (error.message || 'Tente novamente.'),
-        });
+        showAlert(
+          'Erro',
+          error.message || 'Falha ao carregar dados iniciais. Tente Mais Tarde.',
+          'error',
+        );
         setDataLoaded(false);
       }
     };
@@ -630,7 +661,7 @@ const Faturacao: React.FC = () => {
       const lojaLocations = locationsData.filter((loc) => loc.tipo === tipo.Loja);
 
       if (!lojaLocations.length) {
-        setAlert({ severity: 'error', message: 'Nenhuma localização do tipo "Loja" encontrada.' });
+        showAlert('info', 'Nenhuma localização do tipo "Loja" encontrada.', 'info');
         setProductsInStore([]);
         setProdutos(productsData);
         setProductLocations(productLocationsData);
@@ -660,10 +691,11 @@ const Faturacao: React.FC = () => {
       setProductLocations(productLocationsData);
       setDataLoaded(true);
     } catch (error: any) {
-      setAlert({
-        severity: 'error',
-        message: 'Erro ao buscar produtos e localizações: ' + (error.message || 'Tente novamente.'),
-      });
+      showAlert(
+        'Erro',
+        error.message || 'Erro ao buscar produtos e localizações. Tente novamente.',
+        'error',
+      );
       setProductsInStore([]);
       setProdutos([]);
       setProductLocations([]);
@@ -696,135 +728,125 @@ const Faturacao: React.FC = () => {
     }, 0);
   };
 
-  
-
-
-
-  
-
-const generatePDF = (fatura: Fatura) => {
-  try {
-    const doc = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: [80, 150 + fatura.produtos.length * 5], // 80mm largura, altura dinâmica
-    });
-
-    doc.setFont('helvetica', 'normal');
-    const blackColor = '#000000';
-
-    // Cabeçalho com informações fiscais
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text('SUFG - Sistema Unificado', 40, 8, { align: 'center' });
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.text('NIF: 1234567890', 40, 13, { align: 'center' });
-    doc.text('Luanda, Angola', 40, 18, { align: 'center' });
-    doc.text('Email: SUFGGERAL@EMAIL.COM', 40, 23, { align: 'center' });
-    doc.text('Tel: +244 933081862', 40, 28, { align: 'center' });
-
-    // Informações da Fatura
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Fatura: FAT-${fatura.id.slice(-4)}`, 5, 36);
-
-    // Verificação e formatação da data e hora
-    let dataFatura = new Date(fatura.data);
-    if (isNaN(dataFatura.getTime())) {
-      // Fallback para a data e hora atuais (23:16 WAT, 28 de maio de 2025)
-      dataFatura = toZonedTime(new Date('2025-05-28T23:16:00+01:00'), 'Africa/Luanda');
-    } else {
-      // Converter para o fuso horário de Angola (WAT)
-      dataFatura = toZonedTime(dataFatura, 'Africa/Luanda');
-    }
-
-    doc.text(`Data: ${format(dataFatura, 'dd/MM/yyyy', { timeZone: 'Africa/Luanda' })}`, 5, 41);
-    doc.text(`Hora: ${format(dataFatura, 'HH:mm:ss', { timeZone: 'Africa/Luanda' })}`, 5, 46);
-
-    // Informações do Cliente
-    doc.setFontSize(8);
-    doc.text('----------------------------------------', 5, 51);
-    doc.text(`Cliente: ${fatura.cliente.slice(0, 30)}`, 5, 56);
-    doc.text(`NIF: ${fatura.nif || 'N/D'}`, 5, 61);
-    doc.text(`Morada: ${fatura.localizacao?.slice(0, 30) || 'N/D'}`, 5, 66);
-
-    // Tabela de Produtos
-    const produtosTable = fatura.produtos.map((p) => {
-      const precoVenda = Number(p.produto.precoVenda) || 0;
-      return [
-        p.produto.nomeProduto.slice(0, 18), // Limita o nome do produto
-        p.quantidade.toString(),
-        `${precoVenda.toLocaleString('pt-AO', { minimumFractionDigits: 2 })}`,
-        `${(precoVenda * p.quantidade).toLocaleString('pt-AO', { minimumFractionDigits: 2 })}`,
-      ];
-    });
-
-    let finalY = 71;
-    if (produtosTable.length > 0) {
-      autoTable(doc, {
-        startY: 71,
-        head: [['Descrição', 'Qtd', 'P. Unit.', 'Total']],
-        body: produtosTable,
-        theme: 'plain',
-        styles: {
-          fontSize: 7,
-          cellPadding: 1,
-          textColor: blackColor,
-          overflow: 'linebreak',
-        },
-        headStyles: {
-          fontSize: 7,
-          fontStyle: 'bold',
-          halign: 'center',
-        },
-        columnStyles: {
-          0: { cellWidth: 28 },
-          1: { cellWidth: 10, halign: 'center' },
-          2: { cellWidth: 15, halign: 'right' },
-          3: { cellWidth: 22, halign: 'right' },
-        },
-        margin: { left: 5, right: 5 },
+  const generatePDF = (fatura: Fatura) => {
+    try {
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: [80, 150 + fatura.produtos.length * 5], // 80mm largura, altura dinâmica
       });
-      finalY = (doc as any).lastAutoTable.finalY || 71;
+
+      doc.setFont('helvetica', 'normal');
+      const blackColor = '#000000';
+
+      // Cabeçalho com informações fiscais
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('SUFG - Sistema Unificado', 40, 8, { align: 'center' });
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.text('NIF: 1234567890', 40, 13, { align: 'center' });
+      doc.text('Luanda, Angola', 40, 18, { align: 'center' });
+      doc.text('Email: SUFGGERAL@EMAIL.COM', 40, 23, { align: 'center' });
+      doc.text('Tel: +244 933081862', 40, 28, { align: 'center' });
+
+      // Informações da Fatura
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Fatura: FAT-${fatura.id.slice(-4)}`, 5, 36);
+
+      // Verificação e formatação da data e hora
+      let dataFatura = new Date(fatura.data);
+      if (isNaN(dataFatura.getTime())) {
+        // Fallback para a data e hora atuais (23:16 WAT, 28 de maio de 2025)
+        dataFatura = toZonedTime(new Date('2025-05-28T23:16:00+01:00'), 'Africa/Luanda');
+      } else {
+        // Converter para o fuso horário de Angola (WAT)
+        dataFatura = toZonedTime(dataFatura, 'Africa/Luanda');
+      }
+
+      doc.text(`Data: ${format(dataFatura, 'dd/MM/yyyy', { timeZone: 'Africa/Luanda' })}`, 5, 41);
+      doc.text(`Hora: ${format(dataFatura, 'HH:mm:ss', { timeZone: 'Africa/Luanda' })}`, 5, 46);
+
+      // Informações do Cliente
+      doc.setFontSize(8);
+      doc.text('----------------------------------------', 5, 51);
+      doc.text(`Cliente: ${fatura.cliente.slice(0, 30)}`, 5, 56);
+      doc.text(`NIF: ${fatura.nif || 'N/D'}`, 5, 61);
+      doc.text(`Morada: ${fatura.localizacao?.slice(0, 30) || 'N/D'}`, 5, 66);
+
+      const produtosTable = fatura.produtos.map((p) => {
+        const precoVenda = Number(p.produto.precoVenda) || 0;
+        return [
+          p.produto.nomeProduto.slice(0, 18),
+          p.quantidade.toString(),
+          `${precoVenda.toLocaleString('pt-AO', { minimumFractionDigits: 2 })}`,
+          `${(precoVenda * p.quantidade).toLocaleString('pt-AO', { minimumFractionDigits: 2 })}`,
+        ];
+      });
+
+      let finalY = 71;
+      if (produtosTable.length > 0) {
+        autoTable(doc, {
+          startY: 71,
+          head: [['Descrição', 'Qtd', 'P. Unit.', 'Total']],
+          body: produtosTable,
+          theme: 'plain',
+          styles: {
+            fontSize: 7,
+            cellPadding: 1,
+            textColor: blackColor,
+            overflow: 'linebreak',
+          },
+          headStyles: {
+            fontSize: 7,
+            fontStyle: 'bold',
+            halign: 'center',
+          },
+          columnStyles: {
+            0: { cellWidth: 28 },
+            1: { cellWidth: 10, halign: 'center' },
+            2: { cellWidth: 15, halign: 'right' },
+            3: { cellWidth: 22, halign: 'right' },
+          },
+          margin: { left: 5, right: 5 },
+        });
+        finalY = (doc as any).lastAutoTable.finalY || 71;
+      }
+
+      // Total
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.text('----------------------------------------', 5, finalY + 5);
+      doc.text(
+        `Total: Kz ${calcularTotalFatura(fatura).toLocaleString('pt-AO', { minimumFractionDigits: 2 })}`,
+        5,
+        finalY + 10,
+      );
+
+      // Rodapé
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      doc.text('----------------------------------------', 5, finalY + 15);
+      doc.text('Obrigado pela sua preferência!', 40, finalY + 20, { align: 'center' });
+      doc.text('SUFGGERAL@EMAIL.COM | +244 933081862', 40, finalY + 30, { align: 'center' });
+
+      // Saída do PDF
+      const pdfBlob = doc.output('blob');
+      const link = document.createElement('a');
+      link.href = window.URL.createObjectURL(pdfBlob);
+      link.download = `Fatura_${fatura.id}_${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error: any) {
+      showAlert('Erro', error.message || 'Erro ao gerar PDF. Tente novamente.', 'error');
     }
-
-    // Total
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.text('----------------------------------------', 5, finalY + 5);
-    doc.text(
-      `Total: Kz ${calcularTotalFatura(fatura).toLocaleString('pt-AO', { minimumFractionDigits: 2 })}`,
-      5,
-      finalY + 10,
-    );
-
-    // Rodapé
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'normal');
-    doc.text('----------------------------------------', 5, finalY + 15);
-    doc.text('Obrigado pela sua preferência!', 40, finalY + 20, { align: 'center' });
-    doc.text('SUFGGERAL@EMAIL.COM | +244 933081862', 40, finalY + 30, { align: 'center' });
-
-    // Saída do PDF
-    const pdfBlob = doc.output('blob');
-    const link = document.createElement('a');
-    link.href = window.URL.createObjectURL(pdfBlob);
-    link.download = `Fatura_${fatura.id}_${new Date().toISOString().split('T')[0]}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  } catch (error: any) {
-    setAlert({
-      severity: 'error',
-      message: 'Erro ao gerar PDF: ' + (error.message || 'Tente novamente.'),
-    });
-  }
-};
+  };
 
   const handleOpenFaturaModal = (faturaId?: string) => {
     if (!loggedInFuncionarioId) {
-      setAlert({ severity: 'error', message: 'Usuário não autenticado. Faça login novamente.' });
+      showAlert('Erro', 'Usuário não autenticado. Faça login novamente..', 'error');
       navigate('/login');
       return;
     }
@@ -865,10 +887,7 @@ const generatePDF = (fatura: Fatura) => {
           field: 'funcionariosCaixaId',
           value: '',
         });
-        setAlert({
-          severity: 'warning',
-          message: 'Nenhum caixa aberto encontrado. Abra um caixa primeiro.',
-        });
+        showAlert('warning', 'Nenhum caixa aberto encontrado. Abra um caixa primeiro.', 'warning');
       }
     }
     setOpenFaturaModal(true);
@@ -880,8 +899,14 @@ const generatePDF = (fatura: Fatura) => {
   };
 
   const handleOpenConfirmModal = (faturaId: string) => {
-    setFaturaToDelete(faturaId);
-    setOpenConfirmModal(true);
+    showAlert(
+      'Confirmar Exclusão',
+      'Tem certeza que deseja excluir esta fatura? Esta ação não pode ser desfeita.',
+      'warning',
+      () => excluirFatura(faturaId),
+      'Excluir',
+      true,
+    );
   };
 
   const handleCloseConfirmModal = () => {
@@ -1027,29 +1052,29 @@ const generatePDF = (fatura: Fatura) => {
 
   const onAddFaturaSubmit = async () => {
     if (!loggedInFuncionarioId) {
-      setAlert({ severity: 'error', message: 'Usuário não autenticado. Faça login novamente.' });
+      showAlert('Erro', 'Usuário não autenticado. Faça login novamente.', 'error');
       navigate('/login');
       return;
     }
-  
+
     try {
       setLoading(true);
-  
+
       await fetchProductsAndLocations();
       await new Promise((resolve) => setTimeout(resolve, 100));
-  
+
       // Filtrar produtos válidos (com id e quantidade > 0)
       const produtosValidos = faturaState.produtosSelecionados.filter(
-        (p) => p.id && p.quantidade > 0
+        (p) => p.id && p.quantidade > 0,
       );
-  
+
       // Atualizar o estado com apenas produtos válidos
       dispatchFatura({
         type: 'UPDATE_FIELD',
         field: 'produtosSelecionados',
         value: produtosValidos.length > 0 ? produtosValidos : [{ id: '', quantidade: 0 }],
       });
-  
+
       // Validar a fatura com os produtos filtrados
       const errors = validateFatura(
         { ...faturaState, produtosSelecionados: produtosValidos },
@@ -1062,16 +1087,16 @@ const generatePDF = (fatura: Fatura) => {
       if (Object.keys(errors).length > 0) {
         return;
       }
-  
+
       const dataEmissao = new Date();
       const dataValidade = new Date(dataEmissao);
       dataValidade.setDate(dataEmissao.getDate() + 30);
-  
+
       const clienteExistente = clientes.find((c) => c.numeroContribuinte === faturaState.nif);
-  
+
       // Usar produtos válidos para calcular o total
       const totalVenda = calcularTotal(produtosValidos, productsInStore);
-  
+
       const dadosWrapper: DadosWrapper = {
         Dados: {
           dadosVenda: {
@@ -1103,25 +1128,25 @@ const generatePDF = (fatura: Fatura) => {
               : undefined,
         },
       };
-  
+
       const createdVenda = await createSale(dadosWrapper);
       if (!createdVenda.id) {
         throw new Error('ID da venda não retornado pela API.');
       }
-  
+
       const funcionarioCaixa = funcionariosCaixa.find(
         (fc) => fc.id === faturaState.funcionariosCaixaId,
       );
       if (!funcionarioCaixa || !funcionarioCaixa.id) {
         throw new Error('Caixa do funcionário não encontrado.');
       }
-  
+
       const currentQuantidadaFaturada = Number(funcionarioCaixa.quantidadaFaturada) || 0;
       const updatedFuncionarioCaixa: FuncionarioCaixa = {
         ...funcionarioCaixa,
         quantidadaFaturada: currentQuantidadaFaturada + totalVenda,
       };
-  
+
       try {
         await updateEmployeeCashRegister(funcionarioCaixa.id, updatedFuncionarioCaixa);
         setFuncionariosCaixa((prev) =>
@@ -1132,31 +1157,31 @@ const generatePDF = (fatura: Fatura) => {
           'Falha ao atualizar o total faturado do caixa: ' + (error.message || 'Tente novamente.'),
         );
       }
-  
+
       const lojaLocations = locations.filter((loc) => loc.tipo === tipo.Loja);
       if (!lojaLocations.length) {
         throw new Error('Nenhuma localização do tipo "Loja" encontrada.');
       }
-  
+
       const updates = produtosValidos.map(async (produtoSelecionado) => {
         const produtoLocations = productLocations.filter(
           (loc) =>
             loc.id_produto === produtoSelecionado.id &&
             lojaLocations.some((loja) => loja.id === loc.id_localizacao),
         );
-  
+
         if (produtoLocations.length === 0) {
           throw new Error(`Produto ${produtoSelecionado.id} não encontrado em nenhuma loja.`);
         }
-  
+
         let quantidadeRestante = produtoSelecionado.quantidade;
-  
+
         for (const produtoLocation of produtoLocations) {
           if (quantidadeRestante <= 0) break;
-  
+
           const quantidadeAtual = produtoLocation.quantidadeProduto ?? 0;
           const quantidadeADescontar = Math.min(quantidadeAtual, quantidadeRestante);
-  
+
           if (quantidadeADescontar > 0) {
             const newQuantity = quantidadeAtual - quantidadeADescontar;
             try {
@@ -1177,17 +1202,17 @@ const generatePDF = (fatura: Fatura) => {
             }
           }
         }
-  
+
         if (quantidadeRestante > 0) {
           throw new Error(
             `Quantidade insuficiente para o produto ${produtoSelecionado.id} após tentar todas as lojas.`,
           );
         }
       });
-  
+
       const updatedProductLocations = await getAllProductLocations();
       setProductLocations(updatedProductLocations);
-  
+
       const stockUpdates = produtosValidos.map(async (produtoSelecionado) => {
         const lojaQuantity = updatedProductLocations
           .filter(
@@ -1196,7 +1221,7 @@ const generatePDF = (fatura: Fatura) => {
               lojaLocations.some((loja) => loja.id === loc.id_localizacao),
           )
           .reduce((total, loc) => total + (loc.quantidadeProduto ?? 0), 0);
-  
+
         const armazemLocation = locations.find((loc) =>
           loc.nomeLocalizacao.toLowerCase().includes('armazém'),
         );
@@ -1209,7 +1234,7 @@ const generatePDF = (fatura: Fatura) => {
           : null;
         const armazemQuantity = Number(armazemProdutoLocation?.quantidadeProduto) || 0;
         const estoqueGeral = lojaQuantity + armazemQuantity;
-  
+
         try {
           const existingStock = await getStockByProduct(produtoSelecionado.id);
           if (!existingStock || !existingStock.id) {
@@ -1227,12 +1252,12 @@ const generatePDF = (fatura: Fatura) => {
             `Falha ao atualizar estoque do produto ${produtoSelecionado.id}: ${error.message || 'Tente novamente.'}`,
           );
         }
-  
+
         const produto = productsInStore.find((p) => p.id === produtoSelecionado.id);
         if (!produto || !produto.id) {
           throw new Error(`Produto ${produtoSelecionado.id} não encontrado.`);
         }
-  
+
         try {
           const updatedProduto: Produto = {
             ...produto,
@@ -1246,10 +1271,10 @@ const generatePDF = (fatura: Fatura) => {
           );
         }
       });
-  
+
       await Promise.all(updates);
       await Promise.all(stockUpdates);
-  
+
       const novosProdutosFatura = produtosValidos.map((p) => {
         const produto = productsInStore.find((prod) => prod.id === p.id);
         if (!produto || !produto.id) {
@@ -1263,7 +1288,7 @@ const generatePDF = (fatura: Fatura) => {
           quantidade: p.quantidade,
         };
       });
-  
+
       const newFatura: Fatura = {
         id: createdVenda.id,
         cliente: faturaState.cliente || 'Cliente Anônimo',
@@ -1280,9 +1305,9 @@ const generatePDF = (fatura: Fatura) => {
           quantidadaFaturada: currentQuantidadaFaturada + totalVenda,
         },
       };
-  
+
       setFaturas((prev) => [...prev, newFatura]);
-  
+
       if (!clienteExistente && createdVenda.id_cliente) {
         const novoCliente: Cliente = {
           id: createdVenda.id_cliente,
@@ -1294,25 +1319,21 @@ const generatePDF = (fatura: Fatura) => {
         };
         setClientes((prev) => [...prev, novoCliente]);
       }
-  
-      setAlert({ severity: 'success', message: 'Fatura criada com sucesso!' });
+
+      showAlert('Sucesso', 'Fatura criada com sucesso!', 'success');
       generatePDF(newFatura);
       handleCloseFaturaModal();
       await fetchProductsAndLocations();
     } catch (error: any) {
-      setAlert({
-        severity: 'error',
-        message: error.message || 'Falha ao cadastrar fatura. Tente novamente.',
-      });
+      showAlert('Erro', error.message || 'Falha ao cadastrar fatura. Tente novamente.', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const excluirFatura = async () => {
+  const excluirFatura = async (faturaId: string) => {
     if (!faturaToDelete) {
-      setAlert({ severity: 'error', message: 'Nenhuma fatura selecionada para exclusão!' });
-      return;
+      showAlert('Erro', 'Nenhuma fatura selecionada para exclusão!', 'error');
     }
 
     try {
@@ -1463,77 +1484,32 @@ const generatePDF = (fatura: Fatura) => {
       await Promise.all(updates);
 
       setFaturas((prev) => prev.filter((f) => f.id !== faturaToDelete));
-      setAlert({ severity: 'success', message: 'Fatura excluída com sucesso!' });
+
+      showAlert('Sucesso', 'Fatura excluída com sucesso!', 'success');
 
       const totalPages = Math.ceil((faturas.length - 1) / rowsPerPage);
       if (page >= totalPages && page > 0) {
         setPage(page - 1);
       }
     } catch (error: any) {
-      setAlert({
-        severity: 'error',
-        message: error.message || 'Erro ao excluir fatura!',
-      });
+      showAlert('Erro', error.message || 'Erro ao excluir fatura!', 'error');
     } finally {
       setLoading(false);
       await fetchProductsAndLocations();
     }
   };
-  
-  /*useEffect(() => {
-    let barcodeBuffer = '';
-    let lastKeyTime = Date.now();
-  
-    const handleBarcodeScan = (event: KeyboardEvent) => {
-      const currentTime = Date.now();
-      const timeDiff = currentTime - lastKeyTime;
-  
-      // Detectar entrada rápida (típica de scanners de código de barras)
-      if (timeDiff < 50 && event.key !== 'Enter') {
-        barcodeBuffer += event.key;
-      } else if (event.key === 'Enter' && barcodeBuffer) {
-        // Processar o código de barras quando "Enter" é detectado
-        const referencia = barcodeBuffer.trim();
-        const foundProduct = productsInStore.find(
-          (p) => p.referenciaProduto.toLowerCase() === referencia.toLowerCase(),
-        );
-  
-        if (foundProduct && foundProduct.id && openFaturaModal) {
-          const index = faturaState.produtosSelecionados.length - 1;
-          handleProdutoChange(index, 'id', foundProduct.id);
-          if (index === faturaState.produtosSelecionados.length - 1) {
-            adicionarNovoProdutoInput();
-          }
-        } else if (openFaturaModal) {
-          setAlert({
-            severity: 'error',
-            message: `Produto com referência ${referencia} não encontrado.`,
-          });
-        }
-  
-        barcodeBuffer = ''; // Limpar o buffer após processar
-      }
-  
-      lastKeyTime = currentTime;
-    };
-  
-    window.addEventListener('keydown', handleBarcodeScan);
-  
-    return () => {
-      window.removeEventListener('keydown', handleBarcodeScan);
-    };
-  }, [productsInStore, openFaturaModal, faturaState.produtosSelecionados, handleProdutoChange, adicionarNovoProdutoInput, setAlert]);*/
+
   useEffect(() => {
     let barcodeInput = '';
-  
+
     const handleKeyPress = (event: KeyboardEvent) => {
       if (!openFaturaModal) return; // Só processa eventos se o modal de fatura estiver aberto
-  
+
       if (event.key !== 'Enter') {
         barcodeInput += event.key; // Acumula os caracteres do código de barras
         return;
       }
-  
+
       // Quando "Enter" é detectado, processa o código de barras
       const referencia = barcodeInput.trim();
       if (referencia) {
@@ -1548,32 +1524,35 @@ const generatePDF = (fatura: Fatura) => {
             adicionarNovoProdutoInput();
           }
         } else {
-          setAlert({
-            severity: 'error',
-            message: `Produto com referência ${referencia} não encontrado.`,
-          });
+          showAlert('info', 'Produto com referência ${referencia} não encontrado.', 'info');
         }
       }
-      barcodeInput = ''; // Reseta o buffer após processar
+      barcodeInput = '';
     };
-  
+
     window.addEventListener('keypress', handleKeyPress);
-  
+
     return () => {
       window.removeEventListener('keypress', handleKeyPress);
     };
-  }, [openFaturaModal, productsInStore, faturaState.produtosSelecionados, handleProdutoChange, adicionarNovoProdutoInput, setAlert]);
+  }, [
+    openFaturaModal,
+    productsInStore,
+    faturaState.produtosSelecionados,
+    handleProdutoChange,
+    adicionarNovoProdutoInput,
+  ]);
   const lastInputRef = useRef<HTMLInputElement | null>(null);
 
-useEffect(() => {
-  if (lastInputRef.current && openFaturaModal) {
-    lastInputRef.current.focus();
-    console.log('Foco aplicado ao TextField');
-  }
-}, [faturaState.produtosSelecionados, openFaturaModal]);
+  useEffect(() => {
+    if (lastInputRef.current && openFaturaModal) {
+      lastInputRef.current.focus();
+      console.log('Foco aplicado ao TextField');
+    }
+  }, [faturaState.produtosSelecionados, openFaturaModal]);
   const handleOpenCaixaModal = async () => {
     if (!loggedInFuncionarioId) {
-      setAlert({ severity: 'error', message: 'Usuário não autenticado. Faça login novamente.' });
+      showAlert('Erro', 'Usuário não autenticado. Faça login novamente.', 'error');
       navigate('/login');
       return;
     }
@@ -1621,26 +1600,27 @@ useEffect(() => {
           return new Date(dateB).getTime() - new Date(dateA).getTime();
         })[0];
 
-
       dispatchCaixa({
         type: 'UPDATE_FIELD',
         field: 'funcionarioId',
         value: loggedInFuncionarioId,
       });
 
-      setAlert({
-        severity: 'info',
-        message: `Caixa "${caixa.nomeCaixa}" selecionado automaticamente com base no endereço MAC.`,
-      });
+      showAlert(
+        'info',
+        `Caixa "${caixa.nomeCaixa}" selecionado automaticamente com base no endereço MAC.`,
+        'info',
+      );
       setOpenCaixaModal(true);
     } catch (error: any) {
-      setAlert({
-        severity: 'error',
-        message:
-          error.response?.status === 401
-            ? 'Autenticação falhou. Faça login novamente.'
-            : error.message || 'Erro ao buscar o caixa pelo endereço MAC. Selecione manualmente.',
-      });
+      showAlert(
+        'Erro',
+        error.response?.status === 401
+          ? 'Autenticação falhou. Faça login novamente.'
+          : error.message || 'Erro ao buscar o caixa pelo endereço MAC. Selecione manualmente.',
+        'error',
+      );
+
       dispatchCaixa({
         type: 'UPDATE_FIELD',
         field: 'funcionarioId',
@@ -1682,7 +1662,7 @@ useEffect(() => {
 
   const onAddCaixaSubmit = async () => {
     if (!loggedInFuncionarioId) {
-      setAlert({ severity: 'error', message: 'Usuário não autenticado. Faça login novamente.' });
+      showAlert('Erro', 'Usuário não autenticado. Faça login novamente..', 'error');
       navigate('/login');
       return;
     }
@@ -1722,15 +1702,11 @@ useEffect(() => {
       };
       // Atualizar a lista com dados da API
       const updatedFuncionariosCaixa = await getAllEmployeeCashRegisters();
-      console.log('Lista de caixas atualizada:', updatedFuncionariosCaixa);
       setFuncionariosCaixa(updatedFuncionariosCaixa);
-      setAlert({ severity: 'success', message: 'aberto com sucesso!' });
+      showAlert('Sucesso', 'Caixa aberto com sucesso!', 'success');
       handleCloseCaixaModal();
     } catch (error: any) {
-      setAlert({
-        severity: 'error',
-        message: error.message || 'Falha ao abrir o caixa. Tente novamente.',
-      });
+      showAlert('Erro', error.message || 'Falha ao abrir o caixa. Tente novamente.', 'error');
     } finally {
       setLoading(false);
     }
@@ -1776,13 +1752,10 @@ useEffect(() => {
       await updateEmployeeCashRegister(caixaId, updatedCaixa);
       const updatedFuncionariosCaixa = await getAllEmployeeCashRegisters();
       setFuncionariosCaixa(updatedFuncionariosCaixa);
-      setAlert({ severity: 'success', message: 'Caixa fechado com sucesso!' });
+      showAlert('Sucesso', 'Caixa fechado com sucesso!', 'success');
       handleCloseCaixaListModal();
     } catch (error: any) {
-      setAlert({
-        severity: 'error',
-        message: error.message || 'Falha ao fechar o caixa. Tente novamente.',
-      });
+      showAlert('Erro', error.message || 'Falha ao fechar o caixa. Tente novamente.', 'error');
     } finally {
       setLoading(false);
     }
@@ -1812,11 +1785,16 @@ useEffect(() => {
   };
   return (
     <>
-      {alert && (
-        <Grid sx={{ position: 'fixed', top: 20, right: 40, zIndex: 9999 }}>
-          <Alert severity={alert.severity}>{alert.message}</Alert>
-        </Grid>
-      )}
+      <AlertModal
+        open={alertModal.open}
+        onClose={closeAlert}
+        title={alertModal.title}
+        message={alertModal.message}
+        severity={alertModal.severity}
+        confirmText={alertModal.confirmText}
+        onConfirm={alertModal.onConfirm}
+        showCancelButton={alertModal.showCancelButton}
+      />
 
       <Paper sx={{ p: { xs: 1, sm: 2 }, width: '100%', borderRadius: 2 }}>
         <Stack
@@ -1829,172 +1807,183 @@ useEffect(() => {
             Faturação (Vendas)
           </Typography>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-  {funcionariosCaixa.some(
-    (fc) => fc.id_funcionario === loggedInFuncionarioId && fc.estadoCaixa,
-  ) && (
-    <Button
-      variant="contained"
-      color="secondary"
-      onClick={() => handleOpenFaturaModal()}
-      startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
-      size="small"
-      fullWidth
-    >
-      Nova Venda
-    </Button>
-  )}
-  {funcionariosCaixa.some(
-    (fc) => fc.id_funcionario === loggedInFuncionarioId && fc.estadoCaixa,
-  ) ? null : loggedInFuncionarioCargo !== 'Gerente' && (
-    <Button
-      variant="contained"
-      color="primary"
-      onClick={async () => {
-        if (!loggedInFuncionarioId) {
-          setAlert({ severity: 'error', message: 'Usuário não autenticado. Faça login novamente.' });
-          navigate('/login');
-          return;
-        }
+            {funcionariosCaixa.some(
+              (fc) => fc.id_funcionario === loggedInFuncionarioId && fc.estadoCaixa,
+            ) && (
+              <Button
+                variant="contained"
+                color="secondary"
+                onClick={() => handleOpenFaturaModal()}
+                startIcon={<IconifyIcon icon="heroicons-solid:plus" />}
+                size="small"
+                fullWidth
+              >
+                Nova Venda
+              </Button>
+            )}
+            {funcionariosCaixa.some(
+              (fc) => fc.id_funcionario === loggedInFuncionarioId && fc.estadoCaixa,
+            )
+              ? null
+              : loggedInFuncionarioCargo !== 'Gerente' && (
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={async () => {
+                      if (!loggedInFuncionarioId) {
+                        showAlert('Erro', 'Usuário não autenticado. Tente novamente.', 'error');
+                        navigate('/login');
+                        return;
+                      }
 
-        setLoading(true);
-        try {
-          // Obter o endereço MAC da máquina
-          const macResponse = await axios.get('http://localhost:3001/mac');
-          const machineMacAddress = macResponse.data.mac;
+                      setLoading(true);
+                      try {
+                        // Obter o endereço MAC da máquina
+                        const macResponse = await axios.get('http://localhost:3001/mac');
+                        const machineMacAddress = macResponse.data.mac;
 
-          // Obter o token de autenticação
-          const token = localStorage.getItem('token');
-          if (!token) {
-            throw new Error('Token de autenticação não encontrado. Faça login novamente.');
-          }
+                        // Obter o token de autenticação
+                        const token = localStorage.getItem('token');
+                        if (!token) {
+                          throw new Error(
+                            'Token de autenticação não encontrado. Faça login novamente.',
+                          );
+                        }
 
-          // Buscar o caixa associado ao MAC
-          const caixaResponse = await axios.get(
-            `http://localhost:3333/caixa/mac/${machineMacAddress}`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            },
-          );
-          const caixa = caixaResponse.data;
+                        // Buscar o caixa associado ao MAC
+                        const caixaResponse = await axios.get(
+                          `http://localhost:3333/caixa/mac/${machineMacAddress}`,
+                          {
+                            headers: {
+                              Authorization: `Bearer ${token}`,
+                            },
+                          },
+                        );
+                        const caixa = caixaResponse.data;
 
-          if (!caixa || !caixa.id) {
-            throw new Error('Nenhum caixa encontrado para o endereço MAC desta máquina.');
-          }
+                        if (!caixa || !caixa.id) {
+                          throw new Error(
+                            'Nenhum caixa encontrado para o endereço MAC desta máquina.',
+                          );
+                        }
 
-          // Configurar o estado do caixa
-          const caixaState: CaixaState = {
-            funcionarioId: loggedInFuncionarioId,
-            caixaId: caixa.id,
-            errors: {},
-          };
+                        // Configurar o estado do caixa
+                        const caixaState: CaixaState = {
+                          funcionarioId: loggedInFuncionarioId,
+                          caixaId: caixa.id,
+                          errors: {},
+                        };
 
-          // Validar o caixa
-          const errors = validateCaixa(caixaState, funcionarios, caixas, funcionariosCaixa);
-          if (Object.keys(errors).length > 0) {
-            dispatchCaixa({ type: 'SET_ERRORS', errors });
-            setAlert({ severity: 'error', message: Object.values(errors)[0] });
-            return;
-          }
+                        // Validar o caixa
+                        const errors = validateCaixa(
+                          caixaState,
+                          funcionarios,
+                          caixas,
+                          funcionariosCaixa,
+                        );
+                        if (Object.keys(errors).length > 0) {
+                          dispatchCaixa({ type: 'SET_ERRORS', errors });
+                          return;
+                        }
 
-          // Criar o caixa
-          const newFuncionarioCaixa: FuncionarioCaixa = {
-            id_caixa: caixa.id,
-            id_funcionario: loggedInFuncionarioId,
-            estadoCaixa: true,
-            quantidadaFaturada: 0,
-            horarioAbertura: new Date(),
-            horarioFechamento: null,
-          };
+                        // Criar o caixa
+                        const newFuncionarioCaixa: FuncionarioCaixa = {
+                          id_caixa: caixa.id,
+                          id_funcionario: loggedInFuncionarioId,
+                          estadoCaixa: true,
+                          quantidadaFaturada: 0,
+                          horarioAbertura: new Date(),
+                          horarioFechamento: null,
+                        };
 
-          const createdCaixa = await createEmployeeCashRegister(newFuncionarioCaixa);
-          if (!createdCaixa.id) {
-            throw new Error('ID do caixa não retornado pela API.');
-          }
+                        const createdCaixa = await createEmployeeCashRegister(newFuncionarioCaixa);
+                        if (!createdCaixa.id) {
+                          throw new Error('ID do caixa não retornado pela API.');
+                        }
 
-          // Atualizar a lista de caixas
-          setFuncionariosCaixa((prev) => [
-            ...prev,
-            {
-              ...newFuncionarioCaixa,
-              id: createdCaixa.id,
-              caixas: caixas.find((c) => c.id === caixa.id),
-              Funcionarios: funcionarios.find((f) => f.id === loggedInFuncionarioId),
-            },
-          ]);
+                        // Atualizar a lista de caixas
+                        setFuncionariosCaixa((prev) => [
+                          ...prev,
+                          {
+                            ...newFuncionarioCaixa,
+                            id: createdCaixa.id,
+                            caixas: caixas.find((c) => c.id === caixa.id),
+                            Funcionarios: funcionarios.find((f) => f.id === loggedInFuncionarioId),
+                          },
+                        ]);
 
-          const updatedFuncionariosCaixa = await getAllEmployeeCashRegisters();
-          setFuncionariosCaixa(updatedFuncionariosCaixa);
-          setAlert({ severity: 'success', message: `Caixa "${caixa.nomeCaixa}" aberto com sucesso!` });
-        } catch (error: any) {
-          setAlert({
-            severity: 'error',
-            message:
-              error.response?.status === 401
-                ? 'Autenticação falhou. Faça login novamente.'
-                : error.message || 'Erro ao abrir o caixa. Tente novamente.',
-          });
-        } finally {
-          setLoading(false);
-        }
-      }}
-      startIcon={<IconifyIcon icon="mdi:cash-register" />}
-      size="small"
-      fullWidth
-      disabled={!loggedInFuncionarioId || loading}
-    >
-      Abrir Caixa
-    </Button>
-  )}
-  {funcionariosCaixa.some(
-    (fc) => fc.id_funcionario === loggedInFuncionarioId && fc.estadoCaixa,
-  ) && (
-    <Button
-      variant="contained"
-      color="error"
-      onClick={() => {
-        const caixaAberto = funcionariosCaixa.find(
-          (fc) => fc.id_funcionario === loggedInFuncionarioId && fc.estadoCaixa,
-        );
-        if (caixaAberto && caixaAberto.id) {
-          handleFecharCaixa(caixaAberto.id);
-        }
-      }}
-      startIcon={<IconifyIcon icon="mdi:cash-register-off" />}
-      size="small"
-      fullWidth
-      disabled={loading}
-    >
-      {loading ? 'Fechando...' : 'Fechar Caixa'}
-    </Button>
-  )}
-  {['Admin', 'Gerente'].includes(loggedInFuncionarioCargo) && (
-    <Button
-      variant="contained"
-      color="info"
-      onClick={handleOpenCaixaListModal}
-      startIcon={<IconifyIcon icon="mdi:cash-register" />}
-      size="small"
-      fullWidth
-    >
-      Ver Caixas
-    </Button>
-  )}
-  {loggedInFuncionarioCargo !== 'Gerente' && (
-    <Button
-      variant="contained"
-      color="warning"
-      onClick={handleEnviarAlerta}
-      startIcon={<IconifyIcon icon="mdi:alert" />}
-      size="small"
-      fullWidth
-      disabled={!loggedInFuncionarioId || loading}
-    >
-      Enviar Alerta
-    </Button>
-  )}
-</Stack>
+                        const updatedFuncionariosCaixa = await getAllEmployeeCashRegisters();
+                        setFuncionariosCaixa(updatedFuncionariosCaixa);
+
+                        showAlert('Sucesso', `Caixa "${caixa.nomeCaixa}" aberto com sucesso!`);
+                      } catch (error: any) {
+                        showAlert(
+                          'Erro',
+                          error.response?.status === 401
+                            ? 'Autenticação falhou. Faça login novamente.'
+                            : error.message || 'Erro ao abrir o caixa. Tente novamente.',
+                          'error',
+                        );
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    startIcon={<IconifyIcon icon="mdi:cash-register" />}
+                    size="small"
+                    fullWidth
+                    disabled={!loggedInFuncionarioId || loading}
+                  >
+                    Abrir Caixa
+                  </Button>
+                )}
+            {funcionariosCaixa.some(
+              (fc) => fc.id_funcionario === loggedInFuncionarioId && fc.estadoCaixa,
+            ) && (
+              <Button
+                variant="contained"
+                color="error"
+                onClick={() => {
+                  const caixaAberto = funcionariosCaixa.find(
+                    (fc) => fc.id_funcionario === loggedInFuncionarioId && fc.estadoCaixa,
+                  );
+                  if (caixaAberto && caixaAberto.id) {
+                    handleFecharCaixa(caixaAberto.id);
+                  }
+                }}
+                startIcon={<IconifyIcon icon="mdi:cash-register-off" />}
+                size="small"
+                fullWidth
+                disabled={loading}
+              >
+                {loading ? 'Fechando...' : 'Fechar Caixa'}
+              </Button>
+            )}
+            {['Admin', 'Gerente'].includes(loggedInFuncionarioCargo) && (
+              <Button
+                variant="contained"
+                color="info"
+                onClick={handleOpenCaixaListModal}
+                startIcon={<IconifyIcon icon="mdi:cash-register" />}
+                size="small"
+                fullWidth
+              >
+                Ver Caixas
+              </Button>
+            )}
+            {loggedInFuncionarioCargo !== 'Gerente' && (
+              <Button
+                variant="contained"
+                color="warning"
+                onClick={handleEnviarAlerta}
+                startIcon={<IconifyIcon icon="mdi:alert" />}
+                size="small"
+                fullWidth
+                disabled={!loggedInFuncionarioId || loading}
+              >
+                Enviar Alerta
+              </Button>
+            )}
+          </Stack>
         </Stack>
         <Dialog
           open={openModal}
@@ -2174,80 +2163,86 @@ useEffect(() => {
                 const lojaLocations = locations.filter((loc) => loc.tipo === tipo.Loja);
                 return (
                   <Grid container spacing={2} key={index} alignItems="center" sx={{ mb: 2 }}>
-  <Grid item xs={12} sm={6} md={5}>
-  <Autocomplete
-    options={productsInStore}
-    getOptionLabel={(option) => `${option.referenciaProduto} - ${option.nomeProduto}`}
-    onChange={(_event, newValue) => {
-      if (newValue && newValue.id) {
-        handleProdutoChange(index, 'id', newValue.id);
-        // Adiciona automaticamente um novo campo de produto após selecionar um produto
-        if (index === faturaState.produtosSelecionados.length - 1) {
-          adicionarNovoProdutoInput();
-        }
-      } else {
-        handleProdutoChange(index, 'id', '');
-      }
-    }}
-    value={productsInStore.find((p) => p.id === produto.id) || null}
-    disabled={loading || !lojaLocations.length}
-    renderInput={(params) => (
-      <TextField
-        {...params}
-        fullWidth
-        variant="outlined"
-        label="Referência ou Nome do Produto"
-        error={Boolean(faturaState.errors[`produto_${index}`])}
-        helperText={faturaState.errors[`produto_${index}`] || 'Escanear ou selecionar um produto'}
-        sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
-      />
-    )}
-    renderOption={(props, option) => {
-      const produtoLocations = productLocations.filter(
-        (loc) =>
-          loc.id_produto === option.id &&
-          lojaLocations.some((loja) => loja.id === loc.id_localizacao),
-      );
-      const quantidade = produtoLocations.reduce(
-        (total, loc) => total + (loc.quantidadeProduto ?? 0),
-        0,
-      );
-      return (
-        <li {...props} key={option.id}>
-          {option.referenciaProduto} - {option.nomeProduto} - {Number(option.precoVenda).toFixed(2)}kzs (Estoque: {quantidade})
-        </li>
-      );
-    }}
-  />
-</Grid>
-  <Grid item xs={8} sm={4} md={5}>
-    <TextField
-      fullWidth
-      variant="outlined"
-      type="number"
-      label="Quantidade"
-      value={produto.quantidade}
-      onChange={(e) =>
-        handleProdutoChange(index, 'quantidade', parseInt(e.target.value) || 1)
-      }
-      inputProps={{ min: 1 }}
-      error={Boolean(faturaState.errors[`produto_${index}`])}
-      helperText={faturaState.errors[`produto_${index}`]}
-      sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
-      disabled={loading || !lojaLocations.length}
-    />
-  </Grid>
-  <Grid item xs={4} sm={2} md={2}>
-    <IconButton
-      color="error"
-      onClick={() => removerProdutoInput(index)}
-      size="small"
-      disabled={loading}
-    >
-      <Delete />
-    </IconButton>
-  </Grid>
-</Grid>
+                    <Grid item xs={12} sm={6} md={5}>
+                      <Autocomplete
+                        options={productsInStore}
+                        getOptionLabel={(option) =>
+                          `${option.referenciaProduto} - ${option.nomeProduto}`
+                        }
+                        onChange={(_event, newValue) => {
+                          if (newValue && newValue.id) {
+                            handleProdutoChange(index, 'id', newValue.id);
+                            // Adiciona automaticamente um novo campo de produto após selecionar um produto
+                            if (index === faturaState.produtosSelecionados.length - 1) {
+                              adicionarNovoProdutoInput();
+                            }
+                          } else {
+                            handleProdutoChange(index, 'id', '');
+                          }
+                        }}
+                        value={productsInStore.find((p) => p.id === produto.id) || null}
+                        disabled={loading || !lojaLocations.length}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            fullWidth
+                            variant="outlined"
+                            label="Referência ou Nome do Produto"
+                            error={Boolean(faturaState.errors[`produto_${index}`])}
+                            helperText={
+                              faturaState.errors[`produto_${index}`] ||
+                              'Escanear ou selecionar um produto'
+                            }
+                            sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
+                          />
+                        )}
+                        renderOption={(props, option) => {
+                          const produtoLocations = productLocations.filter(
+                            (loc) =>
+                              loc.id_produto === option.id &&
+                              lojaLocations.some((loja) => loja.id === loc.id_localizacao),
+                          );
+                          const quantidade = produtoLocations.reduce(
+                            (total, loc) => total + (loc.quantidadeProduto ?? 0),
+                            0,
+                          );
+                          return (
+                            <li {...props} key={option.id}>
+                              {option.referenciaProduto} - {option.nomeProduto} -{' '}
+                              {Number(option.precoVenda).toFixed(2)}kzs (Estoque: {quantidade})
+                            </li>
+                          );
+                        }}
+                      />
+                    </Grid>
+                    <Grid item xs={8} sm={4} md={5}>
+                      <TextField
+                        fullWidth
+                        variant="outlined"
+                        type="number"
+                        label="Quantidade"
+                        value={produto.quantidade}
+                        onChange={(e) =>
+                          handleProdutoChange(index, 'quantidade', parseInt(e.target.value) || 1)
+                        }
+                        inputProps={{ min: 1 }}
+                        error={Boolean(faturaState.errors[`produto_${index}`])}
+                        helperText={faturaState.errors[`produto_${index}`]}
+                        sx={{ bgcolor: 'grey.50', borderRadius: 1 }}
+                        disabled={loading || !lojaLocations.length}
+                      />
+                    </Grid>
+                    <Grid item xs={4} sm={2} md={2}>
+                      <IconButton
+                        color="error"
+                        onClick={() => removerProdutoInput(index)}
+                        size="small"
+                        disabled={loading}
+                      >
+                        <Delete />
+                      </IconButton>
+                    </Grid>
+                  </Grid>
                 );
               })
             )}
@@ -2383,42 +2378,42 @@ useEffect(() => {
           </Typography>
           <TableContainer component={Paper}>
             <Table size="small">
-            <TableHead>
-  <TableRow>
-    <TableCell sx={{ fontWeight: 'bold' }}>Caixa</TableCell>
-    <TableCell sx={{ fontWeight: 'bold' }}>Funcionário</TableCell>
-    <TableCell sx={{ fontWeight: 'bold' }}>Estado</TableCell>
-    <TableCell sx={{ fontWeight: 'bold' }}>Valor Faturado</TableCell>
-    <TableCell sx={{ fontWeight: 'bold' }}>Total Final</TableCell>
-    <TableCell sx={{ fontWeight: 'bold' }} />
-  </TableRow>
-</TableHead>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Caixa</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Funcionário</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Estado</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Valor Faturado</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Total Final</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }} />
+                </TableRow>
+              </TableHead>
               <TableBody>
-  {getCaixasExibidas().length > 0 ? (
-    getCaixasExibidas().map((item) => {
-      const quantidadaFaturada = Number(item.quantidadaFaturada) || 0;
-      const totalFinal = quantidadaFaturada;
-      return (
-        <TableRow key={item.id}>
-          <TableCell>{item.caixas?.nomeCaixa || 'N/A'}</TableCell>
-          <TableCell>{item.Funcionarios?.nomeFuncionario || 'N/A'}</TableCell>
-          <TableCell>{item.estadoCaixa ? 'Aberto' : 'Fechado'}</TableCell>
-          <TableCell>{quantidadaFaturada.toFixed(2)} Kz</TableCell>
-          <TableCell>{totalFinal.toFixed(2)} Kz</TableCell>
-          <TableCell />
-        </TableRow>
-      );
-    })
-  ) : (
-    <TableRow>
-      <TableCell colSpan={6} align="center">
-        <Typography variant="body2" color="text.secondary">
-          Nenhum caixa aberto encontrado
-        </Typography>
-      </TableCell>
-    </TableRow>
-  )}
-</TableBody>
+                {getCaixasExibidas().length > 0 ? (
+                  getCaixasExibidas().map((item) => {
+                    const quantidadaFaturada = Number(item.quantidadaFaturada) || 0;
+                    const totalFinal = quantidadaFaturada;
+                    return (
+                      <TableRow key={item.id}>
+                        <TableCell>{item.caixas?.nomeCaixa || 'N/A'}</TableCell>
+                        <TableCell>{item.Funcionarios?.nomeFuncionario || 'N/A'}</TableCell>
+                        <TableCell>{item.estadoCaixa ? 'Aberto' : 'Fechado'}</TableCell>
+                        <TableCell>{quantidadaFaturada.toFixed(2)} Kz</TableCell>
+                        <TableCell>{totalFinal.toFixed(2)} Kz</TableCell>
+                        <TableCell />
+                      </TableRow>
+                    );
+                  })
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={6} align="center">
+                      <Typography variant="body2" color="text.secondary">
+                        Nenhum caixa aberto encontrado
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
             </Table>
           </TableContainer>
         </Box>
