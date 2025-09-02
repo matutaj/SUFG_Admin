@@ -34,6 +34,7 @@ import {
   getAllProductCategories,
 } from '../../api/methods';
 import { getUserData, hasPermission } from '../../api/authUtils';
+import AlertModal from 'components/Alert/Alert';
 
 interface CollapsedItemProps {
   open: boolean;
@@ -129,14 +130,51 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     unidadeConteudo?: string;
   }>({});
   const [loading, setLoading] = React.useState(false);
-  const [alert, setAlert] = React.useState<{
-    severity: 'success' | 'error' | 'info' | 'warning';
+
+  const [openFaturaModal, setOpenFaturaModal] = React.useState(false);
+  const [openCaixaModal, setOpenCaixaModal] = React.useState(false);
+  const [openCaixaListModal, setOpenCaixaListModal] = React.useState(false);
+  const [alertModal, setAlertModal] = React.useState<{
+    open: boolean;
+    title: string;
     message: string;
-  } | null>(null);
+    severity: 'success' | 'error' | 'info' | 'warning';
+    onConfirm?: () => void;
+    confirmText?: string;
+    showCancelButton?: boolean;
+  }>({
+    open: false,
+    title: '',
+    message: '',
+    severity: 'info',
+  });
   const [page, setPage] = React.useState(0);
   const [rowsPerPage, setRowsPerPage] = React.useState(5);
 
-  // Função de logging para depuração
+  const showAlert = (
+    title: string,
+    message: string,
+    severity: 'success' | 'error' | 'info' | 'warning' = 'info',
+    onConfirm?: () => void,
+    confirmText?: string,
+    showCancelButton?: boolean,
+  ) => {
+    setAlertModal({
+      open: true,
+      title,
+      message,
+      severity,
+      onConfirm,
+      confirmText,
+      showCancelButton,
+    });
+  };
+
+  // Função para fechar o alerta
+  const closeAlert = () => {
+    setAlertModal((prev) => ({ ...prev, open: false }));
+  };
+
   const log = (message: string, ...args: any[]) => {
     if (process.env.NODE_ENV !== 'production') {
       console.log(message, ...args);
@@ -160,11 +198,11 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
           setPermissions({ canRead, canCreate, canUpdate, canDelete });
           log('Permissões carregadas:', { canRead, canCreate, canUpdate, canDelete });
         } else {
-          setAlert({ severity: 'error', message: 'Usuário não autenticado!' });
-          log('Nenhum usuário autenticado encontrado');
+          showAlert('Erro', 'Usuário não autenticado!', 'error');
         }
       } catch (error) {
-        setAlert({ severity: 'error', message: 'Erro ao carregar dados do usuário!' });
+        showAlert('Erro', 'Erro ao carregar dados do usuário!', 'error');
+
         log('Erro ao carregar dados do usuário:', error);
       }
     };
@@ -204,7 +242,7 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       log('Produtos carregados:', productsData);
       setProducts(productsData || []);
     } catch (error: any) {
-      setAlert({ severity: 'error', message: error.message || 'Erro ao carregar produtos!' });
+      showAlert('Erro', error.message || 'Erro ao carregar produtos!.', 'error');
       log('Erro ao carregar produtos:', error);
     } finally {
       setLoading(false);
@@ -217,7 +255,8 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       log('Categorias carregadas:', data);
       setCategories(data || []);
     } catch (error: any) {
-      setAlert({ severity: 'error', message: error.message || 'Erro ao carregar categorias!' });
+      showAlert('Erro', error.message || 'Erro ao carregar categorias!.', 'error');
+
       log('Erro ao carregar categorias:', error);
     }
   };
@@ -233,12 +272,13 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
   const handleAddProduct = async () => {
     const isEditing = !!editProductRef;
     if (isEditing && !permissions.canUpdate) {
-      setAlert({ severity: 'error', message: 'Você não tem permissão para atualizar produtos!' });
+      showAlert('Erro', 'Você não tem permissão para atualizar produtos!', 'error');
       log('Permissão de atualização negada');
       return;
     }
     if (!isEditing && !permissions.canCreate) {
-      setAlert({ severity: 'error', message: 'Você não tem permissão para criar produtos!' });
+      showAlert('Erro', 'Você não tem permissão para criar produtos!!', 'error');
+
       log('Permissão de criação negada');
       return;
     }
@@ -299,12 +339,13 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
       if (editProductRef) {
         const updatedProduct = await updateProduct(editProductRef, productData);
         setProducts(products.map((p) => (p.id === updatedProduct.id ? updatedProduct : p)));
-        setAlert({ severity: 'success', message: 'Produto atualizado com sucesso!' });
+        showAlert('Sucesso', 'Produto atualizado com sucesso!', 'success');
         log('Produto atualizado:', updatedProduct);
       } else {
         const newProduct = await createProduct(productData);
         setProducts([...products, newProduct]);
-        setAlert({ severity: 'success', message: 'Produto cadastrado com sucesso!' });
+        showAlert('Sucesso', 'Produto cadastrado com sucesso!', 'success');
+
         log('Produto criado:', newProduct);
       }
 
@@ -313,7 +354,6 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
     } catch (error: any) {
       const errorMessage = error.message || 'Erro ao salvar produto!';
       setErrors({ nomeProduto: errorMessage });
-      setAlert({ severity: 'error', message: errorMessage });
       log('Erro ao salvar produto:', error);
     } finally {
       setLoading(false);
@@ -322,7 +362,8 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const handleEditProduct = (ref: string) => {
     if (!permissions.canUpdate) {
-      setAlert({ severity: 'error', message: 'Você não tem permissão para editar produtos!' });
+      showAlert('Sucesso', 'Você não tem permissão para editar produtos!', 'success');
+
       log('Permissão de edição negada');
       return;
     }
@@ -342,7 +383,7 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
   const handleDeleteProduct = async () => {
     if (!permissions.canDelete) {
-      setAlert({ severity: 'error', message: 'Você não tem permissão para excluir produtos!' });
+      showAlert('Erro', 'Você não tem permissão para excluir produtos!', 'error');
       log('Permissão de exclusão negada');
       handleCloseConfirmModal();
       return;
@@ -352,14 +393,14 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
         setLoading(true);
         await deleteProduct(productToDelete);
         setProducts(products.filter((p) => p.id !== productToDelete));
-        setAlert({ severity: 'success', message: 'Produto excluído com sucesso!' });
+        showAlert('Sucesso', 'Produto excluído com sucesso!', 'success');
         log('Produto excluído:', productToDelete);
         const totalPages = Math.ceil(filteredProducts.length / rowsPerPage);
         if (page >= totalPages && page > 0) {
           setPage(page - 1);
         }
       } catch (error: any) {
-        setAlert({ severity: 'error', message: error.message || 'Erro ao excluir produto!' });
+        showAlert('Erro', error.message || 'Erro ao excluir produto.', 'error');
         log('Erro ao excluir produto:', error);
       } finally {
         setLoading(false);
@@ -401,11 +442,16 @@ const ProductComponent: React.FC<CollapsedItemProps> = ({ open }) => {
 
   return (
     <>
-      {alert && (
-        <Grid sx={{ position: 'fixed', top: 20, right: 40, zIndex: 9999 }}>
-          <Alert severity={alert.severity}>{alert.message}</Alert>
-        </Grid>
-      )}
+      <AlertModal
+        open={alertModal.open}
+        onClose={closeAlert}
+        title={alertModal.title}
+        message={alertModal.message}
+        severity={alertModal.severity}
+        confirmText={alertModal.confirmText}
+        onConfirm={alertModal.onConfirm}
+        showCancelButton={alertModal.showCancelButton}
+      />
 
       <Paper sx={{ p: 2, width: '100%' }}>
         <Collapse in={open}>
